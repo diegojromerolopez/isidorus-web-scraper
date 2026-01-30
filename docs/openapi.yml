@@ -1,0 +1,139 @@
+openapi: 3.0.3
+info:
+  title: Nube2e API
+  description: API for the Nube2e web scraping and content analysis application.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+paths:
+  /scrape:
+    post:
+      summary: Start a new scraping job
+      description: Initiates a recursive scraping process for a given URL and search term.
+      requestBody:
+        required: true
+        content:
+          application: json
+          schema:
+            $ref: '#/components/schemas/ScrapeRequest'
+      responses:
+        '200':
+          description: Scraping started successfully
+          content:
+            application: json
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+                scraping_id:
+                  type: integer
+        '500':
+          description: Internal server error
+    get:
+      summary: Get scraping status and results
+      description: Retrieves the current status of a scraping session and its results if completed.
+      parameters:
+        - name: scraping_id
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Scraping status retrieved
+          content:
+            application: json
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [PENDING, COMPLETED, FAILED]
+                scraping:
+                  type: object
+                data:
+                  type: object
+                  description: Only present when status is COMPLETED
+        '404':
+          description: Scraping session not found
+        '500':
+          description: Internal server error
+
+  /search:
+    get:
+      summary: Search websites by term
+      description: Returns a list of websites where a specific term has been found.
+      parameters:
+        - name: t
+          in: query
+          required: true
+          description: The search term (case-insensitive)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of websites found
+          content:
+            application: json
+            schema:
+              type: object
+              properties:
+                websites:
+                  type: array
+                  items:
+                    type: string
+        '400':
+          description: Term 't' is required
+        '500':
+          description: Internal server error
+
+  /terms:
+    get:
+      summary: Get unique terms for a website
+      description: Lists all unique terms and their frequencies found for a specific website URL.
+      parameters:
+        - name: w
+          in: query
+          required: true
+          description: The website URL
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of terms found
+          content:
+            application: json
+            schema:
+              type: object
+              properties:
+                terms:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      term:
+                        type: string
+                      count:
+                        type: integer
+        '400':
+          description: Website 'w' is required
+        '500':
+          description: Internal server error
+
+components:
+  schemas:
+    ScrapeRequest:
+      type: object
+      required:
+        - url
+        - depth
+      properties:
+        url:
+          type: string
+          format: uri
+        depth:
+          type: integer
+          minimum: 0
+          maximum: 5

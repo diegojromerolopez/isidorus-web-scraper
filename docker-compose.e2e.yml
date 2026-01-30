@@ -1,0 +1,159 @@
+services:
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=sqs,s3
+      - DEBUG=1
+      - DATA_DIR=/tmp/localstack/data
+    volumes:
+      - ./infra/localstack:/etc/localstack/init/ready.d
+    healthcheck:
+      test: [ "CMD", "bash", "-c", "awslocal sqs list-queues | grep scraper-queue && awslocal sqs list-queues | grep writer-queue && awslocal sqs list-queues | grep image-queue" ]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=nube2e2e
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/nube2e2e
+      - SQS_QUEUE_URL=http://localstack:4566/000000000000/scraper-queue
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      localstack:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  scraper-worker:
+    build:
+      context: ./workers/scraper
+    deploy:
+      replicas: 2
+    environment:
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - INPUT_QUEUE_URL=http://localstack:4566/000000000000/scraper-queue
+      - IMAGE_QUEUE_URL=http://localstack:4566/000000000000/image-queue
+      - WRITER_QUEUE_URL=http://localstack:4566/000000000000/writer-queue
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      localstack:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  writer-worker:
+    build:
+      context: ./workers/writer
+    environment:
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - INPUT_QUEUE_URL=http://localstack:4566/000000000000/writer-queue
+      - DATABASE_URL=host=postgres user=postgres password=postgres dbname=nube2e2e port=5432 sslmode=disable
+      - DB_BATCH_SIZE=50
+    depends_on:
+      localstack:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  image-extractor-worker:
+    build:
+      context: .
+      dockerfile: workers/image_extractor/Dockerfile
+    environment:
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - INPUT_QUEUE_URL=http://localstack:4566/000000000000/image-queue
+      - WRITER_QUEUE_URL=http://localstack:4566/000000000000/writer-queue
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/nube2e2e
+      - IMAGES_BUCKET=nube2e-images
+      - LLM_PROVIDER=mock
+    depends_on:
+      localstack:
+        condition: service_healthy
+      writer-worker:
+        condition: service_started
+
+  mock-website:
+    build:
+      context: ./tests/e2e/mock_website
+    ports:
+      - "8080:8000"
+
+  test-runner:
+    build:
+      context: ./tests/e2e/runner
+    environment:
+      - API_URL=http://api:8000
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/nube2e2e
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+    depends_on:
+      api:
+        condition: service_started
+      scraper-worker:
+        condition: service_started
+      mock-website:
+        condition: service_started
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  default:
+    name: nube2e-net
