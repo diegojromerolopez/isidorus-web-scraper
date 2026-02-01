@@ -80,29 +80,17 @@ async def terms(
 
 
 # Tortoise ORM Init with Connection Pooling
+db_url = os.getenv("DATABASE_URL", "postgres://user:pass@localhost:5432/isidorus")
+# Append connection pool settings
+if "?" not in db_url:
+    db_url += "?minsize=10&maxsize=50"
+else:
+    db_url += "&minsize=10&maxsize=50"
+
 register_tortoise(
     app,
-    db_url=os.getenv("DATABASE_URL", "postgres://user:pass@localhost:5432/isidorus"),
+    db_url=db_url,
     modules={"models": ["api.models"]},
     generate_schemas=False,
     add_exception_handlers=True,
-    # Connection pooling for better performance
-    config={
-        "connections": {
-            "default": {
-                "engine": "tortoise.backends.asyncpg",
-                "credentials": {
-                    "database": os.getenv("DATABASE_URL", "postgres://user:pass@localhost:5432/isidorus"),
-                    "minsize": 10,  # Minimum pool size
-                    "maxsize": 50,  # Maximum pool size
-                }
-            }
-        },
-        "apps": {
-            "models": {
-                "models": ["api.models"],
-                "default_connection": "default",
-            }
-        }
-    }
 )
