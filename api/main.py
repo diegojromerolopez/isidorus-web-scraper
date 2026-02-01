@@ -79,11 +79,30 @@ async def terms(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-# Tortoise ORM Init
+# Tortoise ORM Init with Connection Pooling
 register_tortoise(
     app,
     db_url=os.getenv("DATABASE_URL", "postgres://user:pass@localhost:5432/isidorus"),
     modules={"models": ["api.models"]},
     generate_schemas=False,
     add_exception_handlers=True,
+    # Connection pooling for better performance
+    config={
+        "connections": {
+            "default": {
+                "engine": "tortoise.backends.asyncpg",
+                "credentials": {
+                    "database": os.getenv("DATABASE_URL", "postgres://user:pass@localhost:5432/isidorus"),
+                    "minsize": 10,  # Minimum pool size
+                    "maxsize": 50,  # Maximum pool size
+                }
+            }
+        },
+        "apps": {
+            "models": {
+                "models": ["api.models"],
+                "default_connection": "default",
+            }
+        }
+    }
 )
