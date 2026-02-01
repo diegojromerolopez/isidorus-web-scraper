@@ -79,32 +79,6 @@ jobs:
           # Calculate average coverage
           TOTAL_COV=$(python -c "print(f\"{(${API_COV} + ${EXTRACTOR_COV} + ${SCRAPER_COV} + ${WRITER_COV}) / 4:.1f}\")")
           echo "Total Coverage: ${TOTAL_COV}%"
-          echo "coverage=${TOTAL_COV}" >> $GITHUB_OUTPUT
-          
-          # Determine badge color
-          if (( $(echo "$TOTAL_COV >= 90" | bc -l) )); then
-            COLOR="brightgreen"
-          elif (( $(echo "$TOTAL_COV >= 80" | bc -l) )); then
-            COLOR="green"
-          elif (( $(echo "$TOTAL_COV >= 70" | bc -l) )); then
-            COLOR="yellowgreen"
-          elif (( $(echo "$TOTAL_COV >= 60" | bc -l) )); then
-            COLOR="yellow"
-          else
-            COLOR="red"
-          fi
-          echo "color=${COLOR}" >> $GITHUB_OUTPUT
-
-      - name: Create Coverage Badge
-        if: github.ref == 'refs/heads/main'
-        uses: schneegans/dynamic-badges-action@v1.7.0
-        with:
-          auth: ${{ secrets.GIST_SECRET }}
-          gistID: ${{ secrets.GIST_ID }}
-          filename: isidorus-coverage.json
-          label: coverage
-          message: ${{ steps.coverage.outputs.coverage }}%
-          color: ${{ steps.coverage.outputs.color }}
 
       - name: Upload Coverage Artifacts
         uses: actions/upload-artifact@v4
