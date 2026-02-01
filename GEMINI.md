@@ -140,10 +140,13 @@ The `scrapings` table uses an internal Integer `id` for primary keys and a `uuid
     - **HTTP Requests**: Use `httpx.AsyncClient` instead of `requests`.
     - **File I/O**: Use `aiofiles` if needed (currently not used).
     - Never use synchronous libraries like `requests`, `boto3` (use `aioboto3`), or `redis` (use `redis.asyncio`) in async contexts.
-8.  **Pre-Commit Linting**: All code changes must pass linting checks before committing:
+8.  **Pre-Commit Linting and Testing**: All code changes must pass linting checks and tests before committing:
     - Run `make format` to auto-format code with `black` and sort imports with `ruff`.
     - Run `make lint` to verify all linting checks pass (`black`, `ruff`, `flake8`, `mypy`, `pylint`).
+    - Run `make test-unit` to verify all unit tests pass.
+    - Run `make test-e2e` to verify all end-to-end tests pass.
     - Target a PyLint score of **≥9.5/10**.
+    - **All tests must pass before committing any changes.**
 9.  **Private Methods and Attributes**: Use double underscore prefix (`__`) for truly private methods and attributes that should not be accessed outside the class:
     - **Private attributes**: Configuration, internal state (e.g., `self.__client`, `self.__session`)
     - **Private methods**: Helper methods not part of the public API (e.g., `def __upload_image_to_s3`)
