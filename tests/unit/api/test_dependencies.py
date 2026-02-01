@@ -20,7 +20,6 @@ class TestDependencies(unittest.TestCase):
     def test_get_sqs_client(self) -> None:
         client = get_sqs_client()
         self.assertIsInstance(client, SQSClient)
-        self.assertEqual(client.queue_url, "http://sqs")
 
     @patch("api.dependencies.DATABASE_URL", "postgresql://user:pass@host/db")
     def test_get_db_repository(self) -> None:

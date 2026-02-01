@@ -15,23 +15,23 @@ class DynamoDBClient:
         secret_key: str | None,
         table_name: str,
     ) -> None:
-        self.endpoint_url = endpoint_url
-        self.region = region
-        self.access_key = access_key
-        self.secret_key = secret_key
-        self.table_name = table_name
-        self.session = aioboto3.Session()
+        self.__endpoint_url = endpoint_url
+        self.__region = region
+        self.__access_key = access_key
+        self.__secret_key = secret_key
+        self.__table_name = table_name
+        self.__session = aioboto3.Session()
 
     async def put_item(self, item: dict) -> bool:
         try:
-            async with self.session.resource(
+            async with self.__session.resource(
                 "dynamodb",
-                endpoint_url=self.endpoint_url,
-                region_name=self.region,
-                aws_access_key_id=self.access_key,
-                aws_secret_access_key=self.secret_key,
+                endpoint_url=self.__endpoint_url,
+                region_name=self.__region,
+                aws_access_key_id=self.__access_key,
+                aws_secret_access_key=self.__secret_key,
             ) as dynamodb:
-                table = await dynamodb.Table(self.table_name)
+                table = await dynamodb.Table(self.__table_name)
                 await table.put_item(Item=item)
                 return True
         except Exception as e:
@@ -40,14 +40,14 @@ class DynamoDBClient:
 
     async def get_item(self, key: dict) -> dict[Any, Any] | None:
         try:
-            async with self.session.resource(
+            async with self.__session.resource(
                 "dynamodb",
-                endpoint_url=self.endpoint_url,
-                region_name=self.region,
-                aws_access_key_id=self.access_key,
-                aws_secret_access_key=self.secret_key,
+                endpoint_url=self.__endpoint_url,
+                region_name=self.__region,
+                aws_access_key_id=self.__access_key,
+                aws_secret_access_key=self.__secret_key,
             ) as dynamodb:
-                table = await dynamodb.Table(self.table_name)
+                table = await dynamodb.Table(self.__table_name)
                 response = await table.get_item(Key=key)
                 item = response.get("Item")
                 return cast(dict[Any, Any], item) if item else None

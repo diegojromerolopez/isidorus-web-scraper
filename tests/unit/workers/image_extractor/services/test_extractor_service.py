@@ -81,12 +81,16 @@ class TestExtractorService(unittest.IsolatedAsyncioTestCase):
 
     def test_upload_image_to_s3_success(self) -> None:
         self.mock_s3_client.upload_bytes.return_value = "s3://bucket/key"
-        res = self.service._upload_image_to_s3(b"data", "http://a.jpg", 123)
+        res = self.service._ExtractorService__upload_image_to_s3(
+            b"data", "http://a.jpg", 123
+        )
         self.assertEqual(res, "s3://bucket/key")
 
     def test_upload_image_to_s3_failure(self) -> None:
         self.mock_s3_client.upload_bytes.side_effect = Exception("S3 error")
-        res = self.service._upload_image_to_s3(b"data", "http://a.jpg", 123)
+        res = self.service._ExtractorService__upload_image_to_s3(
+            b"data", "http://a.jpg", 123
+        )
         self.assertIsNone(res)
 
 

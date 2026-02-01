@@ -20,11 +20,11 @@ class ExtractorService:
         images_bucket: str,
         llm_provider: str = "openai",
     ):
-        self.sqs_client = sqs_client
-        self.s3_client = s3_client
-        self.writer_queue_url = writer_queue_url
-        self.images_bucket = images_bucket
-        self.llm = ExplainerFactory.get_explainer(llm_provider)
+        self.__sqs_client = sqs_client
+        self.__s3_client = s3_client
+        self.__writer_queue_url = writer_queue_url
+        self.__images_bucket = images_bucket
+        self.__llm = ExplainerFactory.get_explainer(llm_provider)
 
     async def process_message(self, message_body: str) -> None:
         try:
@@ -49,14 +49,14 @@ class ExtractorService:
                 async with httpx.AsyncClient() as client:
                     resp = await client.get(image_url, timeout=10.0)
                     if resp.status_code == 200:
-                        s3_path = self._upload_image_to_s3(
+                        s3_path = self.__upload_image_to_s3(
                             resp.content, image_url, scraping_id
                         )
             except Exception as e:
                 logger.error(f"Failed to handle image persistence to S3: {e}")
 
             # 3. Get Explanation via LangChain
-            explanation = ExplainerFactory.explain_image(self.llm, image_url)
+            explanation = ExplainerFactory.explain_image(self.__llm, image_url)
             logger.info(f"Generated explanation for {image_url}")
 
             # Send to Writer
@@ -70,20 +70,22 @@ class ExtractorService:
                 "s3_path": s3_path,
             }
 
-            self.sqs_client.send_message(self.writer_queue_url, writer_msg)
+            self.__sqs_client.send_message(self.__writer_queue_url, writer_msg)
             logger.info(f"Sent extraction info for {image_url} to writer queue")
 
         except Exception as e:
             logger.error(f"Error processing image extraction: {e}")
 
-    def _upload_image_to_s3(
+    def __upload_image_to_s3(
         self, content: bytes, image_url: str, scraping_id: int
     ) -> str | None:
         """Uploads image bytes to S3 and returns the S3 path."""
         try:
             ext = image_url.split(".")[-1].split("?")[0] or "bin"
             s3_key = f"{scraping_id}/{uuid.uuid4()}.{ext}"
-            s3_path = self.s3_client.upload_bytes(content, self.images_bucket, s3_key)
+            s3_path = self.__s3_client.upload_bytes(
+                content, self.__images_bucket, s3_key
+            )
             logger.info(f"Uploaded image to {s3_path}")
             return s3_path
         except Exception as e:

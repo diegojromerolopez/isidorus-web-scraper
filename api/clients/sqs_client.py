@@ -15,24 +15,24 @@ class SQSClient:
         secret_key: str | None,
         queue_url: str | None,
     ) -> None:
-        self.endpoint_url = endpoint_url
-        self.region = region
-        self.access_key = access_key
-        self.secret_key = secret_key
-        self.queue_url = queue_url
-        self.session = aioboto3.Session()
+        self.__endpoint_url = endpoint_url
+        self.__region = region
+        self.__access_key = access_key
+        self.__secret_key = secret_key
+        self.__queue_url = queue_url
+        self.__session = aioboto3.Session()
 
     async def send_message(self, message_body: dict) -> bool:
         try:
-            async with self.session.client(
+            async with self.__session.client(
                 "sqs",
-                endpoint_url=self.endpoint_url,
-                region_name=self.region,
-                aws_access_key_id=self.access_key,
-                aws_secret_access_key=self.secret_key,
+                endpoint_url=self.__endpoint_url,
+                region_name=self.__region,
+                aws_access_key_id=self.__access_key,
+                aws_secret_access_key=self.__secret_key,
             ) as client:
                 await client.send_message(
-                    QueueUrl=self.queue_url, MessageBody=json.dumps(message_body)
+                    QueueUrl=self.__queue_url, MessageBody=json.dumps(message_body)
                 )
                 return True
         except Exception as e:

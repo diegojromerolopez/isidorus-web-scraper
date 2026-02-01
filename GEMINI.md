@@ -144,3 +144,9 @@ The `scrapings` table uses an internal Integer `id` for primary keys and a `uuid
     - Run `make format` to auto-format code with `black` and sort imports with `ruff`.
     - Run `make lint` to verify all linting checks pass (`black`, `ruff`, `flake8`, `mypy`, `pylint`).
     - Target a PyLint score of **≥9.5/10**.
+9.  **Private Methods and Attributes**: Use double underscore prefix (`__`) for truly private methods and attributes that should not be accessed outside the class:
+    - **Private attributes**: Configuration, internal state (e.g., `self.__client`, `self.__session`)
+    - **Private methods**: Helper methods not part of the public API (e.g., `def __upload_image_to_s3`)
+    - **Public interface**: Only expose methods and attributes that are part of the class's contract
+    - Tests can access private members using name mangling (`obj._ClassName__private_attr`) when necessary
+
