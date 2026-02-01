@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"log"
 	"os"
@@ -11,7 +10,8 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
-	_ "github.com/lib/pq"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 
 	"writer-worker/domain"
 	"writer-worker/repositories"
@@ -27,12 +27,11 @@ func main() {
 		batchSize = 25 // Default for safety
 	}
 
-	// Connect DB
-	db, err := sql.Open("postgres", dbURL)
+	// Connect DB using GORM
+	db, err := gorm.Open(postgres.Open(dbURL), &gorm.Config{})
 	if err != nil {
-		log.Fatalf("failed to open db: %v", err)
+		log.Fatalf("failed to connect to db: %v", err)
 	}
-	defer db.Close()
 
 	// Connect AWS
 	cfg, err := config.LoadDefaultConfig(context.TODO())
