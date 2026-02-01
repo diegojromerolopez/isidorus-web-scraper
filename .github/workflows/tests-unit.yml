@@ -15,5 +15,97 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run Unit Tests
-        run: make test-unit
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install coverage coverage-badge
+
+      - name: Run API Unit Tests with Coverage
+        run: |
+          docker build -t isidorus-api-test -f api/Dockerfile .
+          docker run --rm -v "$(pwd):/app" -e PYTHONPATH=/app isidorus-api-test sh -c "pip install coverage && coverage run --branch --source=api -m unittest discover -v -s tests/unit/api -t /app && coverage json -o /app/coverage-api.json && coverage report"
+
+      - name: Run Image Extractor Unit Tests with Coverage
+        run: |
+          docker build -t isidorus-extractor-test -f workers/image_extractor/Dockerfile .
+          docker run --rm -v "$(pwd):/app" -e PYTHONPATH=/app isidorus-extractor-test sh -c "pip install coverage && coverage run --branch --source=workers/image_extractor -m unittest discover -v -p 'test_*.py' -s tests/unit/workers/image_extractor -t /app && coverage json -o /app/coverage-extractor.json && coverage report"
+
+      - name: Run Scraper Unit Tests with Coverage
+        run: |
+          docker build -t isidorus-scraper-test workers/scraper/
+          docker run --rm -v "$(pwd):/app" -w /app/workers/scraper isidorus-scraper-test sh -c "go mod tidy && go test -v -coverprofile=/app/coverage-scraper.out -covermode=count ./... && go tool cover -func=/app/coverage-scraper.out"
+
+      - name: Run Writer Unit Tests with Coverage
+        run: |
+          docker build -t isidorus-writer-test workers/writer/
+          docker run --rm -v "$(pwd):/app" -w /app/workers/writer isidorus-writer-test sh -c "go mod tidy && go test -v -coverprofile=/app/coverage-writer.out -covermode=count ./... && go tool cover -func=/app/coverage-writer.out"
+
+      - name: Calculate Combined Coverage
+        id: coverage
+        run: |
+          # Extract Python API coverage
+          API_COV=$(python -c "import json; data=json.load(open('coverage-api.json')); print(f\"{data['totals']['percent_covered']:.1f}\")")
+          echo "API Coverage: ${API_COV}%"
+          
+          # Extract Python Image Extractor coverage
+          EXTRACTOR_COV=$(python -c "import json; data=json.load(open('coverage-extractor.json')); print(f\"{data['totals']['percent_covered']:.1f}\")")
+          echo "Extractor Coverage: ${EXTRACTOR_COV}%"
+          
+          # Extract Go Scraper coverage
+          SCRAPER_COV=$(go tool cover -func=coverage-scraper.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "Scraper Coverage: ${SCRAPER_COV}%"
+          
+          # Extract Go Writer coverage
+          WRITER_COV=$(go tool cover -func=coverage-writer.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "Writer Coverage: ${WRITER_COV}%"
+          
+          # Calculate average coverage
+          TOTAL_COV=$(python -c "print(f\"{(${API_COV} + ${EXTRACTOR_COV} + ${SCRAPER_COV} + ${WRITER_COV}) / 4:.1f}\")")
+          echo "Total Coverage: ${TOTAL_COV}%"
+          echo "coverage=${TOTAL_COV}" >> $GITHUB_OUTPUT
+          
+          # Determine badge color
+          if (( $(echo "$TOTAL_COV >= 90" | bc -l) )); then
+            COLOR="brightgreen"
+          elif (( $(echo "$TOTAL_COV >= 80" | bc -l) )); then
+            COLOR="green"
+          elif (( $(echo "$TOTAL_COV >= 70" | bc -l) )); then
+            COLOR="yellowgreen"
+          elif (( $(echo "$TOTAL_COV >= 60" | bc -l) )); then
+            COLOR="yellow"
+          else
+            COLOR="red"
+          fi
+          echo "color=${COLOR}" >> $GITHUB_OUTPUT
+
+      - name: Create Coverage Badge
+        if: github.ref == 'refs/heads/main'
+        uses: schneegans/dynamic-badges-action@v1.7.0
+        with:
+          auth: ${{ secrets.GIST_SECRET }}
+          gistID: ${{ secrets.GIST_ID }}
+          filename: isidorus-coverage.json
+          label: coverage
+          message: ${{ steps.coverage.outputs.coverage }}%
+          color: ${{ steps.coverage.outputs.color }}
+
+      - name: Upload Coverage Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: |
+            coverage-api.json
+            coverage-extractor.json
+            coverage-scraper.out
+            coverage-writer.out
+          retention-days: 30
