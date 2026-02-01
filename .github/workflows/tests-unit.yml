@@ -43,12 +43,12 @@ jobs:
       - name: Run Scraper Unit Tests with Coverage
         run: |
           docker build -t isidorus-scraper-test workers/scraper/
-          docker run --rm -v "$(pwd):/app" -w /app/workers/scraper isidorus-scraper-test sh -c "go mod tidy && go test -v -coverprofile=/app/coverage-scraper.out -covermode=count ./... && go tool cover -func=/app/coverage-scraper.out"
+          docker run --rm -v "$(pwd):/app" -w /app/workers/scraper isidorus-scraper-test sh -c "go mod tidy && go test -v -coverprofile=/app/coverage-scraper.out -covermode=count ./... && go tool cover -func=/app/coverage-scraper.out | tee /app/coverage-scraper-summary.txt"
 
       - name: Run Writer Unit Tests with Coverage
         run: |
           docker build -t isidorus-writer-test workers/writer/
-          docker run --rm -v "$(pwd):/app" -w /app/workers/writer isidorus-writer-test sh -c "go mod tidy && go test -v -coverprofile=/app/coverage-writer.out -covermode=count ./... && go tool cover -func=/app/coverage-writer.out"
+          docker run --rm -v "$(pwd):/app" -w /app/workers/writer isidorus-writer-test sh -c "go mod tidy && go test -v -coverprofile=/app/coverage-writer.out -covermode=count ./... && go tool cover -func=/app/coverage-writer.out | tee /app/coverage-writer-summary.txt"
 
       - name: Calculate Combined Coverage
         id: coverage
@@ -61,13 +61,20 @@ jobs:
           EXTRACTOR_COV=$(python -c "import json; data=json.load(open('coverage-extractor.json')); print(f\"{data['totals']['percent_covered']:.1f}\")")
           echo "Extractor Coverage: ${EXTRACTOR_COV}%"
           
-          # Extract Go Scraper coverage
-          SCRAPER_COV=$(go tool cover -func=coverage-scraper.out | grep total | awk '{print $3}' | sed 's/%//')
+          # Extract Go Scraper coverage from summary file
+          SCRAPER_COV=$(grep "total:" coverage-scraper-summary.txt | awk '{print $3}' | sed 's/%//')
           echo "Scraper Coverage: ${SCRAPER_COV}%"
           
-          # Extract Go Writer coverage
-          WRITER_COV=$(go tool cover -func=coverage-writer.out | grep total | awk '{print $3}' | sed 's/%//')
+          # Extract Go Writer coverage from summary file
+          WRITER_COV=$(grep "total:" coverage-writer-summary.txt | awk '{print $3}' | sed 's/%//')
           echo "Writer Coverage: ${WRITER_COV}%"
+          
+          # Validate all coverage values are present
+          if [ -z "$API_COV" ] || [ -z "$EXTRACTOR_COV" ] || [ -z "$SCRAPER_COV" ] || [ -z "$WRITER_COV" ]; then
+            echo "Error: One or more coverage values are missing"
+            echo "API_COV=$API_COV, EXTRACTOR_COV=$EXTRACTOR_COV, SCRAPER_COV=$SCRAPER_COV, WRITER_COV=$WRITER_COV"
+            exit 1
+          fi
           
           # Calculate average coverage
           TOTAL_COV=$(python -c "print(f\"{(${API_COV} + ${EXTRACTOR_COV} + ${SCRAPER_COV} + ${WRITER_COV}) / 4:.1f}\")")
@@ -107,5 +114,7 @@ jobs:
             coverage-api.json
             coverage-extractor.json
             coverage-scraper.out
+            coverage-scraper-summary.txt
             coverage-writer.out
+            coverage-writer-summary.txt
           retention-days: 30
