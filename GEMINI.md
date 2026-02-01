@@ -1,4 +1,6 @@
-# Nube2e
+# Isidorus Web Scraper
+
+**About the Name**: Isidorus is named after **Isidore of Seville** (c. 560-636 AD), the renowned scholar and Archbishop of Seville who compiled the *Etymologiae*, the first encyclopedia of all human knowledge. Known as "The Schoolmaster of the Middle Ages," Isidore meticulously gathered, organized, and preserved the wisdom of his time across all fields of knowledge. Just as Isidore collected and systematized information, this application scrapes and archives web content.
 
 The main aim of this repository is to serve as a showcase of how to use localstack as a way to replace the AWS services an application is based on, and create e2e tests.
 
@@ -78,7 +80,7 @@ Workers are decoupled and highly testable through repository mocking.
 | Variable | Description | Default/Example |
 |----------|-------------|-----------------|
 | `AWS_ENDPOINT_URL` | LocalStack URL | `http://localstack:4566` |
-| `DATABASE_URL` | Postgres Connection String | `postgres://user:pass@localhost:5432/nube2e` |
+| `DATABASE_URL` | Postgres Connection String | `postgres://user:pass@localhost:5432/isidorus` |
 | `INPUT_QUEUE_URL` | Queue for scrape requests | `http://localstack:4566/000000000000/scraper-input` |
 | `WRITER_QUEUE_URL`| Queue for results to be written | `http://localstack:4566/000000000000/writer-queue` |
 | `IMAGE_QUEUE_URL` | Queue for image processing | `http://localstack:4566/000000000000/image-queue` |

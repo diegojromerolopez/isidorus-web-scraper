@@ -82,7 +82,7 @@ async def terms(
 # Tortoise ORM Init
 register_tortoise(
     app,
-    db_url=os.getenv("DATABASE_URL", "postgres://user:pass@localhost:5432/nube2e"),
+    db_url=os.getenv("DATABASE_URL", "postgres://user:pass@localhost:5432/isidorus"),
     modules={"models": ["api.models"]},
     generate_schemas=False,
     add_exception_handlers=True,

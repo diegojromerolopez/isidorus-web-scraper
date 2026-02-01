@@ -11,7 +11,7 @@ import requests
 # Configuration
 API_URL = os.getenv("API_URL", "http://api:8000")
 DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgres://postgres:postgres@postgres:5432/nube2e2e"
+    "DATABASE_URL", "postgres://postgres:postgres@postgres:5432/isidorus"
 )
 REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))

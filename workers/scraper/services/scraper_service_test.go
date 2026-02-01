@@ -90,7 +90,7 @@ func TestProcessMessage_FullFlow(t *testing.T) {
 	html := `
 		<html>
 			<body>
-				<p>Hello world from nube2e</p>
+				<p>Hello world from isidorus</p>
 				<a href="http://site2.com">Link 2</a>
 				<img src="http://img.com/a.jpg">
 			</body>
@@ -280,4 +280,127 @@ func TestProcessMessage_RedisDecrError(t *testing.T) {
     mockSQS.AssertNotCalled(t, "SendMessage", mock.Anything, "writer", mock.MatchedBy(func(msg domain.WriterMessage) bool {
         return msg.Type == "scraping_complete"
     }))
+}
+
+func TestProcessMessage_DepthZero(t *testing.T) {
+	mockSQS := new(MockSQSClient)
+	mockRedis := new(MockRedisClient)
+	mockFetcher := new(MockPageFetcher)
+	s := NewScraperService(mockSQS, mockRedis, mockFetcher, "input", "writer", "image")
+
+	html := `<html><body><a href="http://site2.com">Link</a></body></html>`
+	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(html))}
+	mockFetcher.On("Fetch", "http://site1.com").Return(resp, nil)
+	
+	// SAdd for seed URL
+	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.MatchedBy(func(m []interface{}) bool { 
+		return m[0] == "http://site1.com" 
+	})).Return(1, nil)
+
+	// Expect SendMessage to Writer
+	mockSQS.On("SendMessage", mock.Anything, "writer", mock.Anything).Return(nil)
+	
+	// Expect Decr to be called (no links to send, so no IncrBy)
+	mockRedis.On("Decr", mock.Anything, "scrape:123:pending").Return(1, nil)
+
+	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", Depth: 0, ScrapingID: 123})
+	
+	// Should NOT send any messages to input queue (depth is 0)
+	mockSQS.AssertNotCalled(t, "SendMessage", mock.Anything, "input", mock.Anything)
+	// Should NOT call IncrBy (no links to send)
+	mockRedis.AssertNotCalled(t, "IncrBy", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestProcessMessage_AlreadyVisitedURL(t *testing.T) {
+	mockSQS := new(MockSQSClient)
+	mockRedis := new(MockRedisClient)
+	mockFetcher := new(MockPageFetcher)
+	s := NewScraperService(mockSQS, mockRedis, mockFetcher, "input", "writer", "image")
+
+	html := `<html><body><a href="http://site2.com">Link</a></body></html>`
+	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(html))}
+	mockFetcher.On("Fetch", "http://site1.com").Return(resp, nil)
+	
+	// SAdd for seed URL
+	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.MatchedBy(func(m []interface{}) bool { 
+		return m[0] == "http://site1.com" 
+	})).Return(1, nil)
+	
+	// SAdd for the link - return 0 (already visited)
+	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.MatchedBy(func(m []interface{}) bool { 
+		return m[0] == "http://site2.com" 
+	})).Return(0, nil)
+
+	mockSQS.On("SendMessage", mock.Anything, "writer", mock.Anything).Return(nil)
+	mockRedis.On("Decr", mock.Anything, "scrape:123:pending").Return(1, nil)
+
+	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
+	
+	// Should NOT send message to input queue (URL already visited)
+	mockSQS.AssertNotCalled(t, "SendMessage", mock.Anything, "input", mock.Anything)
+	// Should NOT call IncrBy (no new links to send)
+	mockRedis.AssertNotCalled(t, "IncrBy", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestProcessMessage_NonHTTPLinks(t *testing.T) {
+	mockSQS := new(MockSQSClient)
+	mockRedis := new(MockRedisClient)
+	mockFetcher := new(MockPageFetcher)
+	s := NewScraperService(mockSQS, mockRedis, mockFetcher, "input", "writer", "image")
+
+	// HTML with relative and non-HTTP links
+	html := `<html><body>
+		<a href="/relative">Relative</a>
+		<a href="#anchor">Anchor</a>
+		<a href="mailto:test@example.com">Email</a>
+		<a href="javascript:void(0)">JS</a>
+	</body></html>`
+	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(html))}
+	mockFetcher.On("Fetch", "http://site1.com").Return(resp, nil)
+	
+	// SAdd for seed URL
+	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.MatchedBy(func(m []interface{}) bool { 
+		return m[0] == "http://site1.com" 
+	})).Return(1, nil)
+
+	mockSQS.On("SendMessage", mock.Anything, "writer", mock.Anything).Return(nil)
+	mockRedis.On("Decr", mock.Anything, "scrape:123:pending").Return(1, nil)
+
+	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
+	
+	// Should NOT send any messages to input queue (no HTTP links)
+	mockSQS.AssertNotCalled(t, "SendMessage", mock.Anything, "input", mock.Anything)
+	// Should NOT call IncrBy (no HTTP links to send)
+	mockRedis.AssertNotCalled(t, "IncrBy", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestProcessMessage_SAddErrorDuringCycleDetection(t *testing.T) {
+	mockSQS := new(MockSQSClient)
+	mockRedis := new(MockRedisClient)
+	mockFetcher := new(MockPageFetcher)
+	s := NewScraperService(mockSQS, mockRedis, mockFetcher, "input", "writer", "image")
+
+	html := `<html><body><a href="http://site2.com">Link</a></body></html>`
+	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(html))}
+	mockFetcher.On("Fetch", "http://site1.com").Return(resp, nil)
+	
+	// SAdd for seed URL
+	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.MatchedBy(func(m []interface{}) bool { 
+		return m[0] == "http://site1.com" 
+	})).Return(1, nil)
+	
+	// SAdd for the link - return error (Redis failure during cycle detection)
+	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.MatchedBy(func(m []interface{}) bool { 
+		return m[0] == "http://site2.com" 
+	})).Return(0, assert.AnError)
+
+	mockSQS.On("SendMessage", mock.Anything, "writer", mock.Anything).Return(nil)
+	mockRedis.On("Decr", mock.Anything, "scrape:123:pending").Return(1, nil)
+
+	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
+	
+	// Should NOT send message to input queue (SAdd error, link skipped)
+	mockSQS.AssertNotCalled(t, "SendMessage", mock.Anything, "input", mock.Anything)
+	// Should NOT call IncrBy (link was skipped due to error)
+	mockRedis.AssertNotCalled(t, "IncrBy", mock.Anything, mock.Anything, mock.Anything)
 }

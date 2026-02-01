@@ -1,8 +1,27 @@
-# Nube2e
+<div align="center">
+  <img src="docs/images/logo.png" alt="Isidorus Web Scraper Logo" width="300"/>
+</div>
 
-Nube2e (Cloud-to-End) is a web scraping application designed to demonstrate a robust, event-driven architecture using LocalStack to emulate AWS services.
+# Isidorus Web Scraper
 
-**DISCLAIMER: this project was created by making use of the agentic AI models Gemini 3.0 Pro/Gemini 3.0 Flash.**
+[![Unit Tests](https://github.com/diegojromerolopez/isidorus-web-scraper/actions/workflows/tests-unit.yml/badge.svg)](https://github.com/diegojromerolopez/isidorus-web-scraper/actions/workflows/tests-unit.yml)
+[![Python Lint](https://github.com/diegojromerolopez/isidorus-web-scraper/actions/workflows/python-lint.yml/badge.svg)](https://github.com/diegojromerolopez/isidorus-web-scraper/actions/workflows/python-lint.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Go 1.21+](https://img.shields.io/badge/go-1.21+-00ADD8.svg)](https://golang.org/dl/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg)](https://fastapi.tiangolo.com/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791.svg)](https://www.postgresql.org/)
+[![Redis](https://img.shields.io/badge/Redis-7-DC382D.svg)](https://redis.io/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED.svg)](https://www.docker.com/)
+[![LocalStack](https://img.shields.io/badge/LocalStack-AWS-4D4D4D.svg)](https://localstack.cloud/)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+
+**Isidorus Web Scraper** is named after **Isidore of Seville** (c. 560-636 AD), the renowned scholar and Archbishop of Seville who compiled the *Etymologiae*, the first encyclopedia of all human knowledge. Known as "The Schoolmaster of the Middle Ages," Isidore meticulously gathered, organized, and preserved the wisdom of his time. Just as Isidore collected and systematized knowledge, Isidorus Web Scraper archives and indexes web content with precision and thoroughness.
+
+This project is a web scraping application designed to scrape, analyze, and archive web content. It demonstrates a robust, event-driven architecture using LocalStack to emulate AWS services.
+
+**DISCLAIMER: this project was created by making use of the agentic AI models Gemini 3.0 Pro/Gemini 3.0 Flash/Claude Sonnet 4.5.**
 
 ## Overview
 
@@ -71,7 +90,7 @@ The system is built with a microservices approach:
 | `AWS_ENDPOINT_URL` | LocalStack URL | `http://localstack:4566` |
 | `DATABASE_URL` | Postgres Connection String | `postgres://user:pass@host:5432/db` |
 | `REDIS_HOST` | Redis host | `localhost` or `redis` |
-| `IMAGES_BUCKET` | S3 bucket for images | `nube2e-images` |
+| `IMAGES_BUCKET` | S3 bucket for images | `isidorus-images` |
 | `LLM_PROVIDER` | AI provider for explanations | `mock`, `openai`, `gemini`, etc. |
 | `MAX_DEPTH` | Maximum recursive depth | `2` (Default from API) |
 

@@ -17,7 +17,7 @@ SQS_QUEUE_URL = os.getenv(
     "SQS_QUEUE_URL", "http://localstack:4566/000000000000/scraper-queue"
 )
 DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgres://postgres:postgres@postgres:5432/nube2e2e"
+    "DATABASE_URL", "postgres://postgres:postgres@postgres:5432/isidorus"
 )
 REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))

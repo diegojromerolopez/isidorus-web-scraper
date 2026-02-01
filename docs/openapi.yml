@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
-  title: Nube2e API
-  description: API for the Nube2e web scraping and content analysis application.
+  title: Isidorus Web Scraper API
+  description: API for Isidorus Web Scraper, a web scraping and content analysis application. Named after Isidore of Seville (c. 560-636 AD), who compiled the first encyclopedia.
   version: 1.0.0
 servers:
   - url: http://localhost:8000

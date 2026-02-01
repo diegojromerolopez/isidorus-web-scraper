@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class MockLLM:
-    def invoke(self, prompt: str) -> Any:
+    def invoke(self, _prompt: str) -> Any:
         class MockResponse:
             def __init__(self, content: str) -> None:
                 self.content = content

@@ -1,4 +1,4 @@
-# Makefile for Nube2e
+# Makefile for Isidorus Web Scraper
 
 .PHONY: up down build logs test clean unit-test lint lint-check format
 
@@ -28,17 +28,17 @@ test-e2e:
 # Run unit tests
 test-unit:
 	@echo "Running API unit tests..."
-	docker build -t nube2e-api-test -f api/Dockerfile .
-	docker run --rm -v "$$(pwd):/app" -e PYTHONPATH=/app nube2e-api-test sh -c "pip install coverage && coverage run --branch --source=api -m unittest discover -v -s tests/unit/api -t /app && coverage report"
+	docker build -t isidorus-api-test -f api/Dockerfile .
+	docker run --rm -v "$$(pwd):/app" -e PYTHONPATH=/app isidorus-api-test sh -c "pip install coverage && coverage run --branch --source=api -m unittest discover -v -s tests/unit/api -t /app && coverage report"
 	@echo "Running Image Extractor unit tests..."
-	docker build -t nube2e-extractor-test -f workers/image_extractor/Dockerfile .
-	docker run --rm -v "$$(pwd):/app" -e PYTHONPATH=/app nube2e-extractor-test sh -c "pip install coverage && coverage run --branch --source=workers/image_extractor -m unittest discover -v -p 'test_*.py' -s tests/unit/workers/image_extractor -t /app && coverage report"
+	docker build -t isidorus-extractor-test -f workers/image_extractor/Dockerfile .
+	docker run --rm -v "$$(pwd):/app" -e PYTHONPATH=/app isidorus-extractor-test sh -c "pip install coverage && coverage run --branch --source=workers/image_extractor -m unittest discover -v -p 'test_*.py' -s tests/unit/workers/image_extractor -t /app && coverage report"
 	@echo "Running Scraper unit tests..."
-	docker build -t nube2e-scraper-test workers/scraper/
-	docker run --rm -v "$$(pwd):/app" -w /app/workers/scraper nube2e-scraper-test sh -c "go mod tidy && go test -v -cover ./..."
+	docker build -t isidorus-scraper-test workers/scraper/
+	docker run --rm -v "$$(pwd):/app" -w /app/workers/scraper isidorus-scraper-test sh -c "go mod tidy && go test -v -cover ./..."
 	@echo "Running Writer unit tests..."
-	docker build -t nube2e-writer-test workers/writer/
-	docker run --rm -v "$$(pwd):/app" -w /app/workers/writer nube2e-writer-test sh -c "go mod tidy && go test -v -cover ./..."
+	docker build -t isidorus-writer-test workers/writer/
+	docker run --rm -v "$$(pwd):/app" -w /app/workers/writer isidorus-writer-test sh -c "go mod tidy && go test -v -cover ./..."
 
 # Clean up volumes and orphans
 clean:

@@ -21,7 +21,7 @@ services:
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=nube2e2e
+      - POSTGRES_DB=isidorus
     ports:
       - "5432:5432"
     volumes:
@@ -54,7 +54,7 @@ services:
       - AWS_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
-      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/nube2e2e
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/isidorus
       - SQS_QUEUE_URL=http://localstack:4566/000000000000/scraper-queue
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -96,7 +96,7 @@ services:
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
       - INPUT_QUEUE_URL=http://localstack:4566/000000000000/writer-queue
-      - DATABASE_URL=host=postgres user=postgres password=postgres dbname=nube2e2e port=5432 sslmode=disable
+      - DATABASE_URL=host=postgres user=postgres password=postgres dbname=isidorus port=5432 sslmode=disable
       - DB_BATCH_SIZE=50
     depends_on:
       localstack:
@@ -115,8 +115,8 @@ services:
       - AWS_SECRET_ACCESS_KEY=test
       - INPUT_QUEUE_URL=http://localstack:4566/000000000000/image-queue
       - WRITER_QUEUE_URL=http://localstack:4566/000000000000/writer-queue
-      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/nube2e2e
-      - IMAGES_BUCKET=nube2e-images
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/isidorus
+      - IMAGES_BUCKET=isidorus-images
       - LLM_PROVIDER=mock
     depends_on:
       localstack:
@@ -135,7 +135,7 @@ services:
       context: ./tests/e2e/runner
     environment:
       - API_URL=http://api:8000
-      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/nube2e2e
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/isidorus
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - AWS_ENDPOINT_URL=http://localstack:4566
@@ -156,4 +156,4 @@ volumes:
 
 networks:
   default:
-    name: nube2e-net
+    name: isidorus-net

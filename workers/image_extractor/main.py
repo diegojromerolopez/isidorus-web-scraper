@@ -21,7 +21,7 @@ def main() -> None:
     AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
     INPUT_QUEUE_URL = os.getenv("INPUT_QUEUE_URL") or ""
     WRITER_QUEUE_URL = os.getenv("WRITER_QUEUE_URL") or ""
-    IMAGES_BUCKET = os.getenv("IMAGES_BUCKET") or "nube2e-images"
+    IMAGES_BUCKET = os.getenv("IMAGES_BUCKET") or "isidorus-images"
     LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
 
     if not INPUT_QUEUE_URL or not WRITER_QUEUE_URL:
