@@ -1,12 +1,12 @@
 import unittest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 from api.services.scraper_service import ScraperService
 
 
 class TestScraperService(unittest.IsolatedAsyncioTestCase):
     async def test_start_scraping(self) -> None:
-        mock_sqs_client = MagicMock()
+        mock_sqs_client = AsyncMock()
         mock_redis_client = AsyncMock()
         mock_db_repository = AsyncMock()
 

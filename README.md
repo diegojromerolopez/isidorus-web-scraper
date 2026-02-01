@@ -113,10 +113,11 @@ The entire stack runs locally via Docker Compose:
 ## Technologies
 
 -   **Backend**: Python 3.10+ (FastAPI), Go 1.21+
+-   **Async I/O**: `redis.asyncio` (async Redis client), `aioboto3` (async AWS SDK), `httpx` (async HTTP client)
 -   **ORM**: Tortoise ORM (API)
 -   **Database**: PostgreSQL 15
 -   **Caching/Coordination**: Redis 7
--   **Infrastructure**: LocalStack (AWS SQS/S3 emulation), Docker Compose
+-   **Infrastructure**: LocalStack (AWS SQS/S3/DynamoDB emulation), Docker Compose
 -   **NoSQL**: DynamoDB (Job History)
 -   **AI**: LangChain (Multi-provider support)
 -   **Testing**: `unittest` (Python), `go test` (Go), `boto3`/`requests` (E2E)

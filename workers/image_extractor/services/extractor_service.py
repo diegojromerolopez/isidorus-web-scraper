@@ -2,7 +2,7 @@ import json
 import logging
 import uuid
 
-import requests
+import httpx
 
 from workers.image_extractor.clients.s3_client import S3Client
 from workers.image_extractor.clients.sqs_client import SQSClient
@@ -26,7 +26,7 @@ class ExtractorService:
         self.images_bucket = images_bucket
         self.llm = ExplainerFactory.get_explainer(llm_provider)
 
-    def process_message(self, message_body: str) -> None:
+    async def process_message(self, message_body: str) -> None:
         try:
             body = json.loads(message_body)
             image_url = body.get("url")
@@ -46,11 +46,12 @@ class ExtractorService:
             # 1. Download image
             s3_path = None
             try:
-                resp = requests.get(image_url, timeout=10)
-                if resp.status_code == 200:
-                    s3_path = self._upload_image_to_s3(
-                        resp.content, image_url, scraping_id
-                    )
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(image_url, timeout=10.0)
+                    if resp.status_code == 200:
+                        s3_path = self._upload_image_to_s3(
+                            resp.content, image_url, scraping_id
+                        )
             except Exception as e:
                 logger.error(f"Failed to handle image persistence to S3: {e}")
 

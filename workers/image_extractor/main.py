@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import time
@@ -11,7 +12,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def main() -> None:
+async def main() -> None:
     logger.info("Image Extractor Worker started (Refactor)")
 
     # Configuration
@@ -56,7 +57,7 @@ def main() -> None:
         try:
             messages = sqs_client.receive_messages(INPUT_QUEUE_URL)
             for message in messages:
-                extractor_service.process_message(message["Body"])
+                await extractor_service.process_message(message["Body"])
 
                 # Delete message
                 sqs_client.delete_message(INPUT_QUEUE_URL, message["ReceiptHandle"])
@@ -67,4 +68,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":  # pragma: no cover
-    main()
+    asyncio.run(main())

@@ -1,12 +1,12 @@
 import json
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from workers.image_extractor.services.extractor_service import ExtractorService
 
 
-class TestExtractorService(unittest.TestCase):
-    def setUp(self) -> None:
+class TestExtractorService(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
         self.mock_sqs_client = MagicMock()
         self.mock_s3_client = MagicMock()
         self.writer_queue = "http://writer"
@@ -26,19 +26,25 @@ class TestExtractorService(unittest.TestCase):
                 self.images_bucket,
             )
 
-    @patch("workers.image_extractor.services.extractor_service.requests.get")
+    @patch("workers.image_extractor.services.extractor_service.httpx.AsyncClient")
     @patch(
         "workers.image_extractor.services.extractor_service"
         ".ExplainerFactory.explain_image"
     )
-    def test_process_message_success(
-        self, mock_explain: MagicMock, mock_get: MagicMock
+    async def test_process_message_success(
+        self, mock_explain: MagicMock, mock_async_client_cls: MagicMock
     ) -> None:
-        # Mock download
+        # Mock httpx AsyncClient
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.content = b"fake-image-bytes"
-        mock_get.return_value = mock_resp
+
+        mock_client = AsyncMock()
+        mock_client.get.return_value = mock_resp
+        mock_client.__aenter__.return_value = mock_client
+        mock_client.__aexit__.return_value = None
+
+        mock_async_client_cls.return_value = mock_client
 
         # Mock S3 upload
         self.mock_s3_client.upload_bytes.return_value = "s3://test-bucket/key.jpg"
@@ -54,7 +60,7 @@ class TestExtractorService(unittest.TestCase):
             }
         )
 
-        self.service.process_message(message_body)
+        await self.service.process_message(message_body)
 
         self.mock_sqs_client.send_message.assert_called_once()
         call_args = self.mock_sqs_client.send_message.call_args
@@ -65,12 +71,12 @@ class TestExtractorService(unittest.TestCase):
         self.assertEqual(sent_msg["s3_path"], "s3://test-bucket/key.jpg")
         self.assertEqual(sent_msg["scraping_id"], 123)
 
-    def test_process_message_no_url(self) -> None:
-        self.service.process_message(json.dumps({}))
+    async def test_process_message_no_url(self) -> None:
+        await self.service.process_message(json.dumps({}))
         self.mock_sqs_client.send_message.assert_not_called()
 
-    def test_process_message_invalid_json(self) -> None:
-        self.service.process_message("invalid json")
+    async def test_process_message_invalid_json(self) -> None:
+        await self.service.process_message("invalid json")
         self.mock_sqs_client.send_message.assert_not_called()
 
     def test_upload_image_to_s3_success(self) -> None:

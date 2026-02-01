@@ -53,7 +53,8 @@ The architecture consists of the following components:
 
 ### API (Python/FastAPI)
 - **Routers**: Handle HTTP requests and use FastAPI's dependency injection to provide services.
-- **Services**: Encapsulate business logic.
+- **Services**: Encapsulate business logic with **async/await** for non-blocking I/O.
+- **Async Clients**: Uses `redis.asyncio` for Redis operations, `aioboto3` for DynamoDB/SQS interactions, and `httpx` for HTTP requests.
 - **Mocks**: Integrated into the test suite to achieve **100% unit test coverage**.
 
 ### Workers
@@ -111,7 +112,7 @@ The `scrapings` table uses an internal Integer `id` for primary keys and a `uuid
 ### Unit Tests & Coverage
 - **Purpose**: Verify business logic in isolation using mocks.
 - **Coverage**: All core logic components targeted for **>90% coverage** (currently 100% for API/Scraper/Writer).
-- **Execution**: Run via `make unit-test`.
+- **Execution**: Run via `make test-unit`.
 
 ### End-to-End (E2E) Tests
 - **Infrastructure**: Uses `docker compose` with `docker-compose.e2e.yml` to spin up LocalStack and PostgreSQL.
@@ -131,3 +132,15 @@ The `scrapings` table uses an internal Integer `id` for primary keys and a `uuid
 5.  **CI/CD Pipeline**: 
     - `tests-unit.yml`: Executes unit tests for all components.
     - `python-lint.yml`: Executes the full Python linting suite.
+6.  **Virtual Environment**: Use a Python virtual environment to isolate project dependencies. Do not install packages in the system Python runtime.
+7.  **Async I/O Operations**: All Python I/O operations must be asynchronous to prevent blocking the event loop:
+    - **Database**: Use Tortoise ORM (already async).
+    - **Redis**: Use `redis.asyncio`.
+    - **AWS Services**: Use `aioboto3` for SQS, DynamoDB, and S3.
+    - **HTTP Requests**: Use `httpx.AsyncClient` instead of `requests`.
+    - **File I/O**: Use `aiofiles` if needed (currently not used).
+    - Never use synchronous libraries like `requests`, `boto3` (use `aioboto3`), or `redis` (use `redis.asyncio`) in async contexts.
+8.  **Pre-Commit Linting**: All code changes must pass linting checks before committing:
+    - Run `make format` to auto-format code with `black` and sort imports with `ruff`.
+    - Run `make lint` to verify all linting checks pass (`black`, `ruff`, `flake8`, `mypy`, `pylint`).
+    - Target a PyLint score of **≥9.5/10**.
