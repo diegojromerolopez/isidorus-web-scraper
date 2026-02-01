@@ -107,6 +107,7 @@ The system is built with a microservices approach:
 The entire stack runs locally via Docker Compose:
 -   **LocalStack**: Emulates SQS and S3.
 -   **PostgreSQL**: Relational database for scraping results and image metadata.
+-   **DynamoDB**: NoSQL store for job history and metadata.
 -   **Redis**: In-memory store for cycle detection and job tracking counters.
 
 ## Technologies
@@ -116,6 +117,7 @@ The entire stack runs locally via Docker Compose:
 -   **Database**: PostgreSQL 15
 -   **Caching/Coordination**: Redis 7
 -   **Infrastructure**: LocalStack (AWS SQS/S3 emulation), Docker Compose
+-   **NoSQL**: DynamoDB (Job History)
 -   **AI**: LangChain (Multi-provider support)
 -   **Testing**: `unittest` (Python), `go test` (Go), `boto3`/`requests` (E2E)
 -   **Mock Website**: A static site container for safe, deterministic E2E testing.

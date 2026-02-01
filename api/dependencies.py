@@ -2,6 +2,7 @@ import os
 
 from fastapi import Depends
 
+from api.clients.dynamodb_client import DynamoDBClient
 from api.clients.redis_client import RedisClient
 from api.clients.sqs_client import SQSClient
 from api.repositories.db_repository import DbRepository
@@ -16,6 +17,7 @@ AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "test")
 SQS_QUEUE_URL = os.getenv(
     "SQS_QUEUE_URL", "http://localstack:4566/000000000000/scraper-queue"
 )
+DYNAMODB_TABLE = os.getenv("DYNAMODB_TABLE", "scraping_jobs")
 DATABASE_URL = os.getenv(
     "DATABASE_URL", "postgres://postgres:postgres@postgres:5432/isidorus"
 )
@@ -33,6 +35,19 @@ def get_sqs_client() -> SQSClient:
         access_key=AWS_ACCESS_KEY_ID,
         secret_key=AWS_SECRET_ACCESS_KEY,
         queue_url=SQS_QUEUE_URL,
+    )
+
+
+def get_dynamodb_client() -> DynamoDBClient:
+    """
+    Creates and returns a DynamoDBClient instance configured with environment variables.
+    """
+    return DynamoDBClient(
+        endpoint_url=AWS_ENDPOINT_URL,
+        region=AWS_REGION,
+        access_key=AWS_ACCESS_KEY_ID,
+        secret_key=AWS_SECRET_ACCESS_KEY,
+        table_name=DYNAMODB_TABLE,
     )
 
 
@@ -55,13 +70,14 @@ def get_redis_client() -> RedisClient:
 def get_scraper_service(
     sqs_client: SQSClient = Depends(get_sqs_client),
     redis_client: RedisClient = Depends(get_redis_client),
+    dynamodb_client: DynamoDBClient = Depends(get_dynamodb_client),
     db_repository: DbRepository = Depends(get_db_repository),
 ) -> ScraperService:
     """
     Dependency provider for ScraperService.
-    Requires SQSClient, RedisClient, DbRepository.
+    Requires SQSClient, RedisClient, DynamoDBClient, DbRepository.
     """
-    return ScraperService(sqs_client, redis_client, db_repository)
+    return ScraperService(sqs_client, redis_client, db_repository, dynamodb_client)
 
 
 def get_db_service(

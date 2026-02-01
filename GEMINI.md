@@ -84,10 +84,21 @@ Workers are decoupled and highly testable through repository mocking.
 | `INPUT_QUEUE_URL` | Queue for scrape requests | `http://localstack:4566/000000000000/scraper-input` |
 | `WRITER_QUEUE_URL`| Queue for results to be written | `http://localstack:4566/000000000000/writer-queue` |
 | `IMAGE_QUEUE_URL` | Queue for image processing | `http://localstack:4566/000000000000/image-queue` |
+| `DYNAMODB_TABLE` | DynamoDB Table Name | `scraping_jobs` |
 
-## Data Schema (PostgreSQL)
+## Data Schema (PostgreSQL & DynamoDB)
 
-The system uses a denormalized schema optimized for fast text and graph queries. The `scrapings` table uses an internal Integer `id` for primary keys and a `uuid` for public identification.
+The system uses a hybrid schema:
+- **DynamoDB**: Key-value store for Job History.
+- **PostgreSQL**: Relational graph data for scraped content.
+
+### DynamoDB
+- **`scraping_jobs`**: Logs job lifecycle.
+  - PK: `job_id` (String)
+  - Attributes: `url`, `depth`, `status`
+
+### PostgreSQL
+The `scrapings` table uses an internal Integer `id` for primary keys and a `uuid` for public identification.
 
 - **`scrapings`**: Tracks scraping jobs. `id` (SERIAL PK).
 - **`scraped_pages`**: Unique URLs and metadata. Linked via `scraping_id` (INT).

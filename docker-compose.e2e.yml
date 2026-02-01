@@ -4,17 +4,17 @@ services:
     ports:
       - "4566:4566"
     environment:
-      - SERVICES=sqs,s3
+      - SERVICES=sqs,s3,dynamodb
       - DEBUG=1
       - DATA_DIR=/tmp/localstack/data
     volumes:
       - ./infra/localstack:/etc/localstack/init/ready.d
     healthcheck:
-      test: [ "CMD", "bash", "-c", "awslocal sqs list-queues | grep scraper-queue && awslocal sqs list-queues | grep writer-queue && awslocal sqs list-queues | grep image-queue" ]
-      interval: 5s
-      timeout: 10s
+      test: [ "CMD", "bash", "-c", "awslocal sqs list-queues && awslocal dynamodb list-tables | grep scraping_jobs" ]
+      interval: 10s
+      timeout: 20s
       retries: 5
-      start_period: 10s
+      start_period: 30s
 
   postgres:
     image: postgres:15

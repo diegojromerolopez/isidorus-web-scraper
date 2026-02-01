@@ -273,6 +273,46 @@ class TestScrapingE2E(unittest.TestCase):
         self.assertTrue(any("cycle_b.html" in u for u in urls), "Page B not found")
         print("Cycle Detection Test passed!")
 
+        print("Cycle Detection Test passed!")
+
+    def test_dynamodb_job_history(self) -> None:
+        print("Starting DynamoDB Job History Test...")
+        url = "http://mock-website:8000/index.html"
+        payload = {"url": url, "depth": 1}
+        response = requests.post(f"{API_URL}/scrape", json=payload, timeout=5)
+        self.assertEqual(response.status_code, 200)
+
+        scraping_id = response.json()["scraping_id"]
+        print(f"Scraping started with ID: {scraping_id}")
+
+        # Verify DynamoDB Item
+        dynamodb = boto3.resource(
+            "dynamodb",
+            endpoint_url=AWS_ENDPOINT_URL,
+            region_name=AWS_REGION,
+            aws_access_key_id=AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+        )
+        table = dynamodb.Table("scraping_jobs")
+
+        item = None
+        for _ in range(10):
+            try:
+                resp = table.get_item(Key={"job_id": str(scraping_id)})
+                if "Item" in resp:
+                    item = resp["Item"]
+                    break
+            except Exception:
+                pass
+            time.sleep(1)
+
+        self.assertIsNotNone(item, "Job not found in DynamoDB")
+        assert item is not None
+        self.assertEqual(item["url"], url)
+        self.assertEqual(item["status"], "PENDING")
+        self.assertEqual(item["status"], "PENDING")
+        print("DynamoDB Job History Test passed!")
+
 
 if __name__ == "__main__":
     unittest.main()
