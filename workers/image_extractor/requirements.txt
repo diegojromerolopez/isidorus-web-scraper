@@ -1,0 +1,9 @@
+boto3
+requests
+langchain
+langchain-community
+langchain-openai
+langchain-google-genai
+langchain-anthropic
+langchain-ollama
+langchain-huggingface
