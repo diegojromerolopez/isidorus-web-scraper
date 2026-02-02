@@ -49,11 +49,16 @@ graph TD
     Extractor -->|7. Upload Image| S3[(S3-LocalStack)]
     Extractor -->|8. Explain via LangChain| LLM((AI Models))
     Extractor -->|9. Explanation Result| SQS_W
+
+    Scraper -->|6b. Page Text| SQS_PS[SQS-Summarizer Queue]
+    SQS_PS --> Summarizer[Page Summarizer-Python]
+    Summarizer -->|10. Summarize| LLM
+    Summarizer -->|11. Summary Result| SQS_W
     
     SQS_W --> Writer[Writer-Go]
-    Writer -->|10. Store Results| DB
-    Writer -->|11. Complete| Redis
-    Redis -->|12. Finalize| Writer
+    Writer -->|12. Store Results| DB
+    Writer -->|13. Complete| Redis
+    Redis -->|14. Finalize| Writer
 ```
 
 The system is built with a microservices approach:
@@ -72,15 +77,20 @@ The system is built with a microservices approach:
     -   **Cycle Prevention**: Uses Redis Sets (`SADD`) to track and skip already-processed URLs per scraping session.
     -   **Distributed Tracking**: Uses Redis for distributed reference counting to track job completion.
     -   Recursively enqueues links for further scraping.
+    -   Conditionally sends data to Image Extractor and Page Summarizer based on feature flags.
 
 3.  **Image Extractor Worker (Python)**:
-    -   Consumes image URLs found by the scraper.
-    -   **S3 Persistence**: Downloads and uploads images to an AWS S3 bucket using async S3 client.
-    -   **AI Explainer (LangChain)**: Generates image descriptions using various LLM providers (OpenAI, Gemini, Anthropic, Ollama, HuggingFace).
-    -   Sends the S3 path and explanation to the Writer.
-    -   Uses shared Python library for AWS clients and configuration.
+    -   Consumes image URLs from `image-extractor-queue`.
+    -   **S3 Persistence**: Downloads and uploads images to an AWS S3 bucket.
+    -   **AI Explainer**: Generates image descriptions using LLM providers.
+    -   Sends results to the Writer.
 
-4.  **Writer Worker (Go)**:
+4.  **Page Summarizer Worker (Python)**:
+    -   Consumes text content from `page-summarizer-queue`.
+    -   **AI Summarization**: Generates concise summaries of web pages using LLMs.
+    -   Sends results to the Writer.
+
+5.  **Writer Worker (Go)**:
     -   Consumes structured data (pages, terms, links, images, job completion events) from SQS.
     -   Writes data to PostgreSQL in a normalized schema.
     -   Handles job completion status updates.
@@ -98,9 +108,11 @@ The system is built with a microservices approach:
 | `AWS_ENDPOINT_URL` | LocalStack URL | `http://localstack:4566` |
 | `DATABASE_URL` | Postgres Connection String | `postgres://user:pass@host:5432/db` |
 | `REDIS_HOST` | Redis host | `localhost` or `redis` |
-| `IMAGES_BUCKET` | S3 bucket for images | `isidorus-images` |
+| `IMAGE_BUCKET` | S3 bucket for images | `isidorus-images` |
 | `LLM_PROVIDER` | AI provider for explanations | `mock`, `openai`, `gemini`, etc. |
 | `MAX_DEPTH` | Maximum recursive depth | `2` (Default from API) |
+| `IMAGE_EXPLAINER_ENABLED` | Enable AI image explanation | `true` |
+| `PAGE_SUMMARIZER_ENABLED` | Enable page summarization | `true` |
 
 ## API Endpoints
 
@@ -166,7 +178,7 @@ The entire stack runs locally via Docker Compose:
 ## Testing
 
 The project emphasizes high test coverage:
--   **Unit Tests**: 100% coverage for API, >90% for all other components.
+-   **Unit Tests**: 100% coverage for all components (API, Scraper, Writer, Image Extractor, Page Summarizer).
 -   **E2E Tests**: Full integration tests using a local test runner and mock website.
 -   **Shared Library Tests**: Located in `tests/unit/shared/` for common client testing.
 

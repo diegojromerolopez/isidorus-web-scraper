@@ -2,13 +2,12 @@ import logging
 from typing import Any
 
 # pylint: disable=import-error
-from langchain.chains.summarize import load_summarize_chain
-from langchain.docstore.document import Document
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.chains.summarize import load_summarize_chain  # type: ignore
+from langchain.text_splitter import RecursiveCharacterTextSplitter  # type: ignore
 from langchain_anthropic import ChatAnthropic
+from langchain_community.chat_models import ChatOllama  # type: ignore
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_huggingface import HuggingFaceEndpoint
-from langchain_community.chat_models import ChatOllama  # type: ignore
 from langchain_openai import ChatOpenAI  # type: ignore
 
 logger = logging.getLogger(__name__)
@@ -47,7 +46,7 @@ class SummarizerFactory:
         if provider in providers:
             result = providers[provider]
             # Handle both class types and lambda factories
-            return result()
+            return result()  # type: ignore[no-any-return]
 
         logger.warning("Unknown provider '%s', falling back to Mock provider", provider)
         return MockLLM()
@@ -67,7 +66,8 @@ class SummarizerFactory:
             chain_type = "stuff" if len(docs) == 1 else "map_reduce"
 
             chain = load_summarize_chain(llm, chain_type=chain_type)
-            return chain.run(docs)
+            result = chain.run(docs)
+            return str(result)
 
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("LLM summarization failed: %s", e)

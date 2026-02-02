@@ -1,8 +1,6 @@
-import asyncio
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from workers.page_summarizer.config import Configuration
 from workers.page_summarizer.main import main
 
 
@@ -11,8 +9,11 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
     @patch("workers.page_summarizer.main.SummarizerService")
     @patch("workers.page_summarizer.main.Configuration")
     async def test_main_loop_success(
-        self, mock_config_cls, mock_service_cls, mock_sqs_cls
-    ):
+        self,
+        mock_config_cls: MagicMock,
+        mock_service_cls: MagicMock,
+        mock_sqs_cls: MagicMock,
+    ) -> None:
         # Setup Mocks
         mock_config = MagicMock()
         mock_config.input_queue_url = "input"
@@ -35,7 +36,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         # Run Main
         try:
             await main()
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             pass
 
         # Verify
@@ -44,7 +45,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         mock_sqs.delete_message.assert_called()
 
     @patch("workers.page_summarizer.main.Configuration")
-    async def test_main_missing_config(self, mock_config_cls):
+    async def test_main_missing_config(self, mock_config_cls: MagicMock) -> None:
         mock_config = MagicMock()
         mock_config.input_queue_url = ""
         mock_config_cls.from_env.return_value = mock_config

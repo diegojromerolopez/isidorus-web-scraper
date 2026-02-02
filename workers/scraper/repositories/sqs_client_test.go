@@ -95,3 +95,17 @@ func TestSQSClient_DeleteMessage(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to delete message")
 }
+
+func TestSQSClient_SendMessage_MarshalError(t *testing.T) {
+	client := sqs.NewFromConfig(aws.Config{})
+	repo := NewSQSClient(client)
+
+	// Channel cannot be marshaled to JSON
+	msg := map[string]interface{}{
+		"key": make(chan int),
+	}
+
+	err := repo.SendMessage(context.TODO(), "queue-url", msg)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to marshal message")
+}

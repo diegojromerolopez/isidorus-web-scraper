@@ -19,6 +19,7 @@ class ScrapedPage(models.Model):
         "models.Scraping", related_name="pages", source_field="scraping_id"
     )
     url = fields.TextField()
+    summary = fields.TextField(null=True)
     scraped_at = fields.DatetimeField(auto_now_add=True)
 
     class Meta:

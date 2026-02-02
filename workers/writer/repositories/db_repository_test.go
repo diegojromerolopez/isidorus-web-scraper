@@ -141,3 +141,159 @@ func TestCompleteScraping_Success(t *testing.T) {
 		t.Errorf("there were unfulfilled expectations: %s", err)
 	}
 }
+func TestInsertPageSummary_Success(t *testing.T) {
+	db, mock := newMockDB(t)
+	repo := NewDBRepository(db, 100)
+
+	msg := domain.WriterMessage{
+		URL:        "http://example.com",
+		ScrapingID: 123,
+		Summary:    "This is a summary",
+	}
+
+	mock.ExpectBegin()
+	mock.ExpectExec(`UPDATE "scraped_pages" SET`).
+		WithArgs("This is a summary", msg.URL, msg.ScrapingID).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+
+	err := repo.InsertPageSummary(msg)
+	assert.NoError(t, err)
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("there were unfulfilled expectations: %s", err)
+	}
+}
+
+func TestInsertPageSummary_Error_NoRows(t *testing.T) {
+	db, mock := newMockDB(t)
+	repo := NewDBRepository(db, 100)
+
+	msg := domain.WriterMessage{
+		URL:        "http://example.com",
+		ScrapingID: 123,
+		Summary:    "This is a summary",
+	}
+
+	mock.ExpectBegin()
+	mock.ExpectExec(`UPDATE "scraped_pages" SET`).
+		WithArgs("This is a summary", msg.URL, msg.ScrapingID).
+		WillReturnResult(sqlmock.NewResult(0, 0)) // 0 rows affected
+	mock.ExpectCommit()
+
+	err := repo.InsertPageSummary(msg)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no page found to update summary")
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("there were unfulfilled expectations: %s", err)
+	}
+}
+
+func TestInsertImageExplanation_Error_NoPage(t *testing.T) {
+	db, mock := newMockDB(t)
+	repo := NewDBRepository(db, 100)
+
+	msg := domain.WriterMessage{
+		PageURL:     "http://example.com",
+		ScrapingID:  123,
+		URL:         "http://img.com",
+		Explanation: "desc",
+	}
+
+	// Find page - No rows found
+	mock.ExpectQuery(`SELECT \* FROM "scraped_pages"`).
+		WithArgs(msg.PageURL, msg.ScrapingID, 1).
+		WillReturnError(gorm.ErrRecordNotFound)
+
+	err := repo.InsertImageExplanation(msg)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to find page")
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("there were unfulfilled expectations: %s", err)
+	}
+}
+
+func TestInsertPageData_Error_Terms(t *testing.T) {
+	db, mock := newMockDB(t)
+	repo := NewDBRepository(db, 100)
+
+	msg := domain.WriterMessage{
+		URL:        "http://example.com",
+		ScrapingID: 123,
+		Terms:      map[string]int{"term1": 5},
+	}
+
+	// Insert Scraped Page Success
+	mock.ExpectBegin()
+	mock.ExpectQuery(`INSERT INTO "scraped_pages"`).
+		WithArgs(msg.ScrapingID, msg.URL, "").
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+	mock.ExpectCommit()
+
+	// Insert Page Terms Failure
+	mock.ExpectBegin()
+	mock.ExpectQuery(`INSERT INTO "page_terms"`).
+		WillReturnError(errors.New("terms db error"))
+	mock.ExpectRollback()
+
+	err := repo.InsertPageData(msg)
+	assert.NoError(t, err)
+	// We expect the function to succeed (return nil) despite sub-insert failure, as it just logs.
+}
+
+func TestInsertPageData_Error_Links(t *testing.T) {
+	db, mock := newMockDB(t)
+	repo := NewDBRepository(db, 100)
+
+	msg := domain.WriterMessage{
+		URL:        "http://example.com",
+		ScrapingID: 123,
+		Links:      []string{"http://link1.com"},
+	}
+
+	// Insert Scraped Page Success
+	mock.ExpectBegin()
+	mock.ExpectQuery(`INSERT INTO "scraped_pages"`).
+		WithArgs(msg.ScrapingID, msg.URL, "").
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
+	mock.ExpectCommit()
+
+    // Terms skipped because empty
+
+	// Insert Page Links Failure
+	mock.ExpectBegin()
+	mock.ExpectQuery(`INSERT INTO "page_links"`).
+		WithArgs(123, 1, "http://link1.com").
+		WillReturnError(errors.New("links db error"))
+	mock.ExpectRollback()
+
+	err := repo.InsertPageData(msg)
+	assert.NoError(t, err)
+}
+
+func TestInsertImageExplanation_InsertError(t *testing.T) {
+	db, mock := newMockDB(t)
+	repo := NewDBRepository(db, 100)
+
+	msg := domain.WriterMessage{
+		PageURL:     "http://example.com",
+		ScrapingID:  123,
+		URL:         "http://img.com",
+		Explanation: "desc",
+	}
+
+	// Find page Success
+	mock.ExpectQuery(`SELECT \* FROM "scraped_pages"`).
+		WithArgs(msg.PageURL, msg.ScrapingID, 1). // Limit 1
+		WillReturnRows(sqlmock.NewRows([]string{"id", "url", "scraping_id", "scraped_at"}).
+			AddRow(1, msg.PageURL, 123, time.Now()))
+
+	// Insert Image Failure
+	mock.ExpectBegin()
+	mock.ExpectQuery(`INSERT INTO "page_images"`).
+		WillReturnError(errors.New("image db error"))
+	mock.ExpectRollback()
+
+	err := repo.InsertImageExplanation(msg)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to insert image explanation")
+}

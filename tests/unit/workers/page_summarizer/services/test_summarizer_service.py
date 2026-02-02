@@ -1,11 +1,11 @@
 import unittest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 from workers.page_summarizer.services.summarizer_service import SummarizerService
 
 
 class TestSummarizerService(unittest.IsolatedAsyncioTestCase):
-    async def asyncSetUp(self):
+    async def asyncSetUp(self) -> None:
         self.mock_sqs = AsyncMock()
         self.writer_queue = "writer-queue"
         self.service = SummarizerService(
@@ -14,8 +14,11 @@ class TestSummarizerService(unittest.IsolatedAsyncioTestCase):
             llm_provider="mock",
         )
 
-    async def test_process_message_valid(self):
-        body = '{"scraping_id": 1, "page_id": 2, "url": "http://example.com", "content": "some content"}'
+    async def test_process_message_valid(self) -> None:
+        body = (
+            '{"scraping_id": 1, "page_id": 2, '
+            '"url": "http://example.com", "content": "some content"}'
+        )
 
         await self.service.process_message(body)
 
@@ -31,12 +34,12 @@ class TestSummarizerService(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(msg["url"], "http://example.com")
         self.assertEqual(msg["summary"], "Mocked summary for testing")
 
-    async def test_process_message_missing_fields(self):
+    async def test_process_message_missing_fields(self) -> None:
         body = '{"url": "http://example.com"}'
         await self.service.process_message(body)
         self.mock_sqs.send_message.assert_not_called()
 
-    async def test_process_message_invalid_json(self):
+    async def test_process_message_invalid_json(self) -> None:
         body = "invalid-json"
         await self.service.process_message(body)
         self.mock_sqs.send_message.assert_not_called()

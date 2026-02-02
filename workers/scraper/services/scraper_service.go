@@ -33,13 +33,15 @@ var stopWords = map[string]bool{
 }
 
 type ScraperService struct {
-	sqsClient          SQSClient
-	redisClient        RedisClient
-	pageFetcher        PageFetcher
-	inputQueueURL      string
-	writerQueueURL     string
-	imageQueueURL      string
-	summarizerQueueURL string
+	sqsClient             SQSClient
+	redisClient           RedisClient
+	pageFetcher           PageFetcher
+	inputQueueURL         string
+	writerQueueURL        string
+	imageQueueURL         string
+	summarizerQueueURL    string
+	imageExplainerEnabled bool
+	pageSummarizerEnabled bool
 }
 
 // Functional Options Pattern
@@ -63,6 +65,13 @@ func WithQueues(input, writer, image, summarizer string) ScraperOption {
 		s.writerQueueURL = writer
 		s.imageQueueURL = image
 		s.summarizerQueueURL = summarizer
+	}
+}
+
+func WithFeatureFlags(imageExplainer, pageSummarizer bool) ScraperOption {
+	return func(s *ScraperService) {
+		s.imageExplainerEnabled = imageExplainer
+		s.pageSummarizerEnabled = pageSummarizer
 	}
 }
 
@@ -138,19 +147,8 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 		}
 	}
 
-	// Send to Summarizer Queue (if configured and populated)
-	if s.summarizerQueueURL != "" && fullTextBuilder.Len() > 0 {
-		summaryMsg := domain.PageSummaryMessage{
-			URL:        msg.URL,
-			Content:    fullTextBuilder.String(),
-			ScrapingID: msg.ScrapingID,
-		}
-		if err := s.sqsClient.SendMessage(ctx, s.summarizerQueueURL, summaryMsg); err != nil {
-			log.Printf("failed to send page summary request: %v", err)
-		}
-	}
-
-	// Send to Writer
+	// Send to Writer (Page Data)
+	// Priority 1: Ensure page exists in DB before sending tasks that reference it (Images, Summaries)
 	writerMsg := domain.WriterMessage{
 		Type:       domain.MsgTypePageData,
 		URL:        msg.URL,
@@ -162,15 +160,30 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 		log.Printf("failed to send page data to writer: %v", err)
 	}
 
-	// Send Images to Image Queue
-	for _, imgURL := range images {
-		imgMsg := domain.ImageMessage{
-			URL:          imgURL,
-			OriginalURL:  msg.URL,
-			ScrapingID:   msg.ScrapingID,
+	// Send to Summarizer Queue (if configured, enabled, and populated)
+	log.Printf("Checking summarizer: enabled=%v, queue=%s, textLen=%d", s.pageSummarizerEnabled, s.summarizerQueueURL, fullTextBuilder.Len())
+	if s.pageSummarizerEnabled && s.summarizerQueueURL != "" && fullTextBuilder.Len() > 0 {
+		summaryMsg := domain.PageSummaryMessage{
+			URL:        msg.URL,
+			Content:    fullTextBuilder.String(),
+			ScrapingID: msg.ScrapingID,
 		}
-		if err := s.sqsClient.SendMessage(ctx, s.imageQueueURL, imgMsg); err != nil {
-			log.Printf("failed to send image to image queue: %v", err)
+		if err := s.sqsClient.SendMessage(ctx, s.summarizerQueueURL, summaryMsg); err != nil {
+			log.Printf("failed to send page summary request: %v", err)
+		}
+	}
+
+	// Send Images to Image Queue (if enabled)
+	if s.imageExplainerEnabled {
+		for _, imgURL := range images {
+			imgMsg := domain.ImageMessage{
+				URL:          imgURL,
+				OriginalURL:  msg.URL,
+				ScrapingID:   msg.ScrapingID,
+			}
+			if err := s.sqsClient.SendMessage(ctx, s.imageQueueURL, imgMsg); err != nil {
+				log.Printf("failed to send image to image queue: %v", err)
+			}
 		}
 	}
 

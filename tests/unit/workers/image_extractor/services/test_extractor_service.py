@@ -131,6 +131,67 @@ class TestExtractorService(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(sent_msg["s3_path"])
         self.assertEqual(sent_msg["explanation"], "Explanation")
 
+    async def test_process_message_download_exception(self) -> None:
+        """Test handling of HTTP download exception."""
+        with patch(
+            "workers.image_extractor.services.extractor_service.httpx.AsyncClient"
+        ) as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.get.side_effect = Exception("Network Error")
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = None
+            mock_client_cls.return_value = mock_client
+
+            # Mock LLM to avoid actual calls
+            with patch(
+                "workers.image_extractor.services.extractor_service."
+                "ExplainerFactory.explain_image",
+                return_value="Explanation",
+            ):
+                message_body = json.dumps(
+                    {"url": "http://img.com/a.jpg", "scraping_id": 123}
+                )
+                await self.service.process_message(message_body)
+
+        # S3 path should be None, but explanation still proceeds
+        self.mock_sqs.send_message.assert_called()
+        sent_msg = self.mock_sqs.send_message.call_args[0][0]
+        self.assertIsNone(sent_msg["s3_path"])
+
+    async def test_process_message_download_non_200(self) -> None:
+        """Test handling of non-200 HTTP response."""
+        with patch(
+            "workers.image_extractor.services.extractor_service.httpx.AsyncClient"
+        ) as mock_client_cls:
+            mock_resp = MagicMock()
+            mock_resp.status_code = 404
+
+            mock_client = AsyncMock()
+            mock_client.get.return_value = mock_resp
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = None
+            mock_client_cls.return_value = mock_client
+
+            # Mock LLM
+            with patch(
+                "workers.image_extractor.services.extractor_service."
+                "ExplainerFactory.explain_image",
+                return_value="Explanation",
+            ):
+                message_body = json.dumps(
+                    {"url": "http://img.com/a.jpg", "scraping_id": 123}
+                )
+                await self.service.process_message(message_body)
+
+        self.mock_s3.upload_bytes.assert_not_called()
+        self.mock_sqs.send_message.assert_called()
+
+    async def test_process_message_no_scraping_id(self) -> None:
+        """Test handling of missing scraping_id."""
+        message_body = json.dumps({"url": "http://img.com/a.jpg"})
+        await self.service.process_message(message_body)
+        self.mock_sqs.send_message.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

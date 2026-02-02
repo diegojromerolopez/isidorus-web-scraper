@@ -22,7 +22,8 @@ This application is designed for scenarios where deep content analysis of a web 
 ├── workers/
 │   ├── scraper/        # Recursive Web Scraper (Go)
 │   ├── writer/         # Batch DB Writer (Go)
-│   └── image_extractor/# Image Metadata Extractor (Python)
+│   ├── image_extractor/# Image Metadata Extractor (Python)
+│   └── page_summarizer/# AI Page Summarizer (Python)
 ├── tests/
 │   ├── unit/           # Python Unit Tests
 │   └── e2e/            # End-to-End Test Suite
@@ -65,13 +66,18 @@ Workers are decoupled and highly testable through repository mocking.
     -   **Logic**: Extracts terms, links, and image URLs. Supports recursive scraping via configurable depth.
     -   **Cycle Detection**: Uses Redis Sets (key: `scrape:{id}:visited`) to track handled URLs in a thread-safe, distributed manner.
     -   **Job Tracking**: Uses Redis for distributed reference counting to track pending tasks and signals job completion.
+    -   **Feature Flags**: Conditionally enables `IMAGE_EXPLAINER_ENABLED` and `PAGE_SUMMARIZER_ENABLED`.
 
 2.  **Image Extractor** (Python):
-    -   Consumes image URLs found by the scraper.
+    -   Consumes image URLs found by the scraper (queue: `image-extractor-queue`).
     -   Extracts image metadata and links them to the source page and job.
     -   *Renamed from Image Explainer (AI removed for efficiency).*
 
-3.  **Writer** (Golang):
+3.  **Page Summarizer** (Python):
+    -   Consumes text content found by the scraper (queue: `page-summarizer-queue`).
+    -   Generates concise summaries of web pages using LLMs.
+
+4.  **Writer** (Golang):
     -   **Batch Processing**: Listens for results and performs efficient bulk inserts using a `DBRepository` interface.
     -   **Identifier Resolution**: Uses the provided internal integer ID for optimized storage and relationship mapping.
     -   **Job Management**: Updates job status in Postgres upon receiving completion signals.
@@ -84,8 +90,11 @@ Workers are decoupled and highly testable through repository mocking.
 | `DATABASE_URL` | Postgres Connection String | `postgres://user:pass@localhost:5432/isidorus` |
 | `INPUT_QUEUE_URL` | Queue for scrape requests | `http://localstack:4566/000000000000/scraper-input` |
 | `WRITER_QUEUE_URL`| Queue for results to be written | `http://localstack:4566/000000000000/writer-queue` |
-| `IMAGE_QUEUE_URL` | Queue for image processing | `http://localstack:4566/000000000000/image-queue` |
+| `IMAGE_QUEUE_URL` | Queue for image processing | `http://localstack:4566/000000000000/image-extractor-queue` |
+| `SUMMARIZER_QUEUE_URL`| Queue for page summarizer | `http://localstack:4566/000000000000/page-summarizer-queue` |
 | `DYNAMODB_TABLE` | DynamoDB Table Name | `scraping_jobs` |
+| `IMAGE_EXPLAINER_ENABLED` | Enable AI image explanation | `true` |
+| `PAGE_SUMMARIZER_ENABLED` | Enable page summarization | `true` |
 
 ## Data Schema (PostgreSQL & DynamoDB)
 
@@ -111,7 +120,7 @@ The `scrapings` table uses an internal Integer `id` for primary keys and a `uuid
 
 ### Unit Tests & Coverage
 - **Purpose**: Verify business logic in isolation using mocks.
-- **Coverage**: All core logic components targeted for **>90% coverage** (currently 100% for API/Scraper/Writer).
+- **Coverage**: All core logic components targeted for **100% coverage**.
 - **Execution**: Run via `make test-unit`.
 
 ### End-to-End (E2E) Tests

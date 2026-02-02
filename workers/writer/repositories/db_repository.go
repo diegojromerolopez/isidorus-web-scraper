@@ -110,9 +110,7 @@ func (repo *PostgresDBRepository) InsertPageSummary(msg domain.WriterMessage) er
 	}
 	
 	if result.RowsAffected == 0 {
-		// Log warning but don't error out - page might have arrived later? 
-		// Or maybe we should retry? For now logging is safer.
-		log.Printf("Warning: No page found to update summary for URL %s (ScrapingID %d)", msg.URL, msg.ScrapingID)
+		return fmt.Errorf("no page found to update summary for URL %s (ScrapingID %d) - will retry", msg.URL, msg.ScrapingID)
 	}
 	
 	return nil

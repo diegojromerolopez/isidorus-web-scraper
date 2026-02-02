@@ -39,7 +39,12 @@ class TestScrapingE2E(unittest.TestCase):
             aws_access_key_id=AWS_ACCESS_KEY_ID,
             aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
         )
-        required_queues = ["scraper-queue", "image-queue", "writer-queue"]
+        required_queues = [
+            "scraper-queue",
+            "image-extractor-queue",
+            "writer-queue",
+            "page-summarizer-queue",
+        ]
 
         for _ in range(30):
             try:
@@ -211,13 +216,30 @@ class TestScrapingE2E(unittest.TestCase):
         self.assertTrue(found_image, "Image 'darth.png' not found in scraping results.")
 
         # 5. Check Summaries
-        found_summary = any(
-            page.get("summary") and "Mocked summary" in page.get("summary")
-            for page in results
-        )
+        found_summary = self._check_summary_persistence(scraping_id)
         self.assertTrue(found_summary, "Page summary not found in results.")
 
-        print("Test passed!")
+    def _check_summary_persistence(self, scraping_id: int) -> bool:
+        """Polls specifically for the presence of a page summary in the results."""
+        for _ in range(60):
+            try:
+                status_resp = requests.get(
+                    f"{API_URL}/scrape?scraping_id={scraping_id}", timeout=5
+                )
+                if status_resp.status_code == 200:
+                    body = status_resp.json()
+                    results = body.get("data", [])
+                    found_summary = any(
+                        page.get("summary") and "Mocked summary" in page.get("summary")
+                        for page in results
+                    )
+                    if found_summary:
+                        return True
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                print(f"Error fetching results during summary check: {e}")
+
+            time.sleep(1)
+        return False
 
     def test_cycle_detection(self) -> None:
         print("Starting Cycle Detection Test...")

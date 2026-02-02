@@ -2,9 +2,9 @@
 
 # Create Queues
 awslocal sqs create-queue --queue-name scraper-queue
-awslocal sqs create-queue --queue-name image-queue
+awslocal sqs create-queue --queue-name image-extractor-queue
 awslocal sqs create-queue --queue-name writer-queue
-awslocal sqs create-queue --queue-name summarizer-queue
+awslocal sqs create-queue --queue-name page-summarizer-queue
 
 # Create DynamoDB Table for Job State
 awslocal dynamodb create-table \

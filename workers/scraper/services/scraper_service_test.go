@@ -90,6 +90,7 @@ func TestProcessMessage_FullFlow(t *testing.T) {
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
 		WithQueues("input", "writer", "image", "summarizer"),
+		WithFeatureFlags(true, true),
 	)
 
 	html := `
