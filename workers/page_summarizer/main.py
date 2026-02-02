@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import time
 
 from shared.clients.sqs_client import SQSClient
 from workers.page_summarizer.config import Configuration
@@ -43,7 +42,7 @@ async def main() -> None:
 
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Polling error: %s", e)
-            time.sleep(5)
+            await asyncio.sleep(1)
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -66,6 +66,20 @@ services:
       redis:
         condition: service_healthy
 
+  auth-admin:
+    build:
+      context: ./auth_admin
+    ports:
+      - "8001:8000"
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/isidorus
+      - SECRET_KEY=django-insecure-test-key
+      - DEBUG=True
+      - ALLOWED_HOSTS=*
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   scraper-worker:
     build:
       context: ./workers/scraper

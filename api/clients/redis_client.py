@@ -16,8 +16,8 @@ class RedisClient:
         """
         return RedisClient(host=config.redis_host, port=config.redis_port)
 
-    async def set(self, key: str, value: Any) -> None:
-        await self.__client.set(key, value)
+    async def set(self, key: str, value: Any, ex: int | None = None) -> None:
+        await self.__client.set(key, value, ex=ex)
 
     async def get(self, key: str) -> str | None:
         value = await self.__client.get(key)

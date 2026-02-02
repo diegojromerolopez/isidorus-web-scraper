@@ -22,8 +22,17 @@ logs:
 	docker compose -f docker-compose.e2e.yml logs -f
 
 # Run end-to-end tests
-test-e2e:
+test-e2e: migrate seed-db
 	docker compose -f docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from test-runner
+
+# Run Django migrations and seed data
+migrate:
+	docker compose -f docker-compose.e2e.yml up -d postgres
+	sleep 5
+	docker compose -f docker-compose.e2e.yml run --rm auth-admin python manage.py migrate --fake-initial
+
+seed-db:
+	docker compose -f docker-compose.e2e.yml run --rm auth-admin python manage.py setup_test_data
 
 # Run unit tests
 test-unit:

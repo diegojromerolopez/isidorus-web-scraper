@@ -69,3 +69,18 @@ class PageImage(models.Model):
 
     class Meta:
         table = "page_images"
+
+
+class APIKey(models.Model):
+    id = fields.UUIDField(pk=True)
+    user_id = fields.IntField()  # Store Django user ID
+    name = fields.CharField(max_length=100, unique=True)
+    prefix = fields.CharField(max_length=8)
+    hashed_key = fields.CharField(max_length=128)
+    is_active = fields.BooleanField(default=True)
+    created_at = fields.DatetimeField(auto_now_add=True)
+    expires_at = fields.DatetimeField(null=True)
+    last_used_at = fields.DatetimeField(null=True)
+
+    class Meta:
+        table = "api_keys"

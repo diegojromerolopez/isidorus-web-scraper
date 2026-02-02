@@ -9,8 +9,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the shared package
 COPY shared/ /app/shared/
 
-# Copy the workers package
-COPY workers/ /app/workers/
+# Copy the page_summarizer package
+COPY workers/page_summarizer/ /app/workers/page_summarizer/
 
 ENV PYTHONPATH=/app
 

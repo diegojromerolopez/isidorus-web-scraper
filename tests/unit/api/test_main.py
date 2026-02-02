@@ -3,8 +3,9 @@ from unittest.mock import AsyncMock
 
 from fastapi.testclient import TestClient
 
-from api.dependencies import get_db_service, get_scraper_service
+from api.dependencies import get_api_key, get_db_service, get_scraper_service
 from api.main import app
+from api.models import APIKey
 
 
 class TestMain(unittest.TestCase):
@@ -12,12 +13,14 @@ class TestMain(unittest.TestCase):
         self.client = TestClient(app)
         self.mock_scraper_service = AsyncMock()
         self.mock_db_service = AsyncMock()
+        self.mock_api_key = APIKey(name="test-key", is_active=True)
 
         # Override dependencies
         app.dependency_overrides[get_scraper_service] = (
             lambda: self.mock_scraper_service
         )
         app.dependency_overrides[get_db_service] = lambda: self.mock_db_service
+        app.dependency_overrides[get_api_key] = lambda: self.mock_api_key
 
     def tearDown(self) -> None:
         app.dependency_overrides = {}

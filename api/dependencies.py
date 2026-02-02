@@ -1,14 +1,22 @@
-from fastapi import Depends
+import hashlib
+from datetime import datetime, timezone
+from typing import cast
+
+from fastapi import Depends, HTTPException, Security, status
+from fastapi.security import APIKeyHeader
 
 from api.clients.dynamodb_client import DynamoDBClient
 from api.clients.redis_client import RedisClient
 from api.clients.sqs_client import SQSClient
 from api.config import Configuration
+from api.models import APIKey
 from api.repositories.db_repository import DbRepository
 from api.services.db_service import DbService
 from api.services.scraper_service import ScraperService
 
 config = Configuration.from_env()
+
+API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
 def get_sqs_client() -> SQSClient:
@@ -59,3 +67,54 @@ def get_db_service(
     Dependency to get the DB service.
     """
     return DbService(repository)
+
+
+async def get_api_key(
+    api_key_header: str | None = Security(API_KEY_HEADER),
+    redis_client: RedisClient = Depends(get_redis_client),
+) -> APIKey:
+    """
+    Validates the API key from the header.
+    Uses Redis for caching and Postgres as the source of truth.
+    """
+    if not api_key_header:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="API Key missing",
+        )
+
+    # Hash the key to look it up
+    hashed_key = hashlib.sha256(api_key_header.encode()).hexdigest()
+    cache_key = f"auth:key:{hashed_key}"
+
+    # 1. Try Redis Cache
+    cached_name = await redis_client.get(cache_key)
+    if cached_name:
+        # If cached, we return a shell model.
+        # Note: We might want to cache the expiration date too if we
+        # want to be paranoid.
+        # But usually keys are cached only if they were valid.
+        return APIKey(name=cached_name, hashed_key=hashed_key, is_active=True)
+
+    # 2. Try Database
+    api_key = await APIKey.filter(hashed_key=hashed_key, is_active=True).first()
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API Key",
+        )
+
+    # Check expiration
+    if api_key.expires_at and api_key.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="API Key expired",
+        )
+
+    # 3. Cache it for 5 minutes
+    await redis_client.set(cache_key, api_key.name, ex=300)
+
+    # Update last_used_at (Asynchronous fire-and-forget or background
+    # task would be better)
+    # For now, let's just update it periodically or skip to keep it fast
+    return cast(APIKey, api_key)

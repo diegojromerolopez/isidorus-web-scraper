@@ -5,7 +5,8 @@ from pydantic import BaseModel
 from tortoise.contrib.fastapi import register_tortoise  # pylint: disable=import-error
 
 from api.config import Configuration
-from api.dependencies import get_db_service, get_scraper_service
+from api.dependencies import get_api_key, get_db_service, get_scraper_service
+from api.models import APIKey
 from api.services.db_service import DbService
 from api.services.scraper_service import ScraperService
 
@@ -21,6 +22,7 @@ class ScrapeRequest(BaseModel):
 async def start_scrape(
     request: ScrapeRequest,
     scraper_service: ScraperService = Depends(get_scraper_service),
+    _api_key: APIKey = Depends(get_api_key),
 ) -> dict[str, int]:
     try:
         scraping_id = await scraper_service.start_scraping(request.url, request.depth)
@@ -31,7 +33,9 @@ async def start_scrape(
 
 @app.get("/scrape")
 async def get_scrape_status(
-    scraping_id: int, service: ScraperService = Depends(get_scraper_service)
+    scraping_id: int,
+    service: ScraperService = Depends(get_scraper_service),
+    _api_key: APIKey = Depends(get_api_key),
 ) -> dict[str, Any]:
     try:
         status = await service.get_scraping_status(scraping_id)
@@ -53,7 +57,9 @@ async def get_scrape_status(
 
 @app.get("/search")
 async def search(
-    t: str, service: DbService = Depends(get_db_service)
+    t: str,
+    service: DbService = Depends(get_db_service),
+    _api_key: APIKey = Depends(get_api_key),
 ) -> dict[str, list[str]]:
     if not t:
         raise HTTPException(status_code=400, detail="Term 't' is required")
@@ -67,7 +73,9 @@ async def search(
 
 @app.get("/terms")
 async def terms(
-    w: str, service: DbService = Depends(get_db_service)
+    w: str,
+    service: DbService = Depends(get_db_service),
+    _api_key: APIKey = Depends(get_api_key),
 ) -> dict[str, list[dict[str, Any]]]:
     if not w:
         raise HTTPException(status_code=400, detail="Website 'w' is required")

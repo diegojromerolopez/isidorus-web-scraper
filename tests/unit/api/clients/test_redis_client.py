@@ -30,7 +30,12 @@ class TestRedisClient(unittest.IsolatedAsyncioTestCase):
     async def test_set(self) -> None:
         """Test set operation"""
         await self.client.set("key1", "value1")
-        self.mock_redis.set.assert_called_once_with("key1", "value1")
+        self.mock_redis.set.assert_called_once_with("key1", "value1", ex=None)
+
+    async def test_set_with_expiration(self) -> None:
+        """Test set operation with expiration"""
+        await self.client.set("key2", "value2", ex=60)
+        self.mock_redis.set.assert_called_once_with("key2", "value2", ex=60)
 
     async def test_get_with_value(self) -> None:
         """Test get operation when value exists"""

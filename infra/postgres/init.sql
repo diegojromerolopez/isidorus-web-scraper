@@ -40,3 +40,5 @@ CREATE TABLE IF NOT EXISTS page_links (
 
 CREATE INDEX idx_page_terms_term ON page_terms(term);
 CREATE INDEX idx_scraped_pages_url ON scraped_pages(url);
+
+

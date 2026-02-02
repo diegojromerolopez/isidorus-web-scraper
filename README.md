@@ -39,32 +39,43 @@ graph TD
     API -->|1. Create Scraping| DB[(PostgreSQL)]
     API -->|2. Start Job| SQS_S[SQS-Scraper Queue]
     
+    Admin((Admin)) -->|Manage Keys| AuthAdmin[Auth Admin-Django]
+    AuthAdmin -->|3. Sync Keys| DB
+    API -->|4. Validate Key| Redis[(Redis)]
+    API -->|5. Check DB| DB
+    
     SQS_S --> Scraper[Scraper-Go]
-    Scraper -->|3. Cycle Detection| Redis[(Redis)]
-    Scraper -->|4. Track Depth| Redis
-    Scraper -->|5. Found Image| SQS_I[SQS-Image Queue]
-    Scraper -->|6. Page Data| SQS_W[SQS-Writer Queue]
+    Scraper -->|6. Cycle Detection| Redis
+    Scraper -->|7. Track Depth| Redis
+    Scraper -->|8. Found Image| SQS_I[SQS-Image Queue]
+    Scraper -->|9. Page Data| SQS_W[SQS-Writer Queue]
     
     SQS_I --> Extractor[Image Extractor-Python]
-    Extractor -->|7. Upload Image| S3[(S3-LocalStack)]
-    Extractor -->|8. Explain via LangChain| LLM((AI Models))
-    Extractor -->|9. Explanation Result| SQS_W
+    Extractor -->|10. Upload Image| S3[(S3-LocalStack)]
+    Extractor -->|11. Explain via LangChain| LLM((AI Models))
+    Extractor -->|12. Explanation Result| SQS_W
 
-    Scraper -->|6b. Page Text| SQS_PS[SQS-Summarizer Queue]
+    Scraper -->|9b. Page Text| SQS_PS[SQS-Summarizer Queue]
     SQS_PS --> Summarizer[Page Summarizer-Python]
-    Summarizer -->|10. Summarize| LLM
-    Summarizer -->|11. Summary Result| SQS_W
+    Summarizer -->|13. Summarize| LLM
+    Summarizer -->|14. Summary Result| SQS_W
     
     SQS_W --> Writer[Writer-Go]
-    Writer -->|12. Store Results| DB
-    Writer -->|13. Complete| Redis
-    Redis -->|14. Finalize| Writer
+    Writer -->|15. Store Results| DB
+    Writer -->|16. Complete| Redis
+    Redis -->|17. Finalize| Writer
 ```
 
 The system is built with a microservices approach:
 
+0.  **Auth Admin (Django)**:
+    -   Control plane for managing API keys and users.
+    -   Securely hashes keys and provides a UI for revocation and expiration.
+    -   Shares the PostgreSQL database with the API for high-performance validation.
+
 1.  **API (FastAPI)**:
     -   Entry point for users.
+    -   Enforces **API Key Authentication** with Redis caching for sub-millisecond validation.
     -   Initiates scraping jobs by sending messages to SQS.
     -   Tracks job status and results using Postgres and Redis.
     -   Provides endpoints to query results.
@@ -122,6 +133,31 @@ The system is built with a microservices approach:
 -   **`GET /search?term={term}`**: Search for pages containing a specific term.
 -   **`GET /terms`**: List all unique terms found across all scrapings.
 
+## Authentication
+
+The API requires an API Key for all requests. The key MUST be provided in the `X-API-Key` header.
+
+### Creating an API Key
+
+1.  **Access the Admin Interface**: Go to `http://localhost:8001/admin` (if running via Docker).
+2.  **Login**: Use your superuser credentials.
+3.  **Navigate to API Keys**: Click on "API Keys" under the "Authentication" section.
+4.  **Add API Key**:
+    -   Click "Add API Key".
+    -   Select a user.
+    -   Provide a descriptive name.
+    -   (Optional) Set an expiration date.
+5.  **Copy the Key**: Once you click Save, the **raw API Key will be displayed only once**. Copy it and store it securely.
+
+### Developer Setup (Initial Key)
+
+If you are running the environment for the first time, you can seed a default test key:
+```bash
+make migrate
+make seed-db
+```
+This will create a key `test-api-key-123` for the user `test-runner`.
+
 ## Infrastructure
 
 The entire stack runs locally via Docker Compose:
@@ -174,6 +210,25 @@ The entire stack runs locally via Docker Compose:
 -   **Writer**: Located in `workers/writer/`.
 -   **Image Extractor**: Located in `workers/image_extractor/`.
 -   **Shared Library**: Located in `shared/`. Contains common Python clients and configuration.
+
+### Linting & Formatting
+
+The project uses several tools to ensure code quality:
+-   **Black**: For deterministic code formatting.
+-   **Ruff**: For fast linting and import sorting.
+-   **Flake8**: For legacy style checks.
+-   **Mypy**: For strict static type checking.
+-   **Pylint**: For deep code analysis (Rating ≥ 9.5 required).
+
+Run all checks:
+```bash
+make lint
+```
+
+Auto-format code:
+```bash
+make format
+```
 
 ## Testing
 

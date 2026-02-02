@@ -2,6 +2,7 @@
 import os
 import time
 import unittest
+from typing import Any, cast
 from urllib.parse import urlparse
 
 import boto3
@@ -20,10 +21,13 @@ AWS_ENDPOINT_URL = os.getenv("AWS_ENDPOINT_URL", "http://localstack:4566")
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "test")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "test")
+API_KEY = os.getenv("API_KEY", "test-api-key-123")
 
 
 class TestScrapingE2E(unittest.TestCase):
     def setUp(self) -> None:
+        self.session = requests.Session()
+        self.session.headers.update({"X-API-Key": API_KEY})
         self.wait_for_db()
         self.wait_for_sqs()
         self.cleanup_database()
@@ -132,7 +136,8 @@ class TestScrapingE2E(unittest.TestCase):
         """Wait until the API is responsive."""
         for _ in range(30):
             try:
-                requests.get(f"{API_URL}/docs", timeout=5)
+                # /docs does not require auth usually but let's be safe
+                self.session.get(f"{API_URL}/docs", timeout=5)
                 return
             except requests.RequestException:
                 time.sleep(1)
@@ -141,13 +146,23 @@ class TestScrapingE2E(unittest.TestCase):
     def _trigger_scraping(self, url: str, depth: int) -> int:
         """Triggers a scraping job and returns the scraping_id."""
         payload = {"url": url, "depth": depth}
-        response = requests.post(f"{API_URL}/scrape", json=payload, timeout=5)
+        response = self.session.post(f"{API_URL}/scrape", json=payload, timeout=5)
         self.assertEqual(
             response.status_code, 200, f"Failed to trigger scraping: {response.text}"
         )
         data = response.json()
         self.assertIn("scraping_id", data)
         return int(data["scraping_id"])
+
+    def _get_scraping_status(self, scraping_id: int) -> dict:
+        """Gets the status of a scraping job."""
+        response = self.session.get(
+            f"{API_URL}/scrape", params={"scraping_id": scraping_id}, timeout=5
+        )
+        self.assertEqual(
+            response.status_code, 200, f"Failed to get status: {response.text}"
+        )
+        return cast(dict[Any, Any], response.json())
 
     def _poll_scraping_completion(self, scraping_id: int) -> list:
         """Polls the API until the scraping job completes, returning the results."""
@@ -157,15 +172,11 @@ class TestScrapingE2E(unittest.TestCase):
         # Wait up to 60s
         for _ in range(60):
             time.sleep(1)
-            status_resp = requests.get(
-                f"{API_URL}/scrape?scraping_id={scraping_id}", timeout=5
-            )
-            if status_resp.status_code == 200:
-                body = status_resp.json()
-                final_status = body.get("status")
-                if final_status == "COMPLETED":
-                    results = body.get("data", [])
-                    break
+            status_data = self._get_scraping_status(scraping_id)
+            final_status = status_data.get("status")
+            if final_status == "COMPLETED":
+                results = status_data.get("data", [])
+                break
 
         self.assertEqual(final_status, "COMPLETED", "Scraping timed out or failed.")
         return results
@@ -181,14 +192,10 @@ class TestScrapingE2E(unittest.TestCase):
         """Polls specifically for the presence of a specific image in the results."""
         for _ in range(60):
             try:
-                status_resp = requests.get(
-                    f"{API_URL}/scrape?scraping_id={scraping_id}", timeout=5
-                )
-                if status_resp.status_code == 200:
-                    body = status_resp.json()
-                    results = body.get("data", [])
-                    if self._is_image_found(results):
-                        return True
+                status_data = self._get_scraping_status(scraping_id)
+                results = status_data.get("data", [])
+                if self._is_image_found(results):
+                    return True
             except Exception as e:  # pylint: disable=broad-exception-caught
                 print(f"Error fetching results during image check: {e}")
 
@@ -223,18 +230,14 @@ class TestScrapingE2E(unittest.TestCase):
         """Polls specifically for the presence of a page summary in the results."""
         for _ in range(60):
             try:
-                status_resp = requests.get(
-                    f"{API_URL}/scrape?scraping_id={scraping_id}", timeout=5
+                status_data = self._get_scraping_status(scraping_id)
+                results = status_data.get("data", [])
+                found_summary = any(
+                    page.get("summary") and "Mocked summary" in page.get("summary")
+                    for page in results
                 )
-                if status_resp.status_code == 200:
-                    body = status_resp.json()
-                    results = body.get("data", [])
-                    found_summary = any(
-                        page.get("summary") and "Mocked summary" in page.get("summary")
-                        for page in results
-                    )
-                    if found_summary:
-                        return True
+                if found_summary:
+                    return True
             except Exception as e:  # pylint: disable=broad-exception-caught
                 print(f"Error fetching results during summary check: {e}")
 
@@ -248,7 +251,7 @@ class TestScrapingE2E(unittest.TestCase):
         payload = {"url": "http://mock-website:8000/cycle_a.html", "depth": 5}
         # Depth 5 would cause infinite loop without cycle detection
 
-        response = requests.post(f"{API_URL}/scrape", json=payload, timeout=5)
+        response = self.session.post(f"{API_URL}/scrape", json=payload, timeout=5)
         self.assertEqual(
             response.status_code,
             200,
@@ -264,15 +267,11 @@ class TestScrapingE2E(unittest.TestCase):
         results = []
         for _ in range(60):  # Wait up to 60s
             time.sleep(1)
-            status_resp = requests.get(
-                f"{API_URL}/scrape?scraping_id={scraping_id}", timeout=5
-            )
-            if status_resp.status_code == 200:
-                body = status_resp.json()
-                final_status = body.get("status")
-                if final_status == "COMPLETED":
-                    results = body.get("data", [])
-                    break
+            status_data = self._get_scraping_status(scraping_id)
+            final_status = cast(str, status_data.get("status"))
+            if final_status == "COMPLETED":
+                results = status_data.get("data", [])
+                break
 
         self.assertEqual(
             final_status,
@@ -300,7 +299,7 @@ class TestScrapingE2E(unittest.TestCase):
         print("Starting DynamoDB Job History Test...")
         url = "http://mock-website:8000/index.html"
         payload = {"url": url, "depth": 1}
-        response = requests.post(f"{API_URL}/scrape", json=payload, timeout=5)
+        response = self.session.post(f"{API_URL}/scrape", json=payload, timeout=5)
         self.assertEqual(response.status_code, 200)
 
         scraping_id = response.json()["scraping_id"]

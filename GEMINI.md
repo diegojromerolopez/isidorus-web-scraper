@@ -19,6 +19,7 @@ This application is designed for scenarios where deep content analysis of a web 
 ```text
 .
 ├── api/                # FastAPI Application (Python)
+├── auth_admin/         # API Key & User Management (Django)
 ├── workers/
 │   ├── scraper/        # Recursive Web Scraper (Go)
 │   ├── writer/         # Batch DB Writer (Go)
@@ -57,6 +58,17 @@ The architecture consists of the following components:
 - **Services**: Encapsulate business logic with **async/await** for non-blocking I/O.
 - **Async Clients**: Uses `redis.asyncio` for Redis operations, `aioboto3` for DynamoDB/SQS interactions, and `httpx` for HTTP requests.
 - **Mocks**: Integrated into the test suite to achieve **100% unit test coverage**.
+
+### Auth Admin (Python/Django)
+- **Role**: Contol Plane for managing system state that isn't high-throughput.
+- **Admin**: Uses the standard Django Admin interface for secure management of Users and API Keys.
+- **Security**: Handles key generation and irreversible SHA-256 hashing.
+- **Models**:
+  - `APIKey`: Stores hashed keys, prefixes, owner relationship, and expiration.
+  - `User`: Standard Django user model for authentication.
+- **High Performance Validation**: While keys are managed in Django, they are stored in the shared `api_keys` table. The FastAPI service validates these keys using direct Postgres queries (via Tortoise ORM) and leverages **Redis** for sub-millisecond caching of valid keys.
+- **Management Commands**:
+  - `setup_test_data`: Seeds a known test key (`test-api-key-123`) for E2E tests.
 
 ### Workers
 Workers are decoupled and highly testable through repository mocking.
@@ -115,6 +127,7 @@ The `scrapings` table uses an internal Integer `id` for primary keys and a `uuid
 - **`page_terms`**: Map of terms and frequencies. Denormalized with `scraping_id` (INT) and `page_id` (INT).
 - **`page_links`**: Adjacency list for the web graph. Denormalized with `scraping_id` (INT) and `source_page_id` (INT).
 - **`page_images`**: Metadata and URLs. Denormalized with `scraping_id` (INT) and `page_id` (INT).
+- **`api_keys`**: Managed by Django. Used for FastAPI authentication.
 
 ## Testing Strategy
 
