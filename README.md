@@ -193,7 +193,8 @@ The entire stack runs locally via Docker Compose:
     make up
     ```
 
-2.  **Run End-to-End Tests**:
+2.  **Run Full End-to-End Tests**:
+    Includes image extraction and page summarization (requires more resources).
     ```bash
     make test-e2e
     ```
@@ -203,7 +204,8 @@ The entire stack runs locally via Docker Compose:
     make test-unit
     ```
 
-4.  **Run Basic E2E Tests** (No AI workers):
+4.  **Run Basic E2E Tests**:
+    Runs only the core scraping and writing logic. Useful for fast iteration and CI.
     ```bash
     make test-e2e-basic
     ```
@@ -238,9 +240,17 @@ make format
 ## Testing
 
 The project emphasizes high test coverage:
--   **Unit Tests**: 100% coverage for all components (API, Scraper, Writer, Image Extractor, Page Summarizer).
+-   **Unit Tests**: ~100% coverage for all components (API, Scraper, Writer, Image Extractor, Page Summarizer).
 -   **E2E Tests**: Full integration tests using a local test runner and mock website.
 -   **Shared Library Tests**: Located in `tests/unit/shared/` for common client testing.
+
+### AI Worker Testing
+
+By default, the E2E tests use `LLM_PROVIDER=mock` to avoid external API calls and costs. This returns fixed "Mocked summary" and "Mocked explanation" results.
+
+To test with real providers:
+1.  Update `LLM_PROVIDER` in `docker-compose.e2e.yml` (e.g., to `openai`).
+2.  Ensure the corresponding environment variable (e.g., `OPENAI_API_KEY`) is set in your host or `.env`.
 
 ## License
 
