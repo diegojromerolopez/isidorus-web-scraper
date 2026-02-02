@@ -2,16 +2,21 @@ import json
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from shared.clients.s3_client import S3Client
+from shared.clients.sqs_client import SQSClient
 from workers.image_extractor.services.extractor_service import ExtractorService
 
 
 class TestExtractorService(unittest.IsolatedAsyncioTestCase):
     # pylint: disable=protected-access
     async def asyncSetUp(self) -> None:
-        self.mock_sqs_client = MagicMock()
-        self.mock_s3_client = MagicMock()
-        self.writer_queue = "http://writer"
-        self.images_bucket = "test-bucket"
+        self.mock_sqs = MagicMock(spec=SQSClient)
+        self.mock_s3 = MagicMock(spec=S3Client)
+        # S3 methods are now async
+        self.mock_s3.upload_bytes = AsyncMock(return_value="s3://test/image.jpg")
+
+        self.writer_queue = "writer-queue"
+        self.images_bucket = "images-bucket"
 
         # Patch ExplainerFactory.get_explainer in setUp to avoid actual LLM init
         with patch(
@@ -20,9 +25,11 @@ class TestExtractorService(unittest.IsolatedAsyncioTestCase):
         ) as mock_get:
             self.mock_llm = MagicMock()
             mock_get.return_value = self.mock_llm
+            self.mock_llm = MagicMock()
+            mock_get.return_value = self.mock_llm
             self.service = ExtractorService(
-                self.mock_sqs_client,
-                self.mock_s3_client,
+                self.mock_sqs,
+                self.mock_s3,
                 self.writer_queue,
                 self.images_bucket,
             )
@@ -48,7 +55,7 @@ class TestExtractorService(unittest.IsolatedAsyncioTestCase):
         mock_async_client_cls.return_value = mock_client
 
         # Mock S3 upload
-        self.mock_s3_client.upload_bytes.return_value = "s3://test-bucket/key.jpg"
+        self.mock_s3.upload_bytes = AsyncMock(return_value="s3://test-bucket/key.jpg")
 
         # Mock Explanation
         mock_explain.return_value = "A beautiful landscape"
@@ -63,9 +70,9 @@ class TestExtractorService(unittest.IsolatedAsyncioTestCase):
 
         await self.service.process_message(message_body)
 
-        self.mock_sqs_client.send_message.assert_called_once()
-        call_args = self.mock_sqs_client.send_message.call_args
-        queue_url, sent_msg = call_args[0]
+        self.mock_sqs.send_message.assert_called_once()
+        call_args = self.mock_sqs.send_message.call_args
+        sent_msg, queue_url = call_args[0]
 
         self.assertEqual(queue_url, self.writer_queue)
         self.assertEqual(sent_msg["explanation"], "A beautiful landscape")
@@ -74,15 +81,15 @@ class TestExtractorService(unittest.IsolatedAsyncioTestCase):
 
     async def test_process_message_no_url(self) -> None:
         await self.service.process_message(json.dumps({}))
-        self.mock_sqs_client.send_message.assert_not_called()
+        self.mock_sqs.send_message.assert_not_called()
 
     async def test_process_message_invalid_json(self) -> None:
         await self.service.process_message("invalid json")
-        self.mock_sqs_client.send_message.assert_not_called()
+        self.mock_sqs.send_message.assert_not_called()
 
     async def test_process_message_upload_failure(self) -> None:
         # Mock S3 upload failure
-        self.mock_s3_client.upload_bytes.side_effect = Exception("S3 error")
+        self.mock_s3.upload_bytes = AsyncMock(side_effect=Exception("S3 error"))
         # We also need to mock explain_image to avoid it running if we reach that point
         # But if upload fails, s3_path is None, and we still proceed to explain/send?
         # Looking at code: Yes, it logs error for upload, then proceeds to explanation.
@@ -118,9 +125,9 @@ class TestExtractorService(unittest.IsolatedAsyncioTestCase):
                 await self.service.process_message(message_body)
 
         # Verify SQS message has s3_path=None
-        self.mock_sqs_client.send_message.assert_called_once()
-        call_args = self.mock_sqs_client.send_message.call_args
-        _, sent_msg = call_args[0]
+        self.mock_sqs.send_message.assert_called_once()
+        call_args = self.mock_sqs.send_message.call_args
+        sent_msg, _ = call_args[0]
         self.assertIsNone(sent_msg["s3_path"])
         self.assertEqual(sent_msg["explanation"], "Explanation")
 

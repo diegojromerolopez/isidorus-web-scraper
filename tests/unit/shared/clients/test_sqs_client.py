@@ -2,7 +2,7 @@ import json
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from api.clients.sqs_client import SQSClient
+from shared.clients.sqs_client import SQSClient
 
 
 class TestSQSClient(unittest.IsolatedAsyncioTestCase):
@@ -14,7 +14,7 @@ class TestSQSClient(unittest.IsolatedAsyncioTestCase):
         self.secret_key = "test"
         self.queue_url = "http://localhost:4566/queue/test-queue"
 
-    @patch("api.clients.sqs_client.aioboto3.Session")
+    @patch("shared.clients.sqs_client.aioboto3.Session")
     async def test_init(self, mock_session_cls: MagicMock) -> None:
         mock_session = MagicMock()
         mock_session_cls.return_value = mock_session
@@ -30,7 +30,7 @@ class TestSQSClient(unittest.IsolatedAsyncioTestCase):
         # Verify Session was instantiated
         mock_session_cls.assert_called_once()
 
-    @patch("api.clients.sqs_client.aioboto3.Session")
+    @patch("shared.clients.sqs_client.aioboto3.Session")
     async def test_send_message_success(self, mock_session_cls: MagicMock) -> None:
         # 1. Setup Mock Session and Client
         mock_sqs_client = AsyncMock()
@@ -68,7 +68,7 @@ class TestSQSClient(unittest.IsolatedAsyncioTestCase):
             aws_secret_access_key=self.secret_key,
         )
 
-    @patch("api.clients.sqs_client.aioboto3.Session")
+    @patch("shared.clients.sqs_client.aioboto3.Session")
     async def test_send_message_error(self, mock_session_cls: MagicMock) -> None:
         # 1. Setup Mock to raise error
         mock_client_cm = MagicMock()

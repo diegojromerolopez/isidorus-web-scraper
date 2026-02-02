@@ -35,7 +35,9 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
     ) -> None:
         # Mock SQS Client
         mock_sqs_instance = MagicMock()
-        mock_sqs_cls.return_value = mock_sqs_instance
+        mock_sqs_instance.receive_messages = AsyncMock()
+        mock_sqs_instance.delete_message = AsyncMock()
+        mock_sqs_cls.create.return_value = mock_sqs_instance
 
         # Mock Service with AsyncMock for process_message
         mock_service_instance = MagicMock()
@@ -79,7 +81,8 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         mock_sqs_cls: MagicMock,
     ) -> None:
         mock_sqs_instance = MagicMock()
-        mock_sqs_cls.return_value = mock_sqs_instance
+        mock_sqs_instance.receive_messages = AsyncMock()
+        mock_sqs_cls.create.return_value = mock_sqs_instance
 
         sqs_error = Exception("SQS Error")
         # Side effect: Raise normal exception (caught), then SystemExit (uncaught)

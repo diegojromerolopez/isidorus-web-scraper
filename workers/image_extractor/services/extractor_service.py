@@ -4,8 +4,8 @@ import uuid
 
 import httpx
 
-from workers.image_extractor.clients.s3_client import S3Client
-from workers.image_extractor.clients.sqs_client import SQSClient
+from shared.clients.s3_client import S3Client
+from shared.clients.sqs_client import SQSClient
 from workers.image_extractor.services.explainer_factory import ExplainerFactory
 
 logger = logging.getLogger(__name__)
@@ -50,7 +50,8 @@ class ExtractorService:
                 async with httpx.AsyncClient() as client:
                     resp = await client.get(image_url, timeout=10.0)
                     if resp.status_code == 200:
-                        s3_path = self.__upload_image_to_s3(
+                        # Upload to S3
+                        s3_path = await self.__upload_image_to_s3(
                             resp.content, image_url, scraping_id
                         )
             except Exception as e:  # pylint: disable=broad-exception-caught
@@ -71,20 +72,20 @@ class ExtractorService:
                 "s3_path": s3_path,
             }
 
-            self.__sqs_client.send_message(self.__writer_queue_url, writer_msg)
+            await self.__sqs_client.send_message(writer_msg, self.__writer_queue_url)
             logger.info("Sent extraction info for %s to writer queue", image_url)
 
         except Exception as e:  # pylint: disable=broad-exception-caught
             # Catch-all to prevent worker crash on single message failure
             logger.error("Error processing image extraction: %s", e)
 
-    def __upload_image_to_s3(
+    async def __upload_image_to_s3(
         self, content: bytes, image_url: str, scraping_id: int
     ) -> str | None:
         try:
             ext = image_url.split(".")[-1].split("?")[0] or "bin"
             s3_key = f"{scraping_id}/{uuid.uuid4()}.{ext}"
-            s3_path = self.__s3_client.upload_bytes(
+            s3_path = await self.__s3_client.upload_bytes(
                 content, self.__images_bucket, s3_key, "image/jpeg"
             )
             logger.info("Uploaded image to %s", s3_path)

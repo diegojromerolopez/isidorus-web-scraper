@@ -62,6 +62,44 @@ class TestScraperService(unittest.IsolatedAsyncioTestCase):
             }
         )
 
+    async def test_get_scraping_status(self) -> None:
+        mock_sqs_client = AsyncMock()
+        mock_redis_client = AsyncMock()
+        mock_db_repository = AsyncMock()
+
+        expected_status = {
+            "id": 123,
+            "uuid": "test-uuid",
+            "url": "http://example.com",
+            "created_at": "2024-01-01T00:00:00",
+        }
+        mock_db_repository.get_scraping.return_value = expected_status
+
+        service = ScraperService(mock_sqs_client, mock_redis_client, mock_db_repository)
+
+        result = await service.get_scraping_status(123)
+
+        self.assertEqual(result, expected_status)
+        mock_db_repository.get_scraping.assert_called_once_with(123)
+
+    async def test_get_scraping_results(self) -> None:
+        mock_sqs_client = AsyncMock()
+        mock_redis_client = AsyncMock()
+        mock_db_repository = AsyncMock()
+
+        expected_results = [
+            {"url": "http://example.com/page1", "term_count": 5},
+            {"url": "http://example.com/page2", "term_count": 3},
+        ]
+        mock_db_repository.get_scrape_results.return_value = expected_results
+
+        service = ScraperService(mock_sqs_client, mock_redis_client, mock_db_repository)
+
+        result = await service.get_scraping_results(123)
+
+        self.assertEqual(result, expected_results)
+        mock_db_repository.get_scrape_results.assert_called_once_with(123)
+
 
 if __name__ == "__main__":
     unittest.main()

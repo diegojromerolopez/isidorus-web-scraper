@@ -63,6 +63,7 @@ The system is built with a microservices approach:
     -   Initiates scraping jobs by sending messages to SQS.
     -   Tracks job status and results using Postgres and Redis.
     -   Provides endpoints to query results.
+    -   Uses shared Python library for AWS clients and configuration.
 
 2.  **Scraper Worker (Go)**:
     -   Consumes scrape requests from SQS.
@@ -74,14 +75,21 @@ The system is built with a microservices approach:
 
 3.  **Image Extractor Worker (Python)**:
     -   Consumes image URLs found by the scraper.
-    -   **S3 Persistence**: Downloads and uploads images to an AWS S3 bucket.
+    -   **S3 Persistence**: Downloads and uploads images to an AWS S3 bucket using async S3 client.
     -   **AI Explainer (LangChain)**: Generates image descriptions using various LLM providers (OpenAI, Gemini, Anthropic, Ollama, HuggingFace).
     -   Sends the S3 path and explanation to the Writer.
+    -   Uses shared Python library for AWS clients and configuration.
 
 4.  **Writer Worker (Go)**:
     -   Consumes structured data (pages, terms, links, images, job completion events) from SQS.
     -   Writes data to PostgreSQL in a normalized schema.
     -   Handles job completion status updates.
+
+5.  **Shared Library (Python)**:
+    -   Common package (`shared/`) containing reusable components.
+    -   **Async AWS Clients**: `SQSClient` and `S3Client` using `aioboto3` for non-blocking I/O.
+    -   **Configuration**: Base `Configuration` class for centralized environment variable management.
+    -   Used by both API and Image Extractor worker to ensure consistency.
 
 ## Configuration & Environment Variables
 
@@ -153,12 +161,14 @@ The entire stack runs locally via Docker Compose:
 -   **Scraper**: Located in `workers/scraper/`.
 -   **Writer**: Located in `workers/writer/`.
 -   **Image Extractor**: Located in `workers/image_extractor/`.
+-   **Shared Library**: Located in `shared/`. Contains common Python clients and configuration.
 
 ## Testing
 
 The project emphasizes high test coverage:
--   **Unit Tests**: >90% coverage for all components.
+-   **Unit Tests**: 100% coverage for API, >90% for all other components.
 -   **E2E Tests**: Full integration tests using a local test runner and mock website.
+-   **Shared Library Tests**: Located in `tests/unit/shared/` for common client testing.
 
 ## License
 

@@ -6,6 +6,9 @@ WORKDIR /app
 COPY workers/image_extractor/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy the shared package
+COPY shared/ /app/shared/
+
 # Copy the workers package
 COPY workers/ /app/workers/
 

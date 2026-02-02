@@ -14,7 +14,7 @@ from api.repositories.db_repository import DbRepository
 # pylint: disable=import-outside-toplevel
 # pylint: disable=import-outside-toplevel
 class TestDependencies(unittest.IsolatedAsyncioTestCase):
-    @patch("api.clients.sqs_client.aioboto3.Session")
+    @patch("shared.clients.sqs_client.aioboto3.Session")
     def test_get_sqs_client(self, _mock_session: MagicMock) -> None:
         client = get_sqs_client()
         self.assertIsInstance(client, SQSClient)

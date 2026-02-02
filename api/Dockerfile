@@ -6,6 +6,9 @@ WORKDIR /app
 COPY api/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy the shared package
+COPY shared/ shared/
+
 # Copy the api package
 COPY api/ api/
 
