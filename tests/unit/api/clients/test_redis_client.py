@@ -22,7 +22,9 @@ class TestRedisClient(unittest.IsolatedAsyncioTestCase):
         with patch("api.clients.redis_client.redis.Redis") as mock_redis_val:
             client = RedisClient(host="testhost", port=1234, db=5)
             mock_redis_val.assert_called_with(host="testhost", port=1234, db=5)
-            self.assertIsNotNone(client._RedisClient__client)
+            self.assertIsNotNone(
+                client._RedisClient__client  # type: ignore[attr-defined]
+            )
 
     async def test_set(self) -> None:
         """Test set operation"""

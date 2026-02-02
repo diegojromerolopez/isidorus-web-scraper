@@ -46,7 +46,7 @@ func (m *MockSQSClient) DeleteMessage(ctx context.Context, queueURL string, rece
 
 func TestProcessMessage_PageData(t *testing.T) {
 	mockRepo := new(MockDBRepository)
-	s := NewWriterService(mockRepo)
+	s := NewWriterService(WithDBRepository(mockRepo))
 
 	msg := domain.WriterMessage{
 		Type: "page_data",
@@ -63,7 +63,7 @@ func TestProcessMessage_PageData(t *testing.T) {
 
 func TestProcessMessage_ImageExplanation(t *testing.T) {
 	mockRepo := new(MockDBRepository)
-	s := NewWriterService(mockRepo)
+	s := NewWriterService(WithDBRepository(mockRepo))
 
 	msg := domain.WriterMessage{
 		Type:        "image_explanation",
@@ -81,7 +81,7 @@ func TestProcessMessage_ImageExplanation(t *testing.T) {
 
 func TestProcessMessage_UnknownType(t *testing.T) {
 	mockRepo := new(MockDBRepository)
-	s := NewWriterService(mockRepo)
+	s := NewWriterService(WithDBRepository(mockRepo))
 
 	msg := domain.WriterMessage{
 		Type: "unknown",
@@ -96,7 +96,7 @@ func TestProcessMessage_UnknownType(t *testing.T) {
 
 func TestProcessMessage_RepoError(t *testing.T) {
 	mockRepo := new(MockDBRepository)
-	s := NewWriterService(mockRepo)
+	s := NewWriterService(WithDBRepository(mockRepo))
 
 	msg := domain.WriterMessage{
 		Type: "page_data",
@@ -107,11 +107,11 @@ func TestProcessMessage_RepoError(t *testing.T) {
 	err := s.ProcessMessage(msg)
 
 	assert.Error(t, err)
-	assert.Equal(t, assert.AnError, err)
+	assert.ErrorIs(t, err, assert.AnError)
 }
 func TestProcessMessage_ScrapingComplete(t *testing.T) {
 	mockRepo := new(MockDBRepository)
-	s := NewWriterService(mockRepo)
+	s := NewWriterService(WithDBRepository(mockRepo))
 
 	msg := domain.WriterMessage{
 		Type:         "scraping_complete",

@@ -21,7 +21,7 @@ class TestSQSClient(unittest.IsolatedAsyncioTestCase):
             self.secret_key,
             self.queue_url,
         )
-        self.assertIsNotNone(client._SQSClient__session)
+        self.assertIsNotNone(client._SQSClient__session)  # type: ignore[attr-defined]
 
     async def test_send_message_success(self) -> None:
         client = SQSClient(
@@ -39,8 +39,9 @@ class TestSQSClient(unittest.IsolatedAsyncioTestCase):
         mock_client_cm.__aenter__.return_value = mock_sqs_client
         mock_client_cm.__aexit__.return_value = None
 
-        client._SQSClient__session = MagicMock()
-        client._SQSClient__session.client.return_value = mock_client_cm
+        mock_session = MagicMock()
+        mock_session.client.return_value = mock_client_cm
+        client._SQSClient__session = mock_session  # type: ignore[attr-defined]
 
         message = {"foo": "bar"}
         result = await client.send_message(message)
@@ -64,8 +65,9 @@ class TestSQSClient(unittest.IsolatedAsyncioTestCase):
         mock_client_cm.__aenter__.side_effect = Exception("SQS Error")
         mock_client_cm.__aexit__.return_value = None
 
-        client._SQSClient__session = MagicMock()
-        client._SQSClient__session.client.return_value = mock_client_cm
+        mock_session = MagicMock()
+        mock_session.client.return_value = mock_client_cm
+        client._SQSClient__session = mock_session  # type: ignore[attr-defined]
 
         message = {"foo": "bar"}
 

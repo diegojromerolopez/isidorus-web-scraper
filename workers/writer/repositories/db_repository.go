@@ -1,6 +1,7 @@
 package repositories
 
 import (
+	"fmt"
 	"log"
 
 	"gorm.io/gorm"
@@ -8,24 +9,18 @@ import (
 	"writer-worker/models"
 )
 
-type DBRepository interface {
-	InsertPageData(data domain.WriterMessage) error
-	InsertImageExplanation(data domain.WriterMessage) error
-	CompleteScraping(scrapingID int) error
-}
-
 type PostgresDBRepository struct {
-	DB        *gorm.DB
-	BatchSize int
+	db        *gorm.DB
+	batchSize int
 }
 
-func NewDBRepository(db *gorm.DB, batchSize int) DBRepository {
+func NewDBRepository(db *gorm.DB, batchSize int) *PostgresDBRepository {
 	if batchSize <= 0 {
 		batchSize = 100 // Default
 	}
 	return &PostgresDBRepository{
-		DB:        db,
-		BatchSize: batchSize,
+		db:        db,
+		batchSize: batchSize,
 	}
 }
 
@@ -36,9 +31,8 @@ func (repo *PostgresDBRepository) InsertPageData(msg domain.WriterMessage) error
 		ScrapingID: msg.ScrapingID,
 	}
 
-	if err := repo.DB.Create(&page).Error; err != nil {
-		log.Printf("Error inserting into scraped_pages: %v", err)
-		return err
+	if err := repo.db.Create(&page).Error; err != nil {
+		return fmt.Errorf("failed to insert scraped page for URL %s: %w", msg.URL, err)
 	}
 
 	// Insert Page Terms (Batch)
@@ -53,8 +47,8 @@ func (repo *PostgresDBRepository) InsertPageData(msg domain.WriterMessage) error
 			})
 		}
 
-		if err := repo.DB.CreateInBatches(terms, repo.BatchSize).Error; err != nil {
-			log.Printf("Error batch inserting terms: %v", err)
+		if err := repo.db.CreateInBatches(terms, repo.batchSize).Error; err != nil {
+			log.Printf("Error batch inserting terms for page %d: %v", page.ID, err)
 		}
 	}
 
@@ -69,8 +63,8 @@ func (repo *PostgresDBRepository) InsertPageData(msg domain.WriterMessage) error
 			})
 		}
 
-		if err := repo.DB.CreateInBatches(links, repo.BatchSize).Error; err != nil {
-			log.Printf("Error batch inserting links: %v", err)
+		if err := repo.db.CreateInBatches(links, repo.batchSize).Error; err != nil {
+			log.Printf("Error batch inserting links for page %d: %v", page.ID, err)
 		}
 	}
 
@@ -80,14 +74,13 @@ func (repo *PostgresDBRepository) InsertPageData(msg domain.WriterMessage) error
 func (repo *PostgresDBRepository) InsertImageExplanation(msg domain.WriterMessage) error {
 	// Find the page_id first based on PageURL AND ScrapingID
 	var page models.ScrapedPage
-	err := repo.DB.
+	err := repo.db.
 		Where("url = ? AND scraping_id = ?", msg.PageURL, msg.ScrapingID).
 		Order("scraped_at DESC").
 		First(&page).Error
 
 	if err != nil {
-		log.Printf("Error finding page for image insertion (url=%s, scraping_id=%d): %v", msg.PageURL, msg.ScrapingID, err)
-		return err
+		return fmt.Errorf("failed to find page for URL %s and id %d: %w", msg.PageURL, msg.ScrapingID, err)
 	}
 
 	// Insert the image
@@ -99,15 +92,22 @@ func (repo *PostgresDBRepository) InsertImageExplanation(msg domain.WriterMessag
 		S3Path:      msg.S3Path,
 	}
 
-	return repo.DB.Create(&image).Error
+	if err := repo.db.Create(&image).Error; err != nil {
+		return fmt.Errorf("failed to insert image explanation for URL %s: %w", msg.URL, err)
+	}
+	return nil
 }
 
 func (repo *PostgresDBRepository) CompleteScraping(scrapingID int) error {
-	return repo.DB.
+	err := repo.db.
 		Model(&models.Scraping{}).
 		Where("id = ?", scrapingID).
 		Updates(map[string]interface{}{
-			"status":       "COMPLETED",
+			"status":       domain.StatusCompleted,
 			"completed_at": gorm.Expr("NOW()"),
 		}).Error
+	if err != nil {
+		return fmt.Errorf("failed to complete scraping for ID %d: %w", scrapingID, err)
+	}
+	return nil
 }

@@ -20,7 +20,9 @@ class TestDynamoDBClient(unittest.IsolatedAsyncioTestCase):
             self.secret_key,
             self.table_name,
         )
-        self.assertIsNotNone(client._DynamoDBClient__session)
+        self.assertIsNotNone(
+            client._DynamoDBClient__session  # type: ignore[attr-defined]
+        )
 
     async def test_put_item_success(self) -> None:
         client = DynamoDBClient(
@@ -41,8 +43,9 @@ class TestDynamoDBClient(unittest.IsolatedAsyncioTestCase):
         mock_resource_cm.__aenter__.return_value = mock_dynamodb
         mock_resource_cm.__aexit__.return_value = None
 
-        client._DynamoDBClient__session = MagicMock()
-        client._DynamoDBClient__session.resource.return_value = mock_resource_cm
+        mock_session = MagicMock()
+        mock_session.resource.return_value = mock_resource_cm
+        client._DynamoDBClient__session = mock_session  # type: ignore[attr-defined]
 
         item = {"id": "1", "data": "value"}
         result = await client.put_item(item)
@@ -63,8 +66,9 @@ class TestDynamoDBClient(unittest.IsolatedAsyncioTestCase):
         mock_resource_cm.__aenter__.side_effect = Exception("DynamoDB error")
         mock_resource_cm.__aexit__.return_value = None
 
-        client._DynamoDBClient__session = MagicMock()
-        client._DynamoDBClient__session.resource.return_value = mock_resource_cm
+        mock_session = MagicMock()
+        mock_session.resource.return_value = mock_resource_cm
+        client._DynamoDBClient__session = mock_session  # type: ignore[attr-defined]
 
         with self.assertRaisesRegex(Exception, "DynamoDB error"):
             await client.put_item({"id": "1"})
@@ -89,8 +93,9 @@ class TestDynamoDBClient(unittest.IsolatedAsyncioTestCase):
         mock_resource_cm.__aenter__.return_value = mock_dynamodb
         mock_resource_cm.__aexit__.return_value = None
 
-        client._DynamoDBClient__session = MagicMock()
-        client._DynamoDBClient__session.resource.return_value = mock_resource_cm
+        mock_session = MagicMock()
+        mock_session.resource.return_value = mock_resource_cm
+        client._DynamoDBClient__session = mock_session  # type: ignore[attr-defined]
 
         result = await client.get_item({"id": "1"})
         self.assertEqual(result, expected_item)
@@ -115,8 +120,9 @@ class TestDynamoDBClient(unittest.IsolatedAsyncioTestCase):
         mock_resource_cm.__aenter__.return_value = mock_dynamodb
         mock_resource_cm.__aexit__.return_value = None
 
-        client._DynamoDBClient__session = MagicMock()
-        client._DynamoDBClient__session.resource.return_value = mock_resource_cm
+        mock_session = MagicMock()
+        mock_session.resource.return_value = mock_resource_cm
+        client._DynamoDBClient__session = mock_session  # type: ignore[attr-defined]
 
         result = await client.get_item({"id": "1"})
         self.assertIsNone(result)
@@ -134,8 +140,10 @@ class TestDynamoDBClient(unittest.IsolatedAsyncioTestCase):
         mock_resource_cm.__aenter__.side_effect = Exception("DynamoDB error")
         mock_resource_cm.__aexit__.return_value = None
 
-        client._DynamoDBClient__session = MagicMock()
-        client._DynamoDBClient__session.resource.return_value = mock_resource_cm
+        client._DynamoDBClient__session = MagicMock()  # type: ignore[attr-defined]
+        mock_session = MagicMock()
+        mock_session.resource.return_value = mock_resource_cm
+        client._DynamoDBClient__session = mock_session  # type: ignore[attr-defined]
 
         with self.assertRaisesRegex(Exception, "DynamoDB error"):
             await client.get_item({"id": "1"})

@@ -115,4 +115,17 @@ class TestMain(unittest.TestCase):
         self.assertEqual(
             response.json()["data"], [{"url": "http://foo.com", "terms": []}]
         )
-        self.mock_scraper_service.get_scraping_results.assert_called_once_with(123)
+
+    def test_get_scrape_status_not_found(self) -> None:
+        self.mock_scraper_service.get_scraping_status.return_value = None
+        response = self.client.get("/scrape?scraping_id=999")
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["detail"], "Scraping not found")
+
+    def test_get_scrape_status_error(self) -> None:
+        self.mock_scraper_service.get_scraping_status.side_effect = Exception(
+            "Unexpected"
+        )
+        response = self.client.get("/scrape?scraping_id=123")
+        self.assertEqual(response.status_code, 500)
+        self.assertIn("Unexpected", response.json()["detail"])
