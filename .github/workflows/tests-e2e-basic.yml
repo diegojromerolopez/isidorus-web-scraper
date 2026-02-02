@@ -1,4 +1,4 @@
-name: End-to-End Tests
+name: End-to-End Basic Tests
 
 on:
   push:
@@ -20,4 +20,4 @@ jobs:
     - name: Run E2E Tests with Docker Compose
       env:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}  # Optional, but good to have if you configure secrets
-      run: make test-e2e
+      run: make test-e2e-basic

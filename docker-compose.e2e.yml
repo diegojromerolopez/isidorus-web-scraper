@@ -94,8 +94,8 @@ services:
       WRITER_QUEUE_URL: http://localstack:4566/000000000000/writer-queue
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      IMAGE_EXPLAINER_ENABLED: "true"
-      PAGE_SUMMARIZER_ENABLED: "true"
+      IMAGE_EXPLAINER_ENABLED: "${IMAGE_EXPLAINER_ENABLED:-true}"
+      PAGE_SUMMARIZER_ENABLED: "${PAGE_SUMMARIZER_ENABLED:-true}"
     depends_on:
       localstack:
         condition: service_healthy
@@ -176,6 +176,8 @@ services:
       - AWS_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
+      - IMAGE_EXPLAINER_ENABLED=${IMAGE_EXPLAINER_ENABLED:-true}
+      - PAGE_SUMMARIZER_ENABLED=${PAGE_SUMMARIZER_ENABLED:-true}
     depends_on:
       api:
         condition: service_started

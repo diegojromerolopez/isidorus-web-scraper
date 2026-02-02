@@ -25,6 +25,12 @@ logs:
 test-e2e: migrate seed-db
 	docker compose -f docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from test-runner
 
+# Run basic end-to-end tests (no AI workers)
+test-e2e-basic: migrate seed-db
+	IMAGE_EXPLAINER_ENABLED=false PAGE_SUMMARIZER_ENABLED=false \
+	docker compose -f docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from test-runner \
+		postgres localstack redis api auth-admin scraper-worker writer-worker mock-website test-runner
+
 # Run Django migrations and seed data
 migrate:
 	docker compose -f docker-compose.e2e.yml up -d postgres

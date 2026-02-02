@@ -22,6 +22,8 @@ AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "test")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "test")
 API_KEY = os.getenv("API_KEY", "test-api-key-123")
+IMAGE_EXPLAINER_ENABLED = os.getenv("IMAGE_EXPLAINER_ENABLED", "true").lower() == "true"
+PAGE_SUMMARIZER_ENABLED = os.getenv("PAGE_SUMMARIZER_ENABLED", "true").lower() == "true"
 
 
 class TestScrapingE2E(unittest.TestCase):
@@ -219,12 +221,20 @@ class TestScrapingE2E(unittest.TestCase):
         self.assertTrue(found_terms, "No terms found in results.")
 
         # 4. Check Images
-        found_image = self._check_images_persistence(scraping_id)
-        self.assertTrue(found_image, "Image 'darth.png' not found in scraping results.")
+        if IMAGE_EXPLAINER_ENABLED:
+            found_image = self._check_images_persistence(scraping_id)
+            self.assertTrue(
+                found_image, "Image 'darth.png' not found in scraping results."
+            )
+        else:
+            print("Skipping image extraction check (feature disabled).")
 
         # 5. Check Summaries
-        found_summary = self._check_summary_persistence(scraping_id)
-        self.assertTrue(found_summary, "Page summary not found in results.")
+        if PAGE_SUMMARIZER_ENABLED:
+            found_summary = self._check_summary_persistence(scraping_id)
+            self.assertTrue(found_summary, "Page summary not found in results.")
+        else:
+            print("Skipping page summarization check (feature disabled).")
 
     def _check_summary_persistence(self, scraping_id: int) -> bool:
         """Polls specifically for the presence of a page summary in the results."""
@@ -291,8 +301,6 @@ class TestScrapingE2E(unittest.TestCase):
         urls = [r["url"] for r in results]
         self.assertTrue(any("cycle_a.html" in u for u in urls), "Page A not found")
         self.assertTrue(any("cycle_b.html" in u for u in urls), "Page B not found")
-        print("Cycle Detection Test passed!")
-
         print("Cycle Detection Test passed!")
 
     def test_dynamodb_job_history(self) -> None:

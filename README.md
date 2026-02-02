@@ -203,6 +203,11 @@ The entire stack runs locally via Docker Compose:
     make test-unit
     ```
 
+4.  **Run Basic E2E Tests** (No AI workers):
+    ```bash
+    make test-e2e-basic
+    ```
+
 ## Development
 
 -   **API**: Located in `api/`. Run locally with `uvicorn api.main:app --reload`.
