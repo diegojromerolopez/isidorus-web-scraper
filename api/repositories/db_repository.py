@@ -8,7 +8,7 @@ class DbRepository:
         """
         Finds all unique website URLs that contain the specified search term.
         """
-        from typing import cast
+        from typing import cast  # pylint: disable=import-outside-toplevel
 
         return cast(
             list[str],

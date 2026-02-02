@@ -3,7 +3,7 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
-from tortoise.contrib.fastapi import register_tortoise  # type: ignore
+from tortoise.contrib.fastapi import register_tortoise  # pylint: disable=import-error
 
 from api.dependencies import get_db_service, get_scraper_service
 from api.services.db_service import DbService

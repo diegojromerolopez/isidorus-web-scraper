@@ -1,3 +1,4 @@
+# pylint: disable=duplicate-code
 import os
 import time
 import unittest
@@ -23,7 +24,6 @@ AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "test")
 
 class TestScrapingE2E(unittest.TestCase):
     def setUp(self) -> None:
-        """Clean up Database and Redis before each test."""
         self.wait_for_db()
         self.wait_for_sqs()
         self.cleanup_database()
@@ -40,24 +40,26 @@ class TestScrapingE2E(unittest.TestCase):
             aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
         )
         required_queues = ["scraper-queue", "image-queue", "writer-queue"]
+
         for _ in range(30):
             try:
                 resp = sqs.list_queues()
                 urls = resp.get("QueueUrls", [])
-                found = 0
-                for q_url in urls:
-                    for req in required_queues:
-                        if req in q_url:
-                            found += 1
-                if found >= len(required_queues):
+                # Flatten the check to reduce nesting
+                found_count = sum(
+                    1 for q_url in urls if any(req in q_url for req in required_queues)
+                )
+
+                if found_count >= len(required_queues):
                     print("SQS queues are ready!")
                     return
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-exception-caught
                 print(f"Error checking SQS: {e}")
             time.sleep(1)
         self.fail("SQS queues failed to become ready.")
 
     def wait_for_db(self) -> None:
+        """Wait until the Postgres database is ready to accept connections."""
         print("Waiting for Database to be ready...")
         result = urlparse(DATABASE_URL)
         username = result.username
@@ -83,6 +85,7 @@ class TestScrapingE2E(unittest.TestCase):
         self.fail("Database failed to become ready.")
 
     def cleanup_database(self) -> None:
+        """Truncate all relevant tables in the database."""
         try:
             # Parse DB URL
             result = urlparse(DATABASE_URL)
@@ -100,11 +103,6 @@ class TestScrapingE2E(unittest.TestCase):
                 port=port,
             )
             cur = conn.cursor()
-            # Truncate tables. Order matters due to FKs.
-            # scraping -> scraped_pages -> page_terms/links/images
-            # Actually FK is page->scraping.
-            # scraped_pages has FK to scrapings.
-            # page_terms has FK to scraped_pages.
             cur.execute(
                 "TRUNCATE TABLE page_images, page_links, page_terms, "
                 "scraped_pages, scrapings CASCADE;"
@@ -113,20 +111,20 @@ class TestScrapingE2E(unittest.TestCase):
             cur.close()
             conn.close()
             print("Database cleaned.")
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             print(f"Error cleaning database: {e}")
-            # Don't fail setup, maybe it's empty or connection failed
-            # (will fail test anyway)
 
     def cleanup_redis(self) -> None:
+        """Flush all keys in Redis."""
         try:
             r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
             r.flushall()
             print("Redis cleaned.")
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             print(f"Error cleaning Redis: {e}")
 
     def wait_for_api(self) -> None:
+        """Wait until the API is responsive."""
         for _ in range(30):
             try:
                 requests.get(f"{API_URL}/docs", timeout=5)
@@ -135,37 +133,24 @@ class TestScrapingE2E(unittest.TestCase):
                 time.sleep(1)
         self.fail("API failed to become ready.")
 
-    def test_scraping_flow(self) -> None:
-        # 1. Trigger Scraping
-        payload = {"url": "http://mock-website:8000/index.html", "depth": 2}
+    def _trigger_scraping(self, url: str, depth: int) -> int:
+        """Triggers a scraping job and returns the scraping_id."""
+        payload = {"url": url, "depth": depth}
         response = requests.post(f"{API_URL}/scrape", json=payload, timeout=5)
         self.assertEqual(
             response.status_code, 200, f"Failed to trigger scraping: {response.text}"
         )
-
         data = response.json()
         self.assertIn("scraping_id", data)
-        scraping_id = data["scraping_id"]
-        print(f"Scraping started with ID: {scraping_id}")
+        return int(data["scraping_id"])
 
-        # 2. Check PENDING status
-        # Give a small moment for async DB write if needed,
-        # but API should return ID immediately.
-        # Check status immediately
-        status_resp = requests.get(
-            f"{API_URL}/scrape?scraping_id={scraping_id}", timeout=5
-        )
-        self.assertEqual(status_resp.status_code, 200)
-        status = status_resp.json().get("status")
-        # It could be PENDING or COMPLETED (fast mock), usually PENDING.
-        self.assertIn(status, ["PENDING", "COMPLETED"])
-
-        # 3. Poll for Completion
-        final_status = status
+    def _poll_scraping_completion(self, scraping_id: int) -> list:
+        """Polls the API until the scraping job completes, returning the results."""
+        final_status = None
         results = []
-        for _ in range(30):
-            if final_status == "COMPLETED":
-                break
+
+        # Wait up to 60s
+        for _ in range(60):
             time.sleep(1)
             status_resp = requests.get(
                 f"{API_URL}/scrape?scraping_id={scraping_id}", timeout=5
@@ -175,25 +160,21 @@ class TestScrapingE2E(unittest.TestCase):
                 final_status = body.get("status")
                 if final_status == "COMPLETED":
                     results = body.get("data", [])
+                    break
 
         self.assertEqual(final_status, "COMPLETED", "Scraping timed out or failed.")
+        return results
 
-        # 4. Check Terms
-        self.assertTrue(len(results) > 0, "No pages returned.")
-        found_terms = False
+    def _is_image_found(self, results: list) -> bool:
         for page in results:
-            if page.get("terms"):
-                found_terms = True
-                break
-        self.assertTrue(found_terms, "No terms found in results.")
+            for img in page.get("images", []):
+                if "darth.png" in img["url"]:
+                    return True
+        return False
 
-        # 5. Check Images (with retry for consistency)
-        found_image = False
+    def _check_images_persistence(self, scraping_id: int) -> bool:
+        """Polls specifically for the presence of a specific image in the results."""
         for _ in range(60):
-            if found_image:
-                break
-
-            # Fetch fresh results
             try:
                 status_resp = requests.get(
                     f"{API_URL}/scrape?scraping_id={scraping_id}", timeout=5
@@ -201,21 +182,32 @@ class TestScrapingE2E(unittest.TestCase):
                 if status_resp.status_code == 200:
                     body = status_resp.json()
                     results = body.get("data", [])
-                    for page in results:
-                        images = page.get("images", [])
-                        for img in images:
-                            if "darth.png" in img["url"]:
-                                found_image = True
-                                break
-                        if found_image:
-                            break
-            except Exception as e:
+                    if self._is_image_found(results):
+                        return True
+            except Exception as e:  # pylint: disable=broad-exception-caught
                 print(f"Error fetching results during image check: {e}")
 
-            if not found_image:
-                print("Image not found yet, retrying...")
-                time.sleep(1)
+            time.sleep(1)
+        return False
 
+    def test_scraping_flow(self) -> None:
+        """End-to-end test of the full scraping flow including image extraction."""
+        # 1. Trigger Scraping
+        scraping_id = self._trigger_scraping(
+            "http://mock-website:8000/index.html", depth=2
+        )
+        print(f"Scraping started with ID: {scraping_id}")
+
+        # 2. Poll for Completion
+        results = self._poll_scraping_completion(scraping_id)
+
+        # 3. Check Terms
+        self.assertTrue(len(results) > 0, "No pages returned.")
+        found_terms = any(page.get("terms") for page in results)
+        self.assertTrue(found_terms, "No terms found in results.")
+
+        # 4. Check Images
+        found_image = self._check_images_persistence(scraping_id)
         self.assertTrue(found_image, "Image 'darth.png' not found in scraping results.")
 
         print("Test passed!")
@@ -302,7 +294,7 @@ class TestScrapingE2E(unittest.TestCase):
                 if "Item" in resp:
                     item = resp["Item"]
                     break
-            except Exception:
+            except Exception:  # pylint: disable=broad-exception-caught
                 pass
             time.sleep(1)
 

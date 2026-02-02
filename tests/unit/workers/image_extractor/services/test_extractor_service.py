@@ -6,6 +6,7 @@ from workers.image_extractor.services.extractor_service import ExtractorService
 
 
 class TestExtractorService(unittest.IsolatedAsyncioTestCase):
+    # pylint: disable=protected-access
     async def asyncSetUp(self) -> None:
         self.mock_sqs_client = MagicMock()
         self.mock_s3_client = MagicMock()
@@ -79,19 +80,49 @@ class TestExtractorService(unittest.IsolatedAsyncioTestCase):
         await self.service.process_message("invalid json")
         self.mock_sqs_client.send_message.assert_not_called()
 
-    def test_upload_image_to_s3_success(self) -> None:
-        self.mock_s3_client.upload_bytes.return_value = "s3://bucket/key"
-        res = self.service._ExtractorService__upload_image_to_s3(  # type: ignore[attr-defined]  # noqa: E501
-            b"data", "http://a.jpg", 123
-        )
-        self.assertEqual(res, "s3://bucket/key")
-
-    def test_upload_image_to_s3_failure(self) -> None:
+    async def test_process_message_upload_failure(self) -> None:
+        # Mock S3 upload failure
         self.mock_s3_client.upload_bytes.side_effect = Exception("S3 error")
-        res = self.service._ExtractorService__upload_image_to_s3(  # type: ignore[attr-defined]  # noqa: E501
-            b"data", "http://a.jpg", 123
-        )
-        self.assertIsNone(res)
+        # We also need to mock explain_image to avoid it running if we reach that point
+        # But if upload fails, s3_path is None, and we still proceed to explain/send?
+        # Looking at code: Yes, it logs error for upload, then proceeds to explanation.
+
+        # We need to mock the LLM related calls since they will be called
+        self.mock_llm.invoke = MagicMock(return_value="Explanation")
+        with patch(
+            "workers.image_extractor.services.extractor_service"
+            ".ExplainerFactory.explain_image",
+            return_value="Explanation",
+        ):
+            # Mock httpx to succeed so we reach upload
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.content = b"fake-image-bytes"
+
+            mock_client = AsyncMock()
+            mock_client.get.return_value = mock_resp
+            mock_client.__aenter__.return_value = mock_client
+            mock_client.__aexit__.return_value = None
+
+            with patch(
+                "workers.image_extractor.services.extractor_service.httpx.AsyncClient",
+                return_value=mock_client,
+            ):
+                message_body = json.dumps(
+                    {
+                        "url": "http://img.com/a.jpg",
+                        "original_url": "http://page.com",
+                        "scraping_id": 123,
+                    }
+                )
+                await self.service.process_message(message_body)
+
+        # Verify SQS message has s3_path=None
+        self.mock_sqs_client.send_message.assert_called_once()
+        call_args = self.mock_sqs_client.send_message.call_args
+        _, sent_msg = call_args[0]
+        self.assertIsNone(sent_msg["s3_path"])
+        self.assertEqual(sent_msg["explanation"], "Explanation")
 
 
 if __name__ == "__main__":

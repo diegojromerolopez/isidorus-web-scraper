@@ -21,12 +21,12 @@ class SQSClient:
         )
 
     def receive_messages(
-        self, queue_url: str, max_messages: int = 1, waitTime: int = 20
+        self, queue_url: str, max_messages: int = 1, wait_time: int = 20
     ) -> list[dict[str, Any]]:
         response = self.client.receive_message(
             QueueUrl=queue_url,
             MaxNumberOfMessages=max_messages,
-            WaitTimeSeconds=waitTime,
+            WaitTimeSeconds=wait_time,
         )
         return cast(list[dict[str, Any]], response.get("Messages", []))
 

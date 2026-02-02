@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 class DynamoDBClient:
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         endpoint_url: str | None,
         region: str,
@@ -35,7 +35,7 @@ class DynamoDBClient:
                 await table.put_item(Item=item)
                 return True
         except Exception as e:
-            logger.error(f"Failed to put item to DynamoDB: {e}")
+            logger.error("Failed to put item: %s", e)
             raise e
 
     async def get_item(self, key: dict) -> dict[Any, Any] | None:
@@ -52,5 +52,5 @@ class DynamoDBClient:
                 item = response.get("Item")
                 return cast(dict[Any, Any], item) if item else None
         except Exception as e:
-            logger.error(f"Failed to get item from DynamoDB: {e}")
+            logger.error("Failed to get item from DynamoDB: %s", e)
             raise e

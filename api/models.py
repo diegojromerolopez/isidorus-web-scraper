@@ -1,3 +1,4 @@
+# pylint: disable=import-error,too-few-public-methods
 from tortoise import fields, models  # type: ignore
 
 

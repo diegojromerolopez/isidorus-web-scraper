@@ -81,9 +81,10 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         mock_sqs_instance = MagicMock()
         mock_sqs_cls.return_value = mock_sqs_instance
 
+        sqs_error = Exception("SQS Error")
         # Side effect: Raise normal exception (caught), then SystemExit (uncaught)
         mock_sqs_instance.receive_messages.side_effect = [
-            Exception("SQS Error"),
+            sqs_error,
             SystemExit("Exit Test"),
         ]
 
@@ -92,7 +93,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         except SystemExit:
             pass
 
-        mock_logger.error.assert_called_with("Polling error: SQS Error")
+        mock_logger.error.assert_called_with("Polling error: %s", sqs_error)
         mock_sleep.assert_called_once_with(5)
 
 

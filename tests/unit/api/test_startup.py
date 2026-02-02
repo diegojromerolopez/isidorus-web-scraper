@@ -3,7 +3,8 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 
-class TestStartup(unittest.TestCase):
+# pylint: disable=import-outside-toplevel
+class TestStartup(unittest.IsolatedAsyncioTestCase):
     @patch("tortoise.contrib.fastapi.register_tortoise")
     @patch.dict(
         os.environ, {"DATABASE_URL": "postgres://user:pass@host:5432/db"}, clear=True

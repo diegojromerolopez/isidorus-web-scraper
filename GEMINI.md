@@ -147,9 +147,6 @@ The `scrapings` table uses an internal Integer `id` for primary keys and a `uuid
     - Run `make test-e2e` to verify all end-to-end tests pass.
     - Target a PyLint score of **≥9.5/10**.
     - **All tests must pass before committing any changes.**
-9.  **Private Methods and Attributes**: Use double underscore prefix (`__`) for truly private methods and attributes that should not be accessed outside the class:
-    - **Private attributes**: Configuration, internal state (e.g., `self.__client`, `self.__session`)
-    - **Private methods**: Helper methods not part of the public API (e.g., `def __upload_image_to_s3`)
-    - **Public interface**: Only expose methods and attributes that are part of the class's contract
-    - Tests can access private members using name mangling (`obj._ClassName__private_attr`) when necessary
-
+9.  **Private Methods and Attributes**: Use double underscore prefix (`__`) for truly private methods and attributes.
+    - **Public interface**: Only expose methods and attributes that are part of the class's contract.
+    - **Testing Private Members**: **Do not access private attributes or methods in tests** (e.g., `client._Class__attribute`). Instead, use `unittest.mock.patch` to mock dependencies or inject mocks via the constructor. Tests should verify behavior through the public interface.

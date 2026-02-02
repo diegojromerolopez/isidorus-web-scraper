@@ -11,7 +11,8 @@ from api.dependencies import (
 from api.repositories.db_repository import DbRepository
 
 
-class TestDependencies(unittest.TestCase):
+# pylint: disable=import-outside-toplevel
+class TestDependencies(unittest.IsolatedAsyncioTestCase):
     @patch("api.dependencies.AWS_ENDPOINT_URL", "http://localstack")
     @patch("api.dependencies.AWS_REGION", "us-east-1")
     @patch("api.dependencies.AWS_ACCESS_KEY_ID", "key")

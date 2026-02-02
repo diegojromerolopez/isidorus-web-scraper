@@ -5,6 +5,7 @@ from api.clients.redis_client import RedisClient
 
 
 class TestRedisClient(unittest.IsolatedAsyncioTestCase):
+    # pylint: disable=protected-access
     async def asyncSetUp(self) -> None:
         self.mock_redis = AsyncMock()
         # Mock class Redis to return our AsyncMock instance

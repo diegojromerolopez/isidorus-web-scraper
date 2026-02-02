@@ -50,7 +50,10 @@ class TestS3Client(unittest.TestCase):
 
         self.assertEqual(result, f"s3://{bucket}/{key}")
         self.mock_boto_client.put_object.assert_called_once_with(
-            Body=test_data, Bucket=bucket, Key=key
+            Body=test_data,
+            Bucket=bucket,
+            Key=key,
+            ContentType="application/octet-stream",
         )
 
     def test_upload_bytes_client_error(self) -> None:
@@ -70,7 +73,10 @@ class TestS3Client(unittest.TestCase):
             self.client.upload_bytes(test_data, bucket, key)
 
         self.mock_boto_client.put_object.assert_called_once_with(
-            Body=test_data, Bucket=bucket, Key=key
+            Body=test_data,
+            Bucket=bucket,
+            Key=key,
+            ContentType="application/octet-stream",
         )
 
 

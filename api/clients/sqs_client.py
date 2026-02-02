@@ -7,7 +7,8 @@ logger = logging.getLogger(__name__)
 
 
 class SQSClient:
-    def __init__(
+    # pylint: disable=too-few-public-methods
+    def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         endpoint_url: str | None,
         region: str,
@@ -36,5 +37,5 @@ class SQSClient:
                 )
                 return True
         except Exception as e:
-            logger.error(f"Failed to send SQS message: {e}")
+            logger.error("Failed to send SQS message: %s", e)
             raise e
