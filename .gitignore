@@ -14,8 +14,6 @@ htmlcov/
 /workers/scraper/go.sum
 /workers/writer/go.sum
 
-# Docker
-.dockerignore
 
 # OS
 .DS_Store
