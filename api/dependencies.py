@@ -1,47 +1,42 @@
-import os
+import hashlib
+from datetime import datetime, timezone
+from typing import cast
 
-from fastapi import Depends
+from fastapi import Depends, HTTPException, Security, status
+from fastapi.security import APIKeyHeader
 
+from api.clients.dynamodb_client import DynamoDBClient
 from api.clients.redis_client import RedisClient
 from api.clients.sqs_client import SQSClient
+from api.config import Configuration
+from api.models import APIKey
 from api.repositories.db_repository import DbRepository
 from api.services.db_service import DbService
 from api.services.scraper_service import ScraperService
 
-# Configuration
-AWS_ENDPOINT_URL = os.getenv("AWS_ENDPOINT_URL", "http://localstack:4566")
-AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
-AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "test")
-AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "test")
-SQS_QUEUE_URL = os.getenv(
-    "SQS_QUEUE_URL", "http://localstack:4566/000000000000/scraper-queue"
-)
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgres://postgres:postgres@postgres:5432/isidorus"
-)
-REDIS_HOST = os.getenv("REDIS_HOST", "redis")
-REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+config = Configuration.from_env()
+
+API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
 def get_sqs_client() -> SQSClient:
     """
     Creates and returns an SQSClient instance configured with environment variables.
     """
-    return SQSClient(
-        endpoint_url=AWS_ENDPOINT_URL,
-        region=AWS_REGION,
-        access_key=AWS_ACCESS_KEY_ID,
-        secret_key=AWS_SECRET_ACCESS_KEY,
-        queue_url=SQS_QUEUE_URL,
-    )
+    return SQSClient.create(config)
+
+
+def get_dynamodb_client() -> DynamoDBClient:
+    """
+    Creates and returns a DynamoDBClient instance configured with environment variables.
+    """
+    return DynamoDBClient.create(config)
 
 
 def get_db_repository() -> DbRepository:
     """
     Creates and returns a DbRepository instance connected to the configured database.
     """
-    if DATABASE_URL is None:
-        raise ValueError("DATABASE_URL must be set")
     return DbRepository()
 
 
@@ -49,19 +44,20 @@ def get_redis_client() -> RedisClient:
     """
     Dependency to get the Redis client.
     """
-    return RedisClient(host=REDIS_HOST, port=REDIS_PORT)
+    return RedisClient.create(config)
 
 
 def get_scraper_service(
     sqs_client: SQSClient = Depends(get_sqs_client),
     redis_client: RedisClient = Depends(get_redis_client),
+    dynamodb_client: DynamoDBClient = Depends(get_dynamodb_client),
     db_repository: DbRepository = Depends(get_db_repository),
 ) -> ScraperService:
     """
     Dependency provider for ScraperService.
-    Requires SQSClient, RedisClient, DbRepository.
+    Requires SQSClient, RedisClient, DynamoDBClient, DbRepository.
     """
-    return ScraperService(sqs_client, redis_client, db_repository)
+    return ScraperService(sqs_client, redis_client, db_repository, dynamodb_client)
 
 
 def get_db_service(
@@ -71,3 +67,54 @@ def get_db_service(
     Dependency to get the DB service.
     """
     return DbService(repository)
+
+
+async def get_api_key(
+    api_key_header: str | None = Security(API_KEY_HEADER),
+    redis_client: RedisClient = Depends(get_redis_client),
+) -> APIKey:
+    """
+    Validates the API key from the header.
+    Uses Redis for caching and Postgres as the source of truth.
+    """
+    if not api_key_header:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="API Key missing",
+        )
+
+    # Hash the key to look it up
+    hashed_key = hashlib.sha256(api_key_header.encode()).hexdigest()
+    cache_key = f"auth:key:{hashed_key}"
+
+    # 1. Try Redis Cache
+    cached_name = await redis_client.get(cache_key)
+    if cached_name:
+        # If cached, we return a shell model.
+        # Note: We might want to cache the expiration date too if we
+        # want to be paranoid.
+        # But usually keys are cached only if they were valid.
+        return APIKey(name=cached_name, hashed_key=hashed_key, is_active=True)
+
+    # 2. Try Database
+    api_key = await APIKey.filter(hashed_key=hashed_key, is_active=True).first()
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API Key",
+        )
+
+    # Check expiration
+    if api_key.expires_at and api_key.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="API Key expired",
+        )
+
+    # 3. Cache it for 5 minutes
+    await redis_client.set(cache_key, api_key.name, ex=300)
+
+    # Update last_used_at (Asynchronous fire-and-forget or background
+    # task would be better)
+    # For now, let's just update it periodically or skip to keep it fast
+    return cast(APIKey, api_key)

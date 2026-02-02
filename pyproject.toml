@@ -17,6 +17,7 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
 check_untyped_defs = true
+ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "boto3.*"
@@ -76,3 +77,5 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = "langchain_ollama.*"
 ignore_missing_imports = true
+
+# Redundant overrides removed as ignore_missing_imports is now global

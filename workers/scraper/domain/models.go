@@ -9,11 +9,12 @@ type ScrapeMessage struct {
 
 // WriterMessage represents data sent to the writer worker
 type WriterMessage struct {
-	Type        string         `json:"type"` // "page_data" or "job_complete"
+	Type        string         `json:"type"` // "page_data", "job_complete", "page_summary"
 	URL         string         `json:"url,omitempty"`
 	Terms       map[string]int `json:"terms,omitempty"`
 	Links       []string       `json:"links,omitempty"`
 	Explanation string         `json:"explanation,omitempty"`
+	Summary     string         `json:"summary,omitempty"`
 	ScrapingID  int            `json:"scraping_id,omitempty"`
 }
 
@@ -22,4 +23,11 @@ type ImageMessage struct {
 	URL         string `json:"url"`
 	OriginalURL string `json:"original_url"`
 	ScrapingID  int    `json:"scraping_id"`
+}
+
+// PageSummaryMessage represents a task for the page summarizer
+type PageSummaryMessage struct {
+	URL        string `json:"url"`
+	Content    string `json:"content"`
+	ScrapingID int    `json:"scraping_id"`
 }

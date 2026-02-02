@@ -85,7 +85,13 @@ func TestProcessMessage_FullFlow(t *testing.T) {
 		return members[0] == "http://site2.com"
 	})).Return(1, nil)
 
-	s := NewScraperService(mockSQS, mockRedis, mockFetcher, "input", "writer", "image")
+	s := NewScraperService(
+		WithSQSClient(mockSQS),
+		WithRedisClient(mockRedis),
+		WithPageFetcher(mockFetcher),
+		WithQueues("input", "writer", "image", "summarizer"),
+		WithFeatureFlags(true, true),
+	)
 
 	html := `
 		<html>
@@ -113,6 +119,11 @@ func TestProcessMessage_FullFlow(t *testing.T) {
 		return msg.URL == "http://img.com/a.jpg"
 	})).Return(nil)
 
+	// Expect SendMessage to Summarizer Queue
+	mockSQS.On("SendMessage", mock.Anything, "summarizer", mock.MatchedBy(func(msg domain.PageSummaryMessage) bool {
+		return msg.URL == "http://site1.com" && len(msg.Content) > 0 && msg.ScrapingID == 123
+	})).Return(nil)
+
 	// Expect Redis IncrBy for 1 link
 	mockRedis.On("IncrBy", mock.Anything, "scrape:123:pending", int64(1)).Return(nil)
 
@@ -136,7 +147,12 @@ func TestProcessMessage_FetchError(t *testing.T) {
 	mockSQS := new(MockSQSClient)
 	mockRedis := new(MockRedisClient)
 	mockFetcher := new(MockPageFetcher)
-	s := NewScraperService(mockSQS, mockRedis, mockFetcher, "input", "writer", "image")
+	s := NewScraperService(
+		WithSQSClient(mockSQS),
+		WithRedisClient(mockRedis),
+		WithPageFetcher(mockFetcher),
+		WithQueues("input", "writer", "image", "summarizer"),
+	)
 
 	mockFetcher.On("Fetch", "http://err.com").Return(nil, assert.AnError)
 	// SAdd for seed URL
@@ -151,7 +167,12 @@ func TestProcessMessage_Non200(t *testing.T) {
 	mockSQS := new(MockSQSClient)
 	mockRedis := new(MockRedisClient)
 	mockFetcher := new(MockPageFetcher)
-	s := NewScraperService(mockSQS, mockRedis, mockFetcher, "input", "writer", "image")
+	s := NewScraperService(
+		WithSQSClient(mockSQS),
+		WithRedisClient(mockRedis),
+		WithPageFetcher(mockFetcher),
+		WithQueues("input", "writer", "image", "summarizer"),
+	)
 
 	resp := &http.Response{
 		StatusCode: http.StatusNotFound,
@@ -183,7 +204,12 @@ func TestProcessMessage_RedisIncrError(t *testing.T) {
 	mockSQS := new(MockSQSClient)
 	mockRedis := new(MockRedisClient)
 	mockFetcher := new(MockPageFetcher)
-	s := NewScraperService(mockSQS, mockRedis, mockFetcher, "input", "writer", "image")
+	s := NewScraperService(
+		WithSQSClient(mockSQS),
+		WithRedisClient(mockRedis),
+		WithPageFetcher(mockFetcher),
+		WithQueues("input", "writer", "image", ""),
+	)
 
 	html := `<html><body><a href="http://site2.com">Link</a></body></html>`
 	resp := &http.Response{
@@ -208,7 +234,12 @@ func TestProcessMessage_SQSSendError_WithCompensation(t *testing.T) {
 	mockSQS := new(MockSQSClient)
 	mockRedis := new(MockRedisClient)
 	mockFetcher := new(MockPageFetcher)
-	s := NewScraperService(mockSQS, mockRedis, mockFetcher, "input", "writer", "image")
+	s := NewScraperService(
+		WithSQSClient(mockSQS),
+		WithRedisClient(mockRedis),
+		WithPageFetcher(mockFetcher),
+		WithQueues("input", "writer", "image", ""),
+	)
 
 	html := `<html><body><a href="http://site2.com">Link</a></body></html>`
 	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(html))}
@@ -237,7 +268,12 @@ func TestProcessMessage_CompensationError(t *testing.T) {
 	mockSQS := new(MockSQSClient)
 	mockRedis := new(MockRedisClient)
 	mockFetcher := new(MockPageFetcher)
-	s := NewScraperService(mockSQS, mockRedis, mockFetcher, "input", "writer", "image")
+	s := NewScraperService(
+		WithSQSClient(mockSQS),
+		WithRedisClient(mockRedis),
+		WithPageFetcher(mockFetcher),
+		WithQueues("input", "writer", "image", ""),
+	)
 
 	html := `<html><body><a href="http://site2.com">Link</a></body></html>`
 	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(html))}
@@ -263,7 +299,12 @@ func TestProcessMessage_RedisDecrError(t *testing.T) {
 	mockSQS := new(MockSQSClient)
 	mockRedis := new(MockRedisClient)
 	mockFetcher := new(MockPageFetcher)
-	s := NewScraperService(mockSQS, mockRedis, mockFetcher, "input", "writer", "image")
+	s := NewScraperService(
+		WithSQSClient(mockSQS),
+		WithRedisClient(mockRedis),
+		WithPageFetcher(mockFetcher),
+		WithQueues("input", "writer", "image", ""),
+	)
 
 	html := `<html><body><p>No links</p></body></html>`
 	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(html))}
@@ -286,7 +327,12 @@ func TestProcessMessage_DepthZero(t *testing.T) {
 	mockSQS := new(MockSQSClient)
 	mockRedis := new(MockRedisClient)
 	mockFetcher := new(MockPageFetcher)
-	s := NewScraperService(mockSQS, mockRedis, mockFetcher, "input", "writer", "image")
+	s := NewScraperService(
+		WithSQSClient(mockSQS),
+		WithRedisClient(mockRedis),
+		WithPageFetcher(mockFetcher),
+		WithQueues("input", "writer", "image", ""),
+	)
 
 	html := `<html><body><a href="http://site2.com">Link</a></body></html>`
 	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(html))}
@@ -315,7 +361,12 @@ func TestProcessMessage_AlreadyVisitedURL(t *testing.T) {
 	mockSQS := new(MockSQSClient)
 	mockRedis := new(MockRedisClient)
 	mockFetcher := new(MockPageFetcher)
-	s := NewScraperService(mockSQS, mockRedis, mockFetcher, "input", "writer", "image")
+	s := NewScraperService(
+		WithSQSClient(mockSQS),
+		WithRedisClient(mockRedis),
+		WithPageFetcher(mockFetcher),
+		WithQueues("input", "writer", "image", ""),
+	)
 
 	html := `<html><body><a href="http://site2.com">Link</a></body></html>`
 	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(html))}
@@ -346,7 +397,12 @@ func TestProcessMessage_NonHTTPLinks(t *testing.T) {
 	mockSQS := new(MockSQSClient)
 	mockRedis := new(MockRedisClient)
 	mockFetcher := new(MockPageFetcher)
-	s := NewScraperService(mockSQS, mockRedis, mockFetcher, "input", "writer", "image")
+	s := NewScraperService(
+		WithSQSClient(mockSQS),
+		WithRedisClient(mockRedis),
+		WithPageFetcher(mockFetcher),
+		WithQueues("input", "writer", "image", ""),
+	)
 
 	// HTML with relative and non-HTTP links
 	html := `<html><body>
@@ -378,7 +434,12 @@ func TestProcessMessage_SAddErrorDuringCycleDetection(t *testing.T) {
 	mockSQS := new(MockSQSClient)
 	mockRedis := new(MockRedisClient)
 	mockFetcher := new(MockPageFetcher)
-	s := NewScraperService(mockSQS, mockRedis, mockFetcher, "input", "writer", "image")
+	s := NewScraperService(
+		WithSQSClient(mockSQS),
+		WithRedisClient(mockRedis),
+		WithPageFetcher(mockFetcher),
+		WithQueues("input", "writer", "image", ""),
+	)
 
 	html := `<html><body><a href="http://site2.com">Link</a></body></html>`
 	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(html))}

@@ -5,78 +5,91 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/config"
+	config_aws "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 
+	"scraped-worker/config"
 	"scraped-worker/domain"
 	"scraped-worker/repositories"
 	"scraped-worker/services"
 )
 
 func main() {
-	inputQueueURL := os.Getenv("INPUT_QUEUE_URL")
-	writerQueueURL := os.Getenv("WRITER_QUEUE_URL")
-	imageQueueURL := os.Getenv("IMAGE_QUEUE_URL")
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("failed to load config: %v", err)
+	}
 
-	cfg, err := config.LoadDefaultConfig(context.TODO())
+	awsCfg, err := config_aws.LoadDefaultConfig(context.TODO())
 	if err != nil {
 		log.Fatalf("unable to load SDK config, %v", err)
 	}
 
-	rawSQSClient := sqs.NewFromConfig(cfg)
+	rawSQSClient := sqs.NewFromConfig(awsCfg)
 	sqsClient := repositories.NewSQSClient(rawSQSClient)
 	pageFetcher := repositories.NewPageFetcher()
-	
-	redisHost := os.Getenv("REDIS_HOST")
-	redisPort := os.Getenv("REDIS_PORT")
-	// Fallback/Default for safe local dev if env not set, 
-	// though docker-compose sets them.
-	if redisHost == "" {
-		redisHost = "localhost"
-	}
-	if redisPort == "" {
-		redisPort = "6379"
-	}
-	redisClient := repositories.NewRedisClient(redisHost, redisPort)
+	redisClient := repositories.NewRedisClient(cfg.RedisHost, cfg.RedisPort)
 
 	scraperService := services.NewScraperService(
-		sqsClient,
-		redisClient,
-		pageFetcher,
-		inputQueueURL,
-		writerQueueURL,
-		imageQueueURL,
+		services.WithSQSClient(sqsClient),
+		services.WithRedisClient(redisClient),
+		services.WithPageFetcher(pageFetcher),
+		services.WithQueues(cfg.InputQueueURL, cfg.WriterQueueURL, cfg.ImageQueueURL, cfg.SummarizerQueueURL),
+		services.WithFeatureFlags(cfg.ImageExplainerEnabled, cfg.PageSummarizerEnabled),
 	)
 
-	log.Println("Scraper worker started (DDD Refactor)")
+	log.Println("Scraper worker started (DDD Refactor with community standards)")
+	log.Printf("Raw Env: IMAGE_EXPLAINER_ENABLED='%s', PAGE_SUMMARIZER_ENABLED='%s'", os.Getenv("IMAGE_EXPLAINER_ENABLED"), os.Getenv("PAGE_SUMMARIZER_ENABLED"))
+	log.Printf("Feature Flags: ImageExplainerEnabled=%v, PageSummarizerEnabled=%v", cfg.ImageExplainerEnabled, cfg.PageSummarizerEnabled)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Graceful Shutdown handling
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		sig := <-sigChan
+		log.Printf("Received signal %v, initiating shutdown...", sig)
+		cancel()
+	}()
 
 	for {
-		msgOutput, err := sqsClient.ReceiveMessages(context.TODO(), inputQueueURL)
-		if err != nil {
-			log.Printf("failed to receive message, %v", err)
-			time.Sleep(5 * time.Second)
-			continue
-		}
-
-		if len(msgOutput.Messages) == 0 {
-			continue
-		}
-
-		// Process Messages
-		for _, msg := range msgOutput.Messages {
-			var body domain.ScrapeMessage
-			if err := json.Unmarshal([]byte(*msg.Body), &body); err != nil {
-				log.Printf("failed to unmarshal message: %v", err)
+		select {
+		case <-ctx.Done():
+			log.Println("Scrapper worker shutting down gracefully...")
+			return
+		default:
+			msgOutput, err := sqsClient.ReceiveMessages(ctx, cfg.InputQueueURL)
+			if err != nil {
+				log.Printf("failed to receive message, %v", err)
+				time.Sleep(5 * time.Second)
 				continue
 			}
 
-			scraperService.ProcessMessage(body)
+			if len(msgOutput.Messages) == 0 {
+				continue
+			}
 
-			err := sqsClient.DeleteMessage(context.TODO(), inputQueueURL, msg.ReceiptHandle)
-			if err != nil {
-				log.Printf("failed to delete message, %v", err)
+			// Process Messages
+			for _, msg := range msgOutput.Messages {
+				var body domain.ScrapeMessage
+				if err := json.Unmarshal([]byte(*msg.Body), &body); err != nil {
+					log.Printf("failed to unmarshal message: %v", err)
+					continue
+				}
+
+				scraperService.ProcessMessage(body)
+
+				err := sqsClient.DeleteMessage(ctx, cfg.InputQueueURL, msg.ReceiptHandle)
+				if err != nil {
+					log.Printf("failed to delete message, %v", err)
+				}
 			}
 		}
 	}

@@ -90,6 +90,12 @@ class TestDbRepository(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result["id"], 123)
         mock_get.assert_called_once_with(id=123)
 
+    @patch("api.models.Scraping.get_or_none", new_callable=AsyncMock)
+    async def test_get_scraping_not_found(self, mock_get: AsyncMock) -> None:
+        mock_get.return_value = None
+        result = await self.repo.get_scraping(999)
+        self.assertIsNone(result)
+
     @patch("api.models.ScrapedPage.filter")
     async def test_get_scrape_results(self, mock_filter: MagicMock) -> None:
         # await models.ScrapedPage.filter(...).order_by(...).prefetch_related(...)

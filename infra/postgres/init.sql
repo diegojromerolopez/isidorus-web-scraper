@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS scraped_pages (
     id SERIAL PRIMARY KEY,
     scraping_id INTEGER REFERENCES scrapings(id) ON DELETE CASCADE,
     url TEXT NOT NULL,
+    summary TEXT,
     scraped_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -39,3 +40,5 @@ CREATE TABLE IF NOT EXISTS page_links (
 
 CREATE INDEX idx_page_terms_term ON page_terms(term);
 CREATE INDEX idx_scraped_pages_url ON scraped_pages(url);
+
+

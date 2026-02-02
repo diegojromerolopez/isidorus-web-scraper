@@ -1,15 +1,15 @@
 import os
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from workers.image_extractor.main import main
 
 
-class TestMain(unittest.TestCase):
+class TestMain(unittest.IsolatedAsyncioTestCase):
     @patch.dict(os.environ, {}, clear=True)
     @patch("workers.image_extractor.main.logger")
-    def test_main_missing_env_vars(self, mock_logger: MagicMock) -> None:
-        main()
+    async def test_main_missing_env_vars(self, mock_logger: MagicMock) -> None:
+        await main()
         mock_logger.error.assert_called_with(
             "INPUT_QUEUE_URL and WRITER_QUEUE_URL must be set"
         )
@@ -26,40 +26,32 @@ class TestMain(unittest.TestCase):
     @patch("workers.image_extractor.main.S3Client")
     @patch("workers.image_extractor.main.ExtractorService")
     @patch("workers.image_extractor.main.time.sleep")
-    def test_main_loop_success(
+    async def test_main_loop_success(
         self,
-        mock_sleep: MagicMock,
+        _mock_sleep: MagicMock,
         mock_service_cls: MagicMock,
-        mock_s3_cls: MagicMock,
+        _mock_s3_cls: MagicMock,
         mock_sqs_cls: MagicMock,
     ) -> None:
         # Mock SQS Client
         mock_sqs_instance = MagicMock()
-        mock_sqs_cls.return_value = mock_sqs_instance
+        mock_sqs_instance.receive_messages = AsyncMock()
+        mock_sqs_instance.delete_message = AsyncMock()
+        mock_sqs_cls.create.return_value = mock_sqs_instance
 
-        # Mock Service
+        # Mock Service with AsyncMock for process_message
         mock_service_instance = MagicMock()
+        mock_service_instance.process_message = AsyncMock()
         mock_service_cls.return_value = mock_service_instance
 
-        # Setup receive_messages to return one batch
-        # then raise generic exception to break loop
-        mock_sqs_instance.receive_messages.side_effect = [
-            [{"Body": "{}", "ReceiptHandle": "abc"}],  # First call success
-            Exception("Break Loop"),  # Second call breaks loop
-        ]
-
-        # Call main (it will run until exception)
-        # We catch the exception inside main but it sleeps, so we need to ensure
-        # we don't sleep forever. Actually main catches Exception and sleeps.
-        # We need a way to EXIT. So we mock receive_messages to raise SystemExit.
-
+        # Setup receive_messages to return one batch then exit
         mock_sqs_instance.receive_messages.side_effect = [
             [{"Body": "{}", "ReceiptHandle": "abc"}],
             SystemExit("Exit Test"),
         ]
 
         try:
-            main()
+            await main()
         except SystemExit:
             pass
 
@@ -80,29 +72,31 @@ class TestMain(unittest.TestCase):
     @patch("workers.image_extractor.main.ExtractorService")
     @patch("workers.image_extractor.main.logger")
     @patch("workers.image_extractor.main.time.sleep")  # Mock sleep to be fast
-    def test_main_loop_exception(
+    async def test_main_loop_exception(
         self,
         mock_sleep: MagicMock,
         mock_logger: MagicMock,
-        mock_service_cls: MagicMock,
-        mock_s3_cls: MagicMock,
+        _mock_service_cls: MagicMock,
+        _mock_s3_cls: MagicMock,
         mock_sqs_cls: MagicMock,
     ) -> None:
         mock_sqs_instance = MagicMock()
-        mock_sqs_cls.return_value = mock_sqs_instance
+        mock_sqs_instance.receive_messages = AsyncMock()
+        mock_sqs_cls.create.return_value = mock_sqs_instance
 
+        sqs_error = Exception("SQS Error")
         # Side effect: Raise normal exception (caught), then SystemExit (uncaught)
         mock_sqs_instance.receive_messages.side_effect = [
-            Exception("SQS Error"),
+            sqs_error,
             SystemExit("Exit Test"),
         ]
 
         try:
-            main()
+            await main()
         except SystemExit:
             pass
 
-        mock_logger.error.assert_called_with("Polling error: SQS Error")
+        mock_logger.error.assert_called_with("Polling error: %s", sqs_error)
         mock_sleep.assert_called_once_with(5)
 
 

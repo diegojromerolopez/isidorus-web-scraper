@@ -1,106 +1,70 @@
 package repositories
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
-	"strings"
 
+	"gorm.io/gorm"
 	"writer-worker/domain"
+	"writer-worker/models"
 )
 
-type DBRepository interface {
-	InsertPageData(data domain.WriterMessage) error
-	InsertImageExplanation(data domain.WriterMessage) error
-	CompleteScraping(scrapingID int) error
-}
-
 type PostgresDBRepository struct {
-	DB        *sql.DB
-	BatchSize int
+	db        *gorm.DB
+	batchSize int
 }
 
-func NewDBRepository(db *sql.DB, batchSize int) DBRepository {
+func NewDBRepository(db *gorm.DB, batchSize int) *PostgresDBRepository {
 	if batchSize <= 0 {
 		batchSize = 100 // Default
 	}
 	return &PostgresDBRepository{
-		DB:        db,
-		BatchSize: batchSize,
+		db:        db,
+		batchSize: batchSize,
 	}
 }
 
 func (repo *PostgresDBRepository) InsertPageData(msg domain.WriterMessage) error {
 	// Insert Scraped Page
-	var pageID int
-	err := repo.DB.QueryRow(`
-		INSERT INTO scraped_pages (url, scraping_id)
-		VALUES ($1, $2)
-		RETURNING id
-	`, msg.URL, msg.ScrapingID).Scan(&pageID)
-	if err != nil {
-		log.Printf("Error inserting into scraped_pages: %v", err)
-		return err
+	page := models.ScrapedPage{
+		URL:        msg.URL,
+		ScrapingID: msg.ScrapingID,
 	}
 
-	// Insert Page Terms (Denormalized with scraping_id)
-	var termRows [][]interface{}
-	for term, freq := range msg.Terms {
-		termRows = append(termRows, []interface{}{msg.ScrapingID, pageID, term, freq})
-	}
-	err = repo.batchInsert("page_terms", []string{"scraping_id", "page_id", "term", "frequency"}, termRows)
-	if err != nil {
-		log.Printf("Error batch inserting terms: %v", err)
+	if err := repo.db.Create(&page).Error; err != nil {
+		return fmt.Errorf("failed to insert scraped page for URL %s: %w", msg.URL, err)
 	}
 
-	// Insert Page Links (Denormalized with scraping_id)
-	var linkRows [][]interface{}
-	for _, link := range msg.Links {
-		linkRows = append(linkRows, []interface{}{msg.ScrapingID, pageID, link})
-	}
-	err = repo.batchInsert("page_links", []string{"scraping_id", "source_page_id", "target_url"}, linkRows)
-	if err != nil {
-		log.Printf("Error batch inserting links: %v", err)
-	}
-
-	return nil
-}
-
-func (repo *PostgresDBRepository) batchInsert(table string, columns []string, rows [][]interface{}) error {
-	if len(rows) == 0 {
-		return nil
-	}
-
-	for i := 0; i < len(rows); i += repo.BatchSize {
-		end := i + repo.BatchSize
-		if end > len(rows) {
-			end = len(rows)
+	// Insert Page Terms (Batch)
+	if len(msg.Terms) > 0 {
+		var terms []models.PageTerm
+		for term, freq := range msg.Terms {
+			terms = append(terms, models.PageTerm{
+				ScrapingID: msg.ScrapingID,
+				PageID:     page.ID,
+				Term:       term,
+				Frequency:  freq,
+			})
 		}
 
-		batch := rows[i:end]
-		sqlStr := fmt.Sprintf("INSERT INTO %s (%s) VALUES ", table, strings.Join(columns, ", "))
-		vals := []interface{}{}
+		if err := repo.db.CreateInBatches(terms, repo.batchSize).Error; err != nil {
+			log.Printf("Error batch inserting terms for page %d: %v", page.ID, err)
+		}
+	}
 
-		placeholderCount := 1
-		for r, row := range batch {
-			if r > 0 {
-				sqlStr += ", "
-			}
-			sqlStr += "("
-			for c := range row {
-				if c > 0 {
-					sqlStr += ", "
-				}
-				sqlStr += fmt.Sprintf("$%d", placeholderCount)
-				vals = append(vals, row[c])
-				placeholderCount++
-			}
-			sqlStr += ")"
+	// Insert Page Links (Batch)
+	if len(msg.Links) > 0 {
+		var links []models.PageLink
+		for _, link := range msg.Links {
+			links = append(links, models.PageLink{
+				ScrapingID:   msg.ScrapingID,
+				SourcePageID: page.ID,
+				TargetURL:    link,
+			})
 		}
 
-		_, err := repo.DB.Exec(sqlStr, vals...)
-		if err != nil {
-			return err
+		if err := repo.db.CreateInBatches(links, repo.batchSize).Error; err != nil {
+			log.Printf("Error batch inserting links for page %d: %v", page.ID, err)
 		}
 	}
 
@@ -108,30 +72,60 @@ func (repo *PostgresDBRepository) batchInsert(table string, columns []string, ro
 }
 
 func (repo *PostgresDBRepository) InsertImageExplanation(msg domain.WriterMessage) error {
-	// Need to find the page_id first based on PageURL AND ScrapingID (Int)
-	var pageID int
-	err := repo.DB.QueryRow(`
-		SELECT id FROM scraped_pages WHERE url = $1 AND scraping_id = $2 ORDER BY scraped_at DESC LIMIT 1
-	`, msg.PageURL, msg.ScrapingID).Scan(&pageID)
+	// Find the page_id first based on PageURL AND ScrapingID
+	var page models.ScrapedPage
+	err := repo.db.
+		Where("url = ? AND scraping_id = ?", msg.PageURL, msg.ScrapingID).
+		Order("scraped_at DESC").
+		First(&page).Error
 
 	if err != nil {
-		log.Printf("Error finding page for image insertion (url=%s, scraping_id=%d): %v", msg.PageURL, msg.ScrapingID, err)
-		return err
+		return fmt.Errorf("failed to find page for URL %s and id %d: %w", msg.PageURL, msg.ScrapingID, err)
 	}
 
-	_, err = repo.DB.Exec(`
-		INSERT INTO page_images (scraping_id, page_id, image_url, explanation, s3_path)
-		VALUES ($1, $2, $3, $4, $5)
-	`, msg.ScrapingID, pageID, msg.URL, msg.Explanation, msg.S3Path)
+	// Insert the image
+	image := models.PageImage{
+		ScrapingID:  msg.ScrapingID,
+		PageID:      page.ID,
+		ImageURL:    msg.URL,
+		Explanation: msg.Explanation,
+		S3Path:      msg.S3Path,
+	}
 
-	return err
+	if err := repo.db.Create(&image).Error; err != nil {
+		return fmt.Errorf("failed to insert image explanation for URL %s: %w", msg.URL, err)
+	}
+	return nil
+}
+
+func (repo *PostgresDBRepository) InsertPageSummary(msg domain.WriterMessage) error {
+	// Update the page summary using URL and ScrapingID
+	result := repo.db.
+		Model(&models.ScrapedPage{}).
+		Where("url = ? AND scraping_id = ?", msg.URL, msg.ScrapingID).
+		Update("summary", msg.Summary)
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to update page summary for URL %s: %w", msg.URL, result.Error)
+	}
+	
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("no page found to update summary for URL %s (ScrapingID %d) - will retry", msg.URL, msg.ScrapingID)
+	}
+	
+	return nil
 }
 
 func (repo *PostgresDBRepository) CompleteScraping(scrapingID int) error {
-	_, err := repo.DB.Exec(`
-		UPDATE scrapings
-		SET status = 'COMPLETED', completed_at = NOW()
-		WHERE id = $1
-	`, scrapingID)
-	return err
+	err := repo.db.
+		Model(&models.Scraping{}).
+		Where("id = ?", scrapingID).
+		Updates(map[string]interface{}{
+			"status":       domain.StatusCompleted,
+			"completed_at": gorm.Expr("NOW()"),
+		}).Error
+	if err != nil {
+		return fmt.Errorf("failed to complete scraping for ID %d: %w", scrapingID, err)
+	}
+	return nil
 }

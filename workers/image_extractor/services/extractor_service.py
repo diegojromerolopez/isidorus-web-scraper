@@ -2,16 +2,17 @@ import json
 import logging
 import uuid
 
-import requests
+import httpx
 
-from workers.image_extractor.clients.s3_client import S3Client
-from workers.image_extractor.clients.sqs_client import SQSClient
+from shared.clients.s3_client import S3Client
+from shared.clients.sqs_client import SQSClient
 from workers.image_extractor.services.explainer_factory import ExplainerFactory
 
 logger = logging.getLogger(__name__)
 
 
 class ExtractorService:
+    # pylint: disable=too-few-public-methods
     def __init__(
         self,
         sqs_client: SQSClient,
@@ -19,14 +20,14 @@ class ExtractorService:
         writer_queue_url: str,
         images_bucket: str,
         llm_provider: str = "openai",
-    ):
-        self.sqs_client = sqs_client
-        self.s3_client = s3_client
-        self.writer_queue_url = writer_queue_url
-        self.images_bucket = images_bucket
-        self.llm = ExplainerFactory.get_explainer(llm_provider)
+    ):  # pylint: disable=too-many-arguments,too-many-positional-arguments
+        self.__sqs_client = sqs_client
+        self.__s3_client = s3_client
+        self.__writer_queue_url = writer_queue_url
+        self.__images_bucket = images_bucket
+        self.__llm = ExplainerFactory.get_explainer(llm_provider)
 
-    def process_message(self, message_body: str) -> None:
+    async def process_message(self, message_body: str) -> None:
         try:
             body = json.loads(message_body)
             image_url = body.get("url")
@@ -41,22 +42,24 @@ class ExtractorService:
                 logger.warning("No scraping_id in message")
                 return
 
-            logger.info(f"Processing image: {image_url} for scraping {scraping_id}")
+            logger.info("Processing image: %s for scraping %s", image_url, scraping_id)
 
             # 1. Download image
             s3_path = None
             try:
-                resp = requests.get(image_url, timeout=10)
-                if resp.status_code == 200:
-                    s3_path = self._upload_image_to_s3(
-                        resp.content, image_url, scraping_id
-                    )
-            except Exception as e:
-                logger.error(f"Failed to handle image persistence to S3: {e}")
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(image_url, timeout=10.0)
+                    if resp.status_code == 200:
+                        # Upload to S3
+                        s3_path = await self.__upload_image_to_s3(
+                            resp.content, image_url, scraping_id
+                        )
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                logger.error("Failed to handle image persistence to S3: %s", e)
 
             # 3. Get Explanation via LangChain
-            explanation = ExplainerFactory.explain_image(self.llm, image_url)
-            logger.info(f"Generated explanation for {image_url}")
+            explanation = ExplainerFactory.explain_image(self.__llm, image_url)
+            logger.info("Generated explanation for %s", image_url)
 
             # Send to Writer
             writer_msg = {
@@ -69,22 +72,24 @@ class ExtractorService:
                 "s3_path": s3_path,
             }
 
-            self.sqs_client.send_message(self.writer_queue_url, writer_msg)
-            logger.info(f"Sent extraction info for {image_url} to writer queue")
+            await self.__sqs_client.send_message(writer_msg, self.__writer_queue_url)
+            logger.info("Sent extraction info for %s to writer queue", image_url)
 
-        except Exception as e:
-            logger.error(f"Error processing image extraction: {e}")
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            # Catch-all to prevent worker crash on single message failure
+            logger.error("Error processing image extraction: %s", e)
 
-    def _upload_image_to_s3(
+    async def __upload_image_to_s3(
         self, content: bytes, image_url: str, scraping_id: int
     ) -> str | None:
-        """Uploads image bytes to S3 and returns the S3 path."""
         try:
             ext = image_url.split(".")[-1].split("?")[0] or "bin"
             s3_key = f"{scraping_id}/{uuid.uuid4()}.{ext}"
-            s3_path = self.s3_client.upload_bytes(content, self.images_bucket, s3_key)
-            logger.info(f"Uploaded image to {s3_path}")
+            s3_path = await self.__s3_client.upload_bytes(
+                content, self.__images_bucket, s3_key, "image/jpeg"
+            )
+            logger.info("Uploaded image to %s", s3_path)
             return s3_path
-        except Exception as e:
-            logger.error(f"Internal S3 upload failure: {e}")
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("Internal S3 upload failure: %s", e)
             return None

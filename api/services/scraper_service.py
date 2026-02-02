@@ -1,5 +1,6 @@
 from typing import Any
 
+from api.clients.dynamodb_client import DynamoDBClient
 from api.clients.redis_client import RedisClient
 from api.clients.sqs_client import SQSClient
 from api.repositories.db_repository import DbRepository
@@ -11,10 +12,12 @@ class ScraperService:
         sqs_client: SQSClient,
         redis_client: RedisClient,
         db_repository: DbRepository,
+        dynamodb_client: DynamoDBClient | None = None,
     ):
         self.sqs_client = sqs_client
         self.redis_client = redis_client
         self.db_repository = db_repository
+        self.dynamodb_client = dynamodb_client
 
     async def start_scraping(self, url: str, depth: int) -> int:
         """
@@ -24,7 +27,18 @@ class ScraperService:
 
         # Initial Redis Key for Distributed Completion Tracking
         pending_key = f"scrape:{scraping_id}:pending"
-        self.redis_client.set(pending_key, 1)
+        await self.redis_client.set(pending_key, 1)
+
+        # Log to DynamoDB if client is available
+        if self.dynamodb_client:
+            await self.dynamodb_client.put_item(
+                {
+                    "job_id": str(scraping_id),
+                    "url": url,
+                    "depth": depth,
+                    "status": "PENDING",
+                }
+            )
 
         # Send first message to Scraper Queue
         message = {
@@ -32,7 +46,7 @@ class ScraperService:
             "depth": depth,
             "scraping_id": scraping_id,
         }
-        self.sqs_client.send_message(message)
+        await self.sqs_client.send_message(message)
 
         return scraping_id
 

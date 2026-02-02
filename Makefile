@@ -22,8 +22,23 @@ logs:
 	docker compose -f docker-compose.e2e.yml logs -f
 
 # Run end-to-end tests
-test-e2e:
+test-e2e: migrate seed-db
 	docker compose -f docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from test-runner
+
+# Run basic end-to-end tests (no AI workers)
+test-e2e-basic: migrate seed-db
+	IMAGE_EXPLAINER_ENABLED=false PAGE_SUMMARIZER_ENABLED=false \
+	docker compose -f docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from test-runner \
+		postgres localstack redis api auth-admin scraper-worker writer-worker mock-website test-runner
+
+# Run Django migrations and seed data
+migrate:
+	docker compose -f docker-compose.e2e.yml up -d postgres
+	sleep 5
+	docker compose -f docker-compose.e2e.yml run --rm auth-admin python manage.py migrate --fake-initial
+
+seed-db:
+	docker compose -f docker-compose.e2e.yml run --rm auth-admin python manage.py setup_test_data
 
 # Run unit tests
 test-unit:
@@ -39,6 +54,9 @@ test-unit:
 	@echo "Running Writer unit tests..."
 	docker build -t isidorus-writer-test workers/writer/
 	docker run --rm -v "$$(pwd):/app" -w /app/workers/writer isidorus-writer-test sh -c "go mod tidy && go test -v -cover ./..."
+	@echo "Running Page Summarizer unit tests..."
+	docker build -t isidorus-summarizer-test -f workers/page_summarizer/Dockerfile .
+	docker run --rm -v "$$(pwd):/app" -e PYTHONPATH=/app isidorus-summarizer-test sh -c "pip install coverage && coverage run --branch --source=workers/page_summarizer -m unittest discover -v -p 'test_*.py' -s tests/unit/workers/page_summarizer -t /app && coverage report"
 
 # Clean up volumes and orphans
 clean:
@@ -63,7 +81,7 @@ lint-check:
 	@echo "Running mypy type checker..."
 	mypy .
 	@echo "Running pylint..."
-	pylint api/ workers/image_extractor/ tests/unit/ tests/e2e/runner/runner.py
+	pylint api/ workers/image_extractor/ workers/page_summarizer/ tests/unit/ tests/e2e/runner/runner.py
 	@echo "All linting checks passed!"
 
 # Run all linters and show errors (alias for lint-check)
