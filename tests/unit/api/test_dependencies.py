@@ -12,17 +12,13 @@ from api.repositories.db_repository import DbRepository
 
 
 # pylint: disable=import-outside-toplevel
+# pylint: disable=import-outside-toplevel
 class TestDependencies(unittest.IsolatedAsyncioTestCase):
-    @patch("api.dependencies.AWS_ENDPOINT_URL", "http://localstack")
-    @patch("api.dependencies.AWS_REGION", "us-east-1")
-    @patch("api.dependencies.AWS_ACCESS_KEY_ID", "key")
-    @patch("api.dependencies.AWS_SECRET_ACCESS_KEY", "secret")
-    @patch("api.dependencies.SQS_QUEUE_URL", "http://sqs")
-    def test_get_sqs_client(self) -> None:
+    @patch("api.clients.sqs_client.aioboto3.Session")
+    def test_get_sqs_client(self, _mock_session: MagicMock) -> None:
         client = get_sqs_client()
         self.assertIsInstance(client, SQSClient)
 
-    @patch("api.dependencies.DATABASE_URL", "postgresql://user:pass@host/db")
     def test_get_db_repository(self) -> None:
         repo = get_db_repository()
         self.assertIsInstance(repo, DbRepository)
@@ -37,26 +33,16 @@ class TestDependencies(unittest.IsolatedAsyncioTestCase):
         service = get_db_service(mock_repo)
         self.assertEqual(service.data_repo, mock_repo)
 
-    @patch("api.dependencies.DATABASE_URL", None)
-    def test_get_db_repository_no_url(self) -> None:
-        with self.assertRaises(ValueError):
-            get_db_repository()
-
-    @patch("api.dependencies.REDIS_HOST", "localhost")
-    @patch("api.dependencies.REDIS_PORT", 6379)
-    def test_get_redis_client(self) -> None:
+    @patch("api.clients.redis_client.redis.Redis")
+    def test_get_redis_client(self, _mock_redis: MagicMock) -> None:
         from api.clients.redis_client import RedisClient
         from api.dependencies import get_redis_client
 
         client = get_redis_client()
         self.assertIsInstance(client, RedisClient)
 
-    @patch("api.dependencies.AWS_ENDPOINT_URL", "http://localstack")
-    @patch("api.dependencies.AWS_REGION", "us-east-1")
-    @patch("api.dependencies.AWS_ACCESS_KEY_ID", "key")
-    @patch("api.dependencies.AWS_SECRET_ACCESS_KEY", "secret")
-    @patch("api.dependencies.DYNAMODB_TABLE", "jobs")
-    def test_get_dynamodb_client(self) -> None:
+    @patch("api.clients.dynamodb_client.aioboto3.Session")
+    def test_get_dynamodb_client(self, _mock_session: MagicMock) -> None:
         from api.clients.dynamodb_client import DynamoDBClient
         from api.dependencies import get_dynamodb_client
 

@@ -3,6 +3,8 @@ from typing import Any, cast
 
 import aioboto3  # type: ignore
 
+from api.config import Configuration
+
 logger = logging.getLogger(__name__)
 
 
@@ -21,6 +23,19 @@ class DynamoDBClient:
         self.__secret_key = secret_key
         self.__table_name = table_name
         self.__session = aioboto3.Session()
+
+    @staticmethod
+    def create(config: Configuration) -> "DynamoDBClient":
+        """
+        Creates a DynamoDBClient instance from the configuration.
+        """
+        return DynamoDBClient(
+            endpoint_url=config.aws_endpoint_url,
+            region=config.aws_region,
+            access_key=config.aws_access_key_id,
+            secret_key=config.aws_secret_access_key,
+            table_name=config.dynamodb_table,
+        )
 
     async def put_item(self, item: dict) -> bool:
         try:

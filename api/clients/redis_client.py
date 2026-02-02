@@ -2,10 +2,19 @@ from typing import Any, cast
 
 import redis.asyncio as redis  # type: ignore
 
+from api.config import Configuration
+
 
 class RedisClient:
     def __init__(self, host: str, port: int, db: int = 0):
         self.__client = redis.Redis(host=host, port=port, db=db)
+
+    @staticmethod
+    def create(config: Configuration) -> "RedisClient":
+        """
+        Creates a RedisClient instance from the configuration.
+        """
+        return RedisClient(host=config.redis_host, port=config.redis_port)
 
     async def set(self, key: str, value: Any) -> None:
         await self.__client.set(key, value)

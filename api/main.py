@@ -1,10 +1,10 @@
-import os
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel
 from tortoise.contrib.fastapi import register_tortoise  # pylint: disable=import-error
 
+from api.config import Configuration
 from api.dependencies import get_db_service, get_scraper_service
 from api.services.db_service import DbService
 from api.services.scraper_service import ScraperService
@@ -80,7 +80,9 @@ async def terms(
 
 
 # Tortoise ORM Init with Connection Pooling
-db_url = os.getenv("DATABASE_URL", "postgres://user:pass@localhost:5432/isidorus")
+# Tortoise ORM Init with Connection Pooling
+config = Configuration.from_env()
+db_url = config.database_url
 # Append connection pool settings
 if "?" not in db_url:
     db_url += "?minsize=10&maxsize=50"
