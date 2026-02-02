@@ -124,6 +124,25 @@ services:
       writer-worker:
         condition: service_started
 
+  page-summarizer-worker:
+    build:
+      context: .
+      dockerfile: workers/page_summarizer/Dockerfile
+    environment:
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - INPUT_QUEUE_URL=http://localstack:4566/000000000000/summarizer-queue
+      - WRITER_QUEUE_URL=http://localstack:4566/000000000000/writer-queue
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/isidorus
+      - LLM_PROVIDER=mock
+    depends_on:
+      localstack:
+        condition: service_healthy
+      writer-worker:
+        condition: service_started
+
   mock-website:
     build:
       context: ./tests/e2e/mock_website

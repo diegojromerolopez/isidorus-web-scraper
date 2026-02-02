@@ -33,12 +33,13 @@ var stopWords = map[string]bool{
 }
 
 type ScraperService struct {
-	sqsClient      SQSClient
-	redisClient    RedisClient
-	pageFetcher    PageFetcher
-	inputQueueURL  string
-	writerQueueURL string
-	imageQueueURL  string
+	sqsClient          SQSClient
+	redisClient        RedisClient
+	pageFetcher        PageFetcher
+	inputQueueURL      string
+	writerQueueURL     string
+	imageQueueURL      string
+	summarizerQueueURL string
 }
 
 // Functional Options Pattern
@@ -56,11 +57,12 @@ func WithPageFetcher(c PageFetcher) ScraperOption {
 	return func(s *ScraperService) { s.pageFetcher = c }
 }
 
-func WithQueues(input, writer, image string) ScraperOption {
+func WithQueues(input, writer, image, summarizer string) ScraperOption {
 	return func(s *ScraperService) {
 		s.inputQueueURL = input
 		s.writerQueueURL = writer
 		s.imageQueueURL = image
+		s.summarizerQueueURL = summarizer
 	}
 }
 
@@ -99,6 +101,9 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 	links := []string{}
 	images := []string{}
 
+	// Text accumulation for summarization
+	var fullTextBuilder strings.Builder
+
 	for {
 		tt := tokenizer.Next()
 		if tt == html.ErrorToken {
@@ -108,6 +113,13 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 		if tt == html.TextToken {
 			text := string(tokenizer.Text())
 			s.processText(text, terms)
+
+			// Accumulate text for summarizer (simple append for now)
+			// Limit size to avoid memory issues (e.g. 100KB)
+			if fullTextBuilder.Len() < 100000 {
+				fullTextBuilder.WriteString(text)
+				fullTextBuilder.WriteString(" ")
+			}
 		} else if tt == html.StartTagToken || tt == html.SelfClosingTagToken {
 			token := tokenizer.Token()
 			if token.Data == "a" {
@@ -123,6 +135,18 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 					}
 				}
 			}
+		}
+	}
+
+	// Send to Summarizer Queue (if configured and populated)
+	if s.summarizerQueueURL != "" && fullTextBuilder.Len() > 0 {
+		summaryMsg := domain.PageSummaryMessage{
+			URL:        msg.URL,
+			Content:    fullTextBuilder.String(),
+			ScrapingID: msg.ScrapingID,
+		}
+		if err := s.sqsClient.SendMessage(ctx, s.summarizerQueueURL, summaryMsg); err != nil {
+			log.Printf("failed to send page summary request: %v", err)
 		}
 	}
 
@@ -154,16 +178,16 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 	var linksToSend []string
 	if msg.Depth > 0 {
 		vKey := fmt.Sprintf(domain.RedisKeyVisited, msg.ScrapingID)
-		
+
 		for _, link := range links {
 			if strings.HasPrefix(link, "http") {
 				// Cycle Detection: Atomic check-and-set
 				isNew, err := s.redisClient.SAdd(ctx, vKey, link)
 				if err != nil {
 					log.Printf("error checking visited set for %s: %v", link, err)
-					continue 
+					continue
 				}
-				
+
 				if isNew > 0 {
 					linksToSend = append(linksToSend, link)
 				}
@@ -199,7 +223,7 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 	// Compensate for failed sends
 	if failedCount > 0 {
 		pKey := fmt.Sprintf(domain.RedisKeyPending, msg.ScrapingID)
-		err := s.redisClient.IncrBy(ctx, pKey, int64(-failedCount)) 
+		err := s.redisClient.IncrBy(ctx, pKey, int64(-failedCount))
 		if err != nil {
 			log.Printf("CRITICAL: failed to compensate redis for failed sends (scraping %d, count %d): %v", msg.ScrapingID, failedCount, err)
 		}
@@ -217,8 +241,8 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 	if val == 0 {
 		log.Printf("Scraping %d completed! Sending notification to Writer.", msg.ScrapingID)
 		completionMsg := domain.WriterMessage{
-			Type:         domain.MsgTypeScrapingComplete,
-			ScrapingID:   msg.ScrapingID,
+			Type:       domain.MsgTypeScrapingComplete,
+			ScrapingID: msg.ScrapingID,
 		}
 		if err := s.sqsClient.SendMessage(ctx, s.writerQueueURL, completionMsg); err != nil {
 			log.Printf("failed to send completion signal: %v", err)

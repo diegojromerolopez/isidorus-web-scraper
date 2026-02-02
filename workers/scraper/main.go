@@ -38,7 +38,7 @@ func main() {
 		services.WithSQSClient(sqsClient),
 		services.WithRedisClient(redisClient),
 		services.WithPageFetcher(pageFetcher),
-		services.WithQueues(cfg.InputQueueURL, cfg.WriterQueueURL, cfg.ImageQueueURL),
+		services.WithQueues(cfg.InputQueueURL, cfg.WriterQueueURL, cfg.ImageQueueURL, cfg.SummarizerQueueURL),
 	)
 
 	log.Println("Scraper worker started (DDD Refactor with community standards)")

@@ -210,6 +210,13 @@ class TestScrapingE2E(unittest.TestCase):
         found_image = self._check_images_persistence(scraping_id)
         self.assertTrue(found_image, "Image 'darth.png' not found in scraping results.")
 
+        # 5. Check Summaries
+        found_summary = any(
+            page.get("summary") and "Mocked summary" in page.get("summary")
+            for page in results
+        )
+        self.assertTrue(found_summary, "Page summary not found in results.")
+
         print("Test passed!")
 
     def test_cycle_detection(self) -> None:

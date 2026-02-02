@@ -47,7 +47,7 @@ func TestInsertPageData_Success(t *testing.T) {
 	// Insert Scraped Page
 	mock.ExpectBegin()
 	mock.ExpectQuery(`INSERT INTO "scraped_pages"`).
-		WithArgs(msg.ScrapingID, msg.URL).
+		WithArgs(msg.ScrapingID, msg.URL, "").
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
 	mock.ExpectCommit()
 

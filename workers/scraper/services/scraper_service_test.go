@@ -89,7 +89,7 @@ func TestProcessMessage_FullFlow(t *testing.T) {
 		WithSQSClient(mockSQS),
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
-		WithQueues("input", "writer", "image"),
+		WithQueues("input", "writer", "image", "summarizer"),
 	)
 
 	html := `
@@ -116,6 +116,11 @@ func TestProcessMessage_FullFlow(t *testing.T) {
 	// Expect SendMessage to Image Queue
 	mockSQS.On("SendMessage", mock.Anything, "image", mock.MatchedBy(func(msg domain.ImageMessage) bool {
 		return msg.URL == "http://img.com/a.jpg"
+	})).Return(nil)
+
+	// Expect SendMessage to Summarizer Queue
+	mockSQS.On("SendMessage", mock.Anything, "summarizer", mock.MatchedBy(func(msg domain.PageSummaryMessage) bool {
+		return msg.URL == "http://site1.com" && len(msg.Content) > 0 && msg.ScrapingID == 123
 	})).Return(nil)
 
 	// Expect Redis IncrBy for 1 link
@@ -145,7 +150,7 @@ func TestProcessMessage_FetchError(t *testing.T) {
 		WithSQSClient(mockSQS),
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
-		WithQueues("input", "writer", "image"),
+		WithQueues("input", "writer", "image", "summarizer"),
 	)
 
 	mockFetcher.On("Fetch", "http://err.com").Return(nil, assert.AnError)
@@ -165,7 +170,7 @@ func TestProcessMessage_Non200(t *testing.T) {
 		WithSQSClient(mockSQS),
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
-		WithQueues("input", "writer", "image"),
+		WithQueues("input", "writer", "image", "summarizer"),
 	)
 
 	resp := &http.Response{
@@ -202,7 +207,7 @@ func TestProcessMessage_RedisIncrError(t *testing.T) {
 		WithSQSClient(mockSQS),
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
-		WithQueues("input", "writer", "image"),
+		WithQueues("input", "writer", "image", ""),
 	)
 
 	html := `<html><body><a href="http://site2.com">Link</a></body></html>`
@@ -232,7 +237,7 @@ func TestProcessMessage_SQSSendError_WithCompensation(t *testing.T) {
 		WithSQSClient(mockSQS),
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
-		WithQueues("input", "writer", "image"),
+		WithQueues("input", "writer", "image", ""),
 	)
 
 	html := `<html><body><a href="http://site2.com">Link</a></body></html>`
@@ -266,7 +271,7 @@ func TestProcessMessage_CompensationError(t *testing.T) {
 		WithSQSClient(mockSQS),
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
-		WithQueues("input", "writer", "image"),
+		WithQueues("input", "writer", "image", ""),
 	)
 
 	html := `<html><body><a href="http://site2.com">Link</a></body></html>`
@@ -297,7 +302,7 @@ func TestProcessMessage_RedisDecrError(t *testing.T) {
 		WithSQSClient(mockSQS),
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
-		WithQueues("input", "writer", "image"),
+		WithQueues("input", "writer", "image", ""),
 	)
 
 	html := `<html><body><p>No links</p></body></html>`
@@ -325,7 +330,7 @@ func TestProcessMessage_DepthZero(t *testing.T) {
 		WithSQSClient(mockSQS),
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
-		WithQueues("input", "writer", "image"),
+		WithQueues("input", "writer", "image", ""),
 	)
 
 	html := `<html><body><a href="http://site2.com">Link</a></body></html>`
@@ -359,7 +364,7 @@ func TestProcessMessage_AlreadyVisitedURL(t *testing.T) {
 		WithSQSClient(mockSQS),
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
-		WithQueues("input", "writer", "image"),
+		WithQueues("input", "writer", "image", ""),
 	)
 
 	html := `<html><body><a href="http://site2.com">Link</a></body></html>`
@@ -395,7 +400,7 @@ func TestProcessMessage_NonHTTPLinks(t *testing.T) {
 		WithSQSClient(mockSQS),
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
-		WithQueues("input", "writer", "image"),
+		WithQueues("input", "writer", "image", ""),
 	)
 
 	// HTML with relative and non-HTTP links
@@ -432,7 +437,7 @@ func TestProcessMessage_SAddErrorDuringCycleDetection(t *testing.T) {
 		WithSQSClient(mockSQS),
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
-		WithQueues("input", "writer", "image"),
+		WithQueues("input", "writer", "image", ""),
 	)
 
 	html := `<html><body><a href="http://site2.com">Link</a></body></html>`

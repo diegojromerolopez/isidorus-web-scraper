@@ -39,6 +39,9 @@ test-unit:
 	@echo "Running Writer unit tests..."
 	docker build -t isidorus-writer-test workers/writer/
 	docker run --rm -v "$$(pwd):/app" -w /app/workers/writer isidorus-writer-test sh -c "go mod tidy && go test -v -cover ./..."
+	@echo "Running Page Summarizer unit tests..."
+	docker build -t isidorus-summarizer-test -f workers/page_summarizer/Dockerfile .
+	docker run --rm -v "$$(pwd):/app" -e PYTHONPATH=/app isidorus-summarizer-test sh -c "pip install coverage && coverage run --branch --source=workers/page_summarizer -m unittest discover -v -p 'test_*.py' -s tests/unit/workers/page_summarizer -t /app && coverage report"
 
 # Clean up volumes and orphans
 clean:
@@ -63,7 +66,7 @@ lint-check:
 	@echo "Running mypy type checker..."
 	mypy .
 	@echo "Running pylint..."
-	pylint api/ workers/image_extractor/ tests/unit/ tests/e2e/runner/runner.py
+	pylint api/ workers/image_extractor/ workers/page_summarizer/ tests/unit/ tests/e2e/runner/runner.py
 	@echo "All linting checks passed!"
 
 # Run all linters and show errors (alias for lint-check)

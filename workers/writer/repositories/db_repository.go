@@ -98,6 +98,26 @@ func (repo *PostgresDBRepository) InsertImageExplanation(msg domain.WriterMessag
 	return nil
 }
 
+func (repo *PostgresDBRepository) InsertPageSummary(msg domain.WriterMessage) error {
+	// Update the page summary using URL and ScrapingID
+	result := repo.db.
+		Model(&models.ScrapedPage{}).
+		Where("url = ? AND scraping_id = ?", msg.URL, msg.ScrapingID).
+		Update("summary", msg.Summary)
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to update page summary for URL %s: %w", msg.URL, result.Error)
+	}
+	
+	if result.RowsAffected == 0 {
+		// Log warning but don't error out - page might have arrived later? 
+		// Or maybe we should retry? For now logging is safer.
+		log.Printf("Warning: No page found to update summary for URL %s (ScrapingID %d)", msg.URL, msg.ScrapingID)
+	}
+	
+	return nil
+}
+
 func (repo *PostgresDBRepository) CompleteScraping(scrapingID int) error {
 	err := repo.db.
 		Model(&models.Scraping{}).

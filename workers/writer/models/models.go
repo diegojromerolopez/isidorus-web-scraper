@@ -23,6 +23,7 @@ type ScrapedPage struct {
 	ID         int       `gorm:"primaryKey;autoIncrement"`
 	ScrapingID int       `gorm:"not null;index"`
 	URL        string    `gorm:"type:text;not null;index:idx_scraped_pages_url"`
+	Summary    string    `gorm:"type:text"`
 	ScrapedAt  time.Time `gorm:"type:timestamp with time zone;default:CURRENT_TIMESTAMP"`
 	
 	// Relationships

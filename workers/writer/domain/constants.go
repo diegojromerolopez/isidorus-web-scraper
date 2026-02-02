@@ -8,5 +8,6 @@ const (
 	// Message Types
 	MsgTypePageData         = "page_data"
 	MsgTypeImageExplanation = "image_explanation"
+	MsgTypePageSummary      = "page_summary"
 	MsgTypeScrapingComplete = "scraping_complete"
 )

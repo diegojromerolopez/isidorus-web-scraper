@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS scraped_pages (
     id SERIAL PRIMARY KEY,
     scraping_id INTEGER REFERENCES scrapings(id) ON DELETE CASCADE,
     url TEXT NOT NULL,
+    summary TEXT,
     scraped_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 

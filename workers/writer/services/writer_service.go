@@ -9,6 +9,7 @@ import (
 type DBRepository interface {
 	InsertPageData(data domain.WriterMessage) error
 	InsertImageExplanation(data domain.WriterMessage) error
+	InsertPageSummary(data domain.WriterMessage) error
 	CompleteScraping(scrapingID int) error
 }
 
@@ -37,6 +38,8 @@ func (s *WriterService) ProcessMessage(msg domain.WriterMessage) error {
 		err = s.dbRepo.InsertPageData(msg)
 	} else if msg.Type == domain.MsgTypeImageExplanation {
 		err = s.dbRepo.InsertImageExplanation(msg)
+	} else if msg.Type == domain.MsgTypePageSummary {
+		err = s.dbRepo.InsertPageSummary(msg)
 	} else if msg.Type == domain.MsgTypeScrapingComplete {
 		err = s.dbRepo.CompleteScraping(msg.ScrapingID)
 	} else {

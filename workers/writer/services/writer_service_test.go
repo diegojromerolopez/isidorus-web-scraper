@@ -25,6 +25,11 @@ func (m *MockDBRepository) InsertImageExplanation(data domain.WriterMessage) err
 	return args.Error(0)
 }
 
+func (m *MockDBRepository) InsertPageSummary(data domain.WriterMessage) error {
+	args := m.Called(data)
+	return args.Error(0)
+}
+
 func (m *MockDBRepository) CompleteScraping(scrapingID int) error {
 	args := m.Called(scrapingID)
 	return args.Error(0)
@@ -119,6 +124,25 @@ func TestProcessMessage_ScrapingComplete(t *testing.T) {
 	}
 
 	mockRepo.On("CompleteScraping", 123).Return(nil)
+
+	err := s.ProcessMessage(msg)
+
+	assert.NoError(t, err)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestProcessMessage_PageSummary(t *testing.T) {
+	mockRepo := new(MockDBRepository)
+	s := NewWriterService(WithDBRepository(mockRepo))
+
+	msg := domain.WriterMessage{
+		Type:        "page_summary",
+		URL:         "http://example.com/page",
+		Summary:     "This is a summary",
+		ScrapingID:  123,
+	}
+
+	mockRepo.On("InsertPageSummary", msg).Return(nil)
 
 	err := s.ProcessMessage(msg)
 
