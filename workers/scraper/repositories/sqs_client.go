@@ -7,6 +7,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 )
 
 type AWSSQSClient struct {
@@ -17,10 +18,10 @@ func NewSQSClient(client *sqs.Client) *AWSSQSClient {
 	return &AWSSQSClient{client: client}
 }
 
-func (s *AWSSQSClient) ReceiveMessages(ctx context.Context, queueURL string) (*sqs.ReceiveMessageOutput, error) {
+func (s *AWSSQSClient) ReceiveMessages(ctx context.Context, queueURL string, maxMessages int32) (*sqs.ReceiveMessageOutput, error) {
 	out, err := s.client.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
 		QueueUrl:            aws.String(queueURL),
-		MaxNumberOfMessages: 1,
+		MaxNumberOfMessages: maxMessages,
 		WaitTimeSeconds:     20,
 	})
 	if err != nil {
@@ -36,6 +37,17 @@ func (s *AWSSQSClient) DeleteMessage(ctx context.Context, queueURL string, recei
 	})
 	if err != nil {
 		return fmt.Errorf("failed to delete message from %s: %w", queueURL, err)
+	}
+	return nil
+}
+
+func (s *AWSSQSClient) DeleteMessageBatch(ctx context.Context, queueURL string, entries []types.DeleteMessageBatchRequestEntry) error {
+	_, err := s.client.DeleteMessageBatch(ctx, &sqs.DeleteMessageBatchInput{
+		QueueUrl: aws.String(queueURL),
+		Entries:  entries,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to batch delete messages from %s: %w", queueURL, err)
 	}
 	return nil
 }

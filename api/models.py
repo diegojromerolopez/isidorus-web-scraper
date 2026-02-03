@@ -18,7 +18,7 @@ class ScrapedPage(models.Model):
     scraping = fields.ForeignKeyField(
         "models.Scraping", related_name="pages", source_field="scraping_id"
     )
-    url = fields.TextField()
+    url = fields.CharField(max_length=2048, index=True)
     summary = fields.TextField(null=True)
     scraped_at = fields.DatetimeField(auto_now_add=True)
 
@@ -34,7 +34,7 @@ class PageTerm(models.Model):
     page = fields.ForeignKeyField(
         "models.ScrapedPage", related_name="terms", source_field="page_id"
     )
-    term = fields.TextField()
+    term = fields.CharField(max_length=2048, index=True)
     frequency = fields.IntField(default=1)
 
     class Meta:
@@ -76,7 +76,7 @@ class APIKey(models.Model):
     user_id = fields.IntField()  # Store Django user ID
     name = fields.CharField(max_length=100, unique=True)
     prefix = fields.CharField(max_length=8)
-    hashed_key = fields.CharField(max_length=128)
+    hashed_key = fields.CharField(max_length=128, index=True)
     is_active = fields.BooleanField(default=True)
     created_at = fields.DatetimeField(auto_now_add=True)
     expires_at = fields.DatetimeField(null=True)
