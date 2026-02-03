@@ -98,34 +98,31 @@ class TestDbRepository(unittest.IsolatedAsyncioTestCase):
 
     @patch("api.models.ScrapedPage.filter")
     async def test_get_scrape_results(self, mock_filter: MagicMock) -> None:
-        # await models.ScrapedPage.filter(...).order_by(...).prefetch_related(...)
-        # Code: pages = await models.ScrapedPage.filter(
-        # scraping_id=scraping_id).order_by("url").prefetch_related("terms")
-        # filter -> queryset
-        # order_by -> queryset
-        # prefetch_related -> queryset (awaitable)
-
+        # Mock QuerySet returned by filter()
         mock_qs = MagicMock()
         mock_filter.return_value = mock_qs
+
+        # Mock count() - awaitable
+        mock_qs.count = AsyncMock(return_value=1)
+
+        # Mock chaining: filter().order_by().prefetch_related()
         mock_order = MagicMock()
         mock_qs.order_by.return_value = mock_order
 
-        # prefetch_related is awaited.
-
+        # Mock result data
         page1 = MagicMock()
         page1.url = "http://site1.com"
         term1 = MagicMock()
         term1.term = "t1"
         term1.frequency = 10
         page1.terms = [term1]
+        
+        image1 = MagicMock()
+        image1.image_url = "http://img.com"
+        image1.explanation = "desc"
+        page1.images = [image1]
 
-        mock_prefetch = AsyncMock(return_value=[page1])
-        mock_order.prefetch_related.return_value = (
-            mock_prefetch()
-        )  # Calls it? Code calls it.
-        # Wait, code: .prefetch_related("terms") -- this returns QuerySet(awaitable).
-        # So we mock prefetch_related correctly.
-
+        # prefetch_related is awaited and returns the list of pages
         mock_order.prefetch_related = AsyncMock(return_value=[page1])
 
         results = await self.repo.get_scrape_results(123)
@@ -133,7 +130,27 @@ class TestDbRepository(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["url"], "http://site1.com")
         self.assertEqual(results[0]["terms"][0]["term"], "t1")
-        mock_filter.assert_called_once_with(scraping_id=123)
+        self.assertEqual(results[0]["images"][0]["url"], "http://img.com")
+        
+        # Verify calls
+        # Note: filter is called twice. Once for count, once for fetching.
+        # Ideally we check call args or count.
+        self.assertEqual(mock_filter.call_count, 2)
+        mock_qs.count.assert_called_once()
+    
+    @patch("api.models.ScrapedPage.filter")
+    async def test_get_scrape_results_empty(self, mock_filter: MagicMock) -> None:
+        # Test optimization: count() == 0 returns []
+        mock_qs = MagicMock()
+        mock_filter.return_value = mock_qs
+        mock_qs.count = AsyncMock(return_value=0)
+
+        results = await self.repo.get_scrape_results(123)
+
+        self.assertEqual(results, [])
+        mock_qs.count.assert_called_once()
+        # Ensure chain was NOT called
+        mock_qs.order_by.assert_not_called()
 
 
 if __name__ == "__main__":

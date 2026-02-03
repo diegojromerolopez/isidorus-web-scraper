@@ -135,6 +135,11 @@ The system is built with a microservices approach:
           -H "Content-Type: application/json" \
           -H "X-API-Key: test-api-key-123" \
           -d '{"url": "https://example.com", "term": "example", "depth": 1}'
+          -d '{"url": "https://example.com", "term": "example", "depth": 1}'
+        ```
+        Response:
+        ```json
+        {"scraping_id": 123}
         ```
 -   **`GET /scrape?scraping_id=1`**: Check status and get results of a scraping job.
 -   **`GET /search?term={term}`**: Search for pages containing a specific term.
@@ -277,6 +282,38 @@ To test with real providers:
     export LLM_API_KEY=sk-...
     make run
     ```
+
+## Retrieving Results
+
+Since the system is event-driven, results are retrieved by polling the API or monitoring the job status.
+
+### 1. Check Job Status & Get Data
+Use the `scraping_id` returned by the `POST /scrape` endpoint.
+
+```bash
+curl http://localhost:8000/scrape?scraping_id=<ID> -H "X-API-Key: test-api-key-123"
+```
+Response (when `COMPLETED`):
+```json
+{
+  "status": "COMPLETED",
+  "scraping": { ... },
+  "data": [
+    {
+      "url": "https://example.com/page1",
+      "summary": "AI generated summary...",
+      "images": [{"url": "...", "explanation": "..."}],
+      "terms": [{"term": "foo", "frequency": 10}]
+    }
+  ]
+}
+```
+
+### 2. Search Indexed Data
+Search for websites containing a specific term:
+```bash
+curl http://localhost:8000/search?t=example -H "X-API-Key: test-api-key-123"
+```
 
 ## License
 
