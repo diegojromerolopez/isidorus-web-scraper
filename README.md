@@ -293,6 +293,7 @@ make format
 The project emphasizes high test coverage:
 -   **Unit Tests**: ~100% coverage for all components (API, Scraper, Writer, Image Extractor, Page Summarizer).
 -   **E2E Tests**: Full integration tests using a local test runner and mock website.
+    - **Reliable Verification**: Tests utilize a centralized polling mechanism that monitors the `GET /scrape` endpoint, waiting up to **5 minutes (300 seconds)** for a `COMPLETED` status to ensure all asynchronous background tasks (AI extraction, DB writes) have finished.
 -   **Shared Library Tests**: Located in `tests/unit/shared/` for common client testing.
 
 ### AI Worker Testing

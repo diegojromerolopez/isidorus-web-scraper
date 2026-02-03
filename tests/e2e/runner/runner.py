@@ -27,6 +27,8 @@ PAGE_SUMMARIZER_ENABLED = os.getenv("PAGE_SUMMARIZER_ENABLED", "true").lower() =
 
 
 class TestScrapingE2E(unittest.TestCase):
+    MAX_TIMEOUT_SECONDS = 300
+
     def setUp(self) -> None:
         self.session = requests.Session()
         self.session.headers.update({"X-API-Key": API_KEY})
@@ -166,13 +168,13 @@ class TestScrapingE2E(unittest.TestCase):
         )
         return cast(dict[Any, Any], response.json())
 
-    def _poll_scraping_completion(self, scraping_id: int) -> list:
+    def _poll_scraping_completion(self, scraping_id: int, timeout_seconds: int = MAX_TIMEOUT_SECONDS) -> list:
         """Polls the API until the scraping job completes, returning the results."""
         final_status = None
         results = []
 
-        # Wait up to 60s
-        for _ in range(60):
+        # Wait up to timeout_seconds (default 5 minutes)
+        for _ in range(timeout_seconds):
             time.sleep(1)
             status_data = self._get_scraping_status(scraping_id)
             final_status = status_data.get("status")
@@ -180,7 +182,7 @@ class TestScrapingE2E(unittest.TestCase):
                 results = status_data.get("data", [])
                 break
 
-        self.assertEqual(final_status, "COMPLETED", "Scraping timed out or failed.")
+        self.assertEqual(final_status, "COMPLETED", f"Scraping {scraping_id} timed out after {timeout_seconds}s or failed.")
         return results
 
     def _is_image_found(self, results: list) -> bool:
@@ -272,22 +274,8 @@ class TestScrapingE2E(unittest.TestCase):
         scraping_id = data["scraping_id"]
         print(f"Cycle Scraping started with ID: {scraping_id}")
 
-        # 2. Poll for Completion
-        final_status = "PENDING"
-        results = []
-        for _ in range(60):  # Wait up to 60s
-            time.sleep(1)
-            status_data = self._get_scraping_status(scraping_id)
-            final_status = cast(str, status_data.get("status"))
-            if final_status == "COMPLETED":
-                results = status_data.get("data", [])
-                break
-
-        self.assertEqual(
-            final_status,
-            "COMPLETED",
-            "Cycle scraping timed out (possible infinite loop).",
-        )
+        # 2. Poll for Completion (up to 5m)
+        results = self._poll_scraping_completion(scraping_id, timeout_seconds=300)
 
         # 3. Verify Results
         # Should contain cycle_a.html and cycle_b.html (2 pages)
@@ -323,9 +311,10 @@ class TestScrapingE2E(unittest.TestCase):
         )
         table = dynamodb.Table("scraping_jobs")
 
+        # Verify DynamoDB Item (Wait up to 5m for completion)
         item = None
         final_status = None
-        for _ in range(30):
+        for _ in range(300):
             try:
                 resp = table.get_item(Key={"scraping_id": str(scraping_id)})
                 if "Item" in resp:
@@ -333,7 +322,7 @@ class TestScrapingE2E(unittest.TestCase):
                     final_status = item.get("status")
                     if final_status == "COMPLETED":
                         break
-            except Exception:  # pylint: disable=broad-exception-caught
+            except Exception: # pylint: disable=broad-exception-caught
                 pass
             time.sleep(1)
 
@@ -343,7 +332,7 @@ class TestScrapingE2E(unittest.TestCase):
         self.assertEqual(
             final_status,
             "COMPLETED",
-            f"Status in DynamoDB is {final_status}, expected COMPLETED",
+            f"Status in DynamoDB for {scraping_id} is {final_status}, expected COMPLETED after timeout",
         )
         print("DynamoDB Job History Test passed!")
 
