@@ -27,6 +27,33 @@ class TestExplainerFactory(unittest.TestCase):
         self.assertIsInstance(explainer, MockLLM)
 
     @patch("workers.image_extractor.services.explainer_factory.ChatOpenAI")
+    def test_get_explainer_openai_with_key(self, mock_openai: MagicMock) -> None:
+        """Test factory sets OPENAI_API_KEY when key is provided"""
+        with patch.dict("os.environ", {}, clear=True):
+            ExplainerFactory.get_explainer("openai", "test-key")
+            import os
+
+            self.assertEqual(os.environ["OPENAI_API_KEY"], "test-key")
+
+    @patch("workers.image_extractor.services.explainer_factory.ChatGoogleGenerativeAI")
+    def test_get_explainer_gemini_with_key(self, mock_gemini: MagicMock) -> None:
+        """Test factory sets GOOGLE_API_KEY when key is provided"""
+        with patch.dict("os.environ", {}, clear=True):
+            ExplainerFactory.get_explainer("gemini", "test-key")
+            import os
+
+            self.assertEqual(os.environ["GOOGLE_API_KEY"], "test-key")
+
+    @patch("workers.image_extractor.services.explainer_factory.ChatAnthropic")
+    def test_get_explainer_anthropic_with_key(self, mock_anthropic: MagicMock) -> None:
+        """Test factory sets ANTHROPIC_API_KEY when key is provided"""
+        with patch.dict("os.environ", {}, clear=True):
+            ExplainerFactory.get_explainer("anthropic", "test-key")
+            import os
+
+            self.assertEqual(os.environ["ANTHROPIC_API_KEY"], "test-key")
+
+    @patch("workers.image_extractor.services.explainer_factory.ChatOpenAI")
     def test_get_explainer_openai(self, mock_openai: MagicMock) -> None:
         """Test factory returns ChatOpenAI for 'openai' provider"""
         mock_instance = MagicMock()

@@ -25,16 +25,6 @@ class TestDbRepository(unittest.IsolatedAsyncioTestCase):
         # terms__term=term).distinct().values_list("url", flat=True)
         # So values_list returns an awaitable that yields result.
 
-        mock_values_list = AsyncMock(
-            return_value=["http://site1.com", "http://site2.com"]
-        )
-        mock_distinct.values_list.return_value = (
-            mock_values_list()
-        )  # Wait, it calls it and awaits result.
-        # Correct mock: values_list.return_value must be an Awaitable
-        # that returns the list.
-
-        # Actually simplest way:
         mock_distinct.values_list = AsyncMock(
             return_value=["http://site1.com", "http://site2.com"]
         )
@@ -118,7 +108,7 @@ class TestDbRepository(unittest.IsolatedAsyncioTestCase):
         term1.term = "t1"
         term1.frequency = 10
         page1.terms = [term1]
-        
+
         image1 = MagicMock()
         image1.image_url = "http://img.com"
         image1.explanation = "desc"
@@ -133,7 +123,7 @@ class TestDbRepository(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(results[0]["url"], "http://site1.com")
         self.assertEqual(results[0]["terms"][0]["term"], "t1")
         self.assertEqual(results[0]["images"][0]["url"], "http://img.com")
-        
+
         mock_filter.assert_called_once_with(scraping_id=123)
 
 
