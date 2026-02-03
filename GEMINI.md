@@ -173,3 +173,4 @@ The `scrapings` table uses an internal Integer `id` for primary keys and a `uuid
 9.  **Private Methods and Attributes**: Use double underscore prefix (`__`) for truly private methods and attributes.
     - **Public interface**: Only expose methods and attributes that are part of the class's contract.
     - **Testing Private Members**: **Do not access private attributes or methods in tests** (e.g., `client._Class__attribute`). Instead, use `unittest.mock.patch` to mock dependencies or inject mocks via the constructor. Tests should verify behavior through the public interface.
+10. **Constant-Driven Defaults**: Never define default values in function parameters with raw values (literals). Always use class constants or module-level constants to ensure maintainability and a single source of truth for configuration values.
