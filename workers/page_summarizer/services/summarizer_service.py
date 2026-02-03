@@ -14,10 +14,11 @@ class SummarizerService:
         sqs_client: SQSClient,
         writer_queue_url: str,
         llm_provider: str = "openai",
+        llm_api_key: str | None = None,
     ):
         self.__sqs_client = sqs_client
         self.__writer_queue_url = writer_queue_url
-        self.__llm = SummarizerFactory.get_llm(llm_provider)
+        self.__llm = SummarizerFactory.get_llm(llm_provider, llm_api_key)
 
     async def process_message(self, message_body: str) -> None:
         try:

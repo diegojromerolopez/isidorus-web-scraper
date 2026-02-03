@@ -1,0 +1,18 @@
+services:
+  trigger:
+    image: python:3.10-slim
+    volumes:
+      - ./trigger:/app/trigger
+    command: /bin/bash -c "pip install requests && python /app/trigger/trigger_scraper.py"
+    environment:
+      - API_URL=http://api:8000
+      - API_KEY=test-api-key-123
+      - SCRAPE_URL=${SCRAPE_URL:-https://news.ycombinator.com/news}
+      - SCRAPE_DEPTH=${SCRAPE_DEPTH:-1}
+    depends_on:
+      api:
+        condition: service_started
+
+networks:
+  default:
+    name: isidorus-net

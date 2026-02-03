@@ -29,8 +29,20 @@ class MockLLM:
 class SummarizerFactory:
     # pylint: disable=too-few-public-methods
     @staticmethod
-    def get_llm(provider: str = "openai") -> Any:
+    def get_llm(provider: str = "openai", api_key: str | None = None) -> Any:
         provider = provider.lower()
+
+        if api_key:
+            if provider == "openai":
+                import os
+                os.environ["OPENAI_API_KEY"] = api_key
+            elif provider == "gemini":
+                import os
+                os.environ["GOOGLE_API_KEY"] = api_key
+            elif provider == "anthropic":
+                import os
+                os.environ["ANTHROPIC_API_KEY"] = api_key
+            # Add other mappings as needed
 
         providers = {
             "mock": MockLLM,

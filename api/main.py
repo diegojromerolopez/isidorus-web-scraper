@@ -18,6 +18,11 @@ class ScrapeRequest(BaseModel):
     depth: int = 1
 
 
+@app.get("/health")
+async def health_check() -> dict[str, str]:
+    return {"status": "ok"}
+
+
 @app.post("/scrape", response_model=dict[str, int])
 async def start_scrape(
     request: ScrapeRequest,

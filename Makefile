@@ -7,38 +7,42 @@ all: up
 
 # Start all services in detached mode
 up:
-	docker compose -f docker-compose.e2e.yml up -d --build
+	docker compose -f docker-compose.yml up -d --build
 
 # Stop all services and remove containers
 down:
-	docker compose -f docker-compose.e2e.yml down
+	docker compose -f docker-compose.yml down
 
 # Rebuild all services
 build:
-	docker compose -f docker-compose.e2e.yml build
+	docker compose -f docker-compose.yml build
 
 # Follow logs from all services
 logs:
-	docker compose -f docker-compose.e2e.yml logs -f
+	docker compose -f docker-compose.yml logs -f
 
 # Run end-to-end tests
 test-e2e: migrate seed-db
-	docker compose -f docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from test-runner
+	docker compose -f docker-compose.yml -f docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from test-runner
 
 # Run basic end-to-end tests (no AI workers)
 test-e2e-basic: migrate seed-db
 	IMAGE_EXPLAINER_ENABLED=false PAGE_SUMMARIZER_ENABLED=false \
-	docker compose -f docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from test-runner \
+	docker compose -f docker-compose.yml -f docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from test-runner \
 		postgres localstack redis api auth-admin scraper-worker writer-worker mock-website test-runner
+
+# Run the stack and trigger a scrape job
+run: migrate seed-db
+	SCRAPE_URL=$(URL) SCRAPE_DEPTH=$(DEPTH) docker compose -f docker-compose.yml -f docker-compose.run.yml up --build --abort-on-container-exit --exit-code-from trigger
 
 # Run Django migrations and seed data
 migrate:
-	docker compose -f docker-compose.e2e.yml up -d postgres
+	docker compose -f docker-compose.yml up -d postgres
 	sleep 5
-	docker compose -f docker-compose.e2e.yml run --rm auth-admin python manage.py migrate --fake-initial
+	docker compose -f docker-compose.yml run --rm auth-admin python manage.py migrate --fake-initial
 
 seed-db:
-	docker compose -f docker-compose.e2e.yml run --rm auth-admin python manage.py setup_test_data
+	docker compose -f docker-compose.yml run --rm auth-admin python manage.py setup_test_data
 
 # Run unit tests
 test-unit:
@@ -60,7 +64,7 @@ test-unit:
 
 # Clean up volumes and orphans
 clean:
-	docker compose -f docker-compose.e2e.yml down -v --remove-orphans
+	docker compose -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.run.yml down -v --remove-orphans
 
 # Format Python code with black
 format:

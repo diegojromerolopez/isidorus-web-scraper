@@ -27,6 +27,7 @@ async def main() -> None:
         sqs_client=sqs_client,
         writer_queue_url=config.writer_queue_url,
         llm_provider=config.llm_provider,
+        llm_api_key=config.llm_api_key,
     )
 
     # Main Loop

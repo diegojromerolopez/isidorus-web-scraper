@@ -1,0 +1,169 @@
+services:
+  localstack:
+    image: localstack/localstack:4.13
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=sqs,s3,dynamodb
+      - DEBUG=1
+      - DATA_DIR=/tmp/localstack/data
+    volumes:
+      - ./infra/localstack:/etc/localstack/init/ready.d
+    healthcheck:
+      test: [ "CMD", "bash", "-c", "awslocal sqs list-queues && awslocal dynamodb list-tables | grep scraping_jobs" ]
+      interval: 10s
+      timeout: 20s
+      retries: 5
+      start_period: 30s
+
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=isidorus
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/isidorus
+      - SQS_QUEUE_URL=http://localstack:4566/000000000000/scraper-queue
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      localstack:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  auth-admin:
+    build:
+      context: ./auth_admin
+    ports:
+      - "8001:8000"
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/isidorus
+      - SECRET_KEY=django-insecure-test-key
+      - DEBUG=True
+      - ALLOWED_HOSTS=*
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  scraper-worker:
+    build:
+      context: ./workers/scraper
+    environment:
+      AWS_ENDPOINT_URL: http://localstack:4566
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      INPUT_QUEUE_URL: http://localstack:4566/000000000000/scraper-queue
+      SUMMARIZER_QUEUE_URL: http://localstack:4566/000000000000/page-summarizer-queue
+      IMAGE_QUEUE_URL: http://localstack:4566/000000000000/image-extractor-queue
+      WRITER_QUEUE_URL: http://localstack:4566/000000000000/writer-queue
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      IMAGE_EXPLAINER_ENABLED: "${IMAGE_EXPLAINER_ENABLED:-true}"
+      PAGE_SUMMARIZER_ENABLED: "${PAGE_SUMMARIZER_ENABLED:-true}"
+    depends_on:
+      localstack:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  writer-worker:
+    build:
+      context: ./workers/writer
+    environment:
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - INPUT_QUEUE_URL=http://localstack:4566/000000000000/writer-queue
+      - DATABASE_URL=host=postgres user=postgres password=postgres dbname=isidorus port=5432 sslmode=disable
+      - DB_BATCH_SIZE=50
+    depends_on:
+      localstack:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  image-extractor-worker:
+    build:
+      context: .
+      dockerfile: workers/image_extractor/Dockerfile
+    environment:
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - INPUT_QUEUE_URL=http://localstack:4566/000000000000/image-extractor-queue
+      - WRITER_QUEUE_URL=http://localstack:4566/000000000000/writer-queue
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/isidorus
+      - IMAGES_BUCKET=isidorus-images
+      - LLM_PROVIDER=mock
+      - LLM_API_KEY=${LLM_API_KEY}
+    depends_on:
+      localstack:
+        condition: service_healthy
+      writer-worker:
+        condition: service_started
+
+  page-summarizer-worker:
+    build:
+      context: .
+      dockerfile: workers/page_summarizer/Dockerfile
+    environment:
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - INPUT_QUEUE_URL=http://localstack:4566/000000000000/page-summarizer-queue
+      - WRITER_QUEUE_URL=http://localstack:4566/000000000000/writer-queue
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/isidorus
+      - LLM_PROVIDER=mock
+      - LLM_API_KEY=${LLM_API_KEY}
+    depends_on:
+      localstack:
+        condition: service_healthy
+      writer-worker:
+        condition: service_started
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  default:
+    name: isidorus-net

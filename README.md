@@ -129,6 +129,13 @@ The system is built with a microservices approach:
 
 -   **`POST /scrape`**: Start a new scraping job.
     -   Body: `{"url": "...", "term": "...", "depth": 2}`
+    -   **Example**:
+        ```bash
+        curl -X POST http://localhost:8000/scrape \
+          -H "Content-Type: application/json" \
+          -H "X-API-Key: test-api-key-123" \
+          -d '{"url": "https://example.com", "term": "example", "depth": 1}'
+        ```
 -   **`GET /scrape?scraping_id=1`**: Check status and get results of a scraping job.
 -   **`GET /search?term={term}`**: Search for pages containing a specific term.
 -   **`GET /terms`**: List all unique terms found across all scrapings.
@@ -210,6 +217,19 @@ The entire stack runs locally via Docker Compose:
     make test-e2e-basic
     ```
 
+5.  **Run a Demo Scrape**:
+    Starts the stack and triggers a scrape job.
+    
+    Default (Hacker News, depth 1):
+    ```bash
+    make run
+    ```
+
+    Custom URL and Depth:
+    ```bash
+    make run URL=https://example.com DEPTH=2
+    ```
+
 ## Development
 
 -   **API**: Located in `api/`. Run locally with `uvicorn api.main:app --reload`.
@@ -249,8 +269,14 @@ The project emphasizes high test coverage:
 By default, the E2E tests use `LLM_PROVIDER=mock` to avoid external API calls and costs. This returns fixed "Mocked summary" and "Mocked explanation" results.
 
 To test with real providers:
-1.  Update `LLM_PROVIDER` in `docker-compose.e2e.yml` (e.g., to `openai`).
-2.  Ensure the corresponding environment variable (e.g., `OPENAI_API_KEY`) is set in your host or `.env`.
+### Running with Real AI Services (e.g., OpenAI)
+
+1.  Update `LLM_PROVIDER` in `docker-compose.yml` (e.g., to `openai`).
+2.  Ensure `LLM_API_KEY` is set in your environment (it is passed to the workers via `docker-compose.yml`).
+    ```bash
+    export LLM_API_KEY=sk-...
+    make run
+    ```
 
 ## License
 

@@ -27,7 +27,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         # Mock message receipt
         mock_sqs.receive_messages.side_effect = [
             [{"Body": "{}", "ReceiptHandle": "handle"}],  # First iteration: 1 message
-            Exception("Stop Loop"),  # Second iteration: Stop loop
+            KeyboardInterrupt("Stop Loop"),  # Second iteration: Stop loop
         ]
 
         mock_service = AsyncMock()
@@ -36,7 +36,7 @@ class TestMain(unittest.IsolatedAsyncioTestCase):
         # Run Main
         try:
             await main()
-        except Exception:  # pylint: disable=broad-exception-caught
+        except KeyboardInterrupt:
             pass
 
         # Verify

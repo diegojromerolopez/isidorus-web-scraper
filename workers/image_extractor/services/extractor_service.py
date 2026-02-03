@@ -20,12 +20,13 @@ class ExtractorService:
         writer_queue_url: str,
         images_bucket: str,
         llm_provider: str = "openai",
+        llm_api_key: str | None = None,
     ):  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self.__sqs_client = sqs_client
         self.__s3_client = s3_client
         self.__writer_queue_url = writer_queue_url
         self.__images_bucket = images_bucket
-        self.__llm = ExplainerFactory.get_explainer(llm_provider)
+        self.__llm = ExplainerFactory.get_explainer(llm_provider, llm_api_key)
 
     async def process_message(self, message_body: str) -> None:
         try:

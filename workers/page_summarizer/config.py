@@ -13,6 +13,7 @@ class Configuration(BaseConfiguration):
     input_queue_url: str
     writer_queue_url: str
     llm_provider: str
+    llm_api_key: str | None
 
     @classmethod
     def from_env(cls) -> "Configuration":
@@ -40,4 +41,5 @@ class Configuration(BaseConfiguration):
             input_queue_url=os.getenv("INPUT_QUEUE_URL", ""),
             writer_queue_url=os.getenv("WRITER_QUEUE_URL", ""),
             llm_provider=os.getenv("LLM_PROVIDER", "openai"),
+            llm_api_key=os.getenv("LLM_API_KEY"),
         )

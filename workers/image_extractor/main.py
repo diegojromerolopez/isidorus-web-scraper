@@ -32,6 +32,7 @@ async def main() -> None:
         writer_queue_url=config.writer_queue_url,
         images_bucket=config.images_bucket,
         llm_provider=config.llm_provider,
+        llm_api_key=config.llm_api_key,
     )
 
     # Main Loop
