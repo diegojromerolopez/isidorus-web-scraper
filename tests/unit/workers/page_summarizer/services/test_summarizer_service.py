@@ -1,22 +1,22 @@
 import json
 import unittest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from workers.page_summarizer.services.summarizer_service import SummarizerService
 
 
 @patch("workers.page_summarizer.services.summarizer_service.SummarizerFactory")
 class TestSummarizerService(unittest.IsolatedAsyncioTestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         self.mock_sqs = AsyncMock()
         self.writer_queue = "writer-queue"
         self.api_key = "test-key"
 
-    async def test_init(self, mock_factory):
+    async def test_init(self, mock_factory: MagicMock) -> None:
         _ = SummarizerService(self.mock_sqs, self.writer_queue, "openai", self.api_key)
         mock_factory.get_llm.assert_called_with("openai", self.api_key)
 
-    async def test_process_message_success(self, mock_factory):
+    async def test_process_message_success(self, mock_factory: MagicMock) -> None:
         # Setup message
         msg_body = json.dumps(
             {
@@ -45,7 +45,7 @@ class TestSummarizerService(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["summary"], "Summary")
         self.assertEqual(args[1], self.writer_queue)
 
-    async def test_process_message_with_page_id(self, mock_factory):
+    async def test_process_message_with_page_id(self, mock_factory: MagicMock) -> None:
         # Setup message
         msg_body = json.dumps(
             {
@@ -64,7 +64,9 @@ class TestSummarizerService(unittest.IsolatedAsyncioTestCase):
         payload = args[0]
         self.assertEqual(payload["page_id"], 456)
 
-    async def test_process_message_missing_fields(self, mock_factory):
+    async def test_process_message_missing_fields(
+        self, _mock_factory: MagicMock
+    ) -> None:
         msg_body = json.dumps(
             {
                 "url": "http://example.com"
@@ -77,12 +79,12 @@ class TestSummarizerService(unittest.IsolatedAsyncioTestCase):
 
         self.mock_sqs.send_message.assert_not_called()
 
-    async def test_process_message_json_error(self, mock_factory):
+    async def test_process_message_json_error(self, _mock_factory: MagicMock) -> None:
         service = SummarizerService(self.mock_sqs, self.writer_queue)
         await service.process_message("invalid json")
         self.mock_sqs.send_message.assert_not_called()
 
-    async def test_process_message_exception(self, mock_factory):
+    async def test_process_message_exception(self, mock_factory: MagicMock) -> None:
         msg_body = json.dumps(
             {"scraping_id": 123, "url": "http://example.com", "content": "text"}
         )

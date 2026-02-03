@@ -92,20 +92,21 @@ async def terms(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-# Tortoise ORM Init with Connection Pooling
-# Tortoise ORM Init with Connection Pooling
-config = Configuration.from_env()
-db_url = config.database_url
-# Append connection pool settings
-if "?" not in db_url:
-    db_url += "?minsize=10&maxsize=50"
-else:
-    db_url += "&minsize=10&maxsize=50"
+def setup_database(application: FastAPI) -> None:
+    # Tortoise ORM Init with Connection Pooling
+    config = Configuration.from_env()
+    db_url = config.database_url
+    # Append connection pool settings
+    separator = "&" if "?" in db_url else "?"
+    db_url += f"{separator}minsize=10&maxsize=50"
 
-register_tortoise(
-    app,
-    db_url=db_url,
-    modules={"models": ["api.models"]},
-    generate_schemas=False,
-    add_exception_handlers=True,
-)
+    register_tortoise(
+        application,
+        db_url=db_url,
+        modules={"models": ["api.models"]},
+        generate_schemas=False,
+        add_exception_handlers=True,
+    )
+
+
+setup_database(app)

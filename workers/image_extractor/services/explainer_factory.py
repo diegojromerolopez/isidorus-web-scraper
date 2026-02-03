@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import Any
 
 # pylint: disable=import-error
@@ -29,13 +30,10 @@ class ExplainerFactory:
 
         if api_key:
             if provider == "openai":
-                import os
                 os.environ["OPENAI_API_KEY"] = api_key
             elif provider == "gemini":
-                import os
                 os.environ["GOOGLE_API_KEY"] = api_key
             elif provider == "anthropic":
-                import os
                 os.environ["ANTHROPIC_API_KEY"] = api_key
             # Add other mappings as needed
 
