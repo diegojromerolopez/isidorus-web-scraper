@@ -35,6 +35,20 @@ func (m *MockDBRepository) CompleteScraping(scrapingID int) error {
 	return args.Error(0)
 }
 
+type MockJobStatusRepository struct {
+	mock.Mock
+}
+
+func (m *MockJobStatusRepository) UpdateJobStatus(ctx context.Context, jobID string, status string) error {
+	args := m.Called(ctx, jobID, status)
+	return args.Error(0)
+}
+
+func (m *MockJobStatusRepository) UpdateJobStatusFull(ctx context.Context, jobID string, status string, completedAt string) error {
+	args := m.Called(ctx, jobID, status, completedAt)
+	return args.Error(0)
+}
+
 type MockSQSClient struct {
 	mock.Mock
 }
@@ -114,21 +128,28 @@ func TestProcessMessage_RepoError(t *testing.T) {
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, assert.AnError)
 }
+
 func TestProcessMessage_ScrapingComplete(t *testing.T) {
-	mockRepo := new(MockDBRepository)
-	s := NewWriterService(WithDBRepository(mockRepo))
+	mockDbRepo := new(MockDBRepository)
+	mockStatusRepo := new(MockJobStatusRepository)
+	s := NewWriterService(
+		WithDBRepository(mockDbRepo),
+		WithJobStatusRepository(mockStatusRepo),
+	)
 
 	msg := domain.WriterMessage{
-		Type:         "scraping_complete",
-		ScrapingID:   123,
+		Type:       "scraping_complete",
+		ScrapingID: 123,
 	}
 
-	mockRepo.On("CompleteScraping", 123).Return(nil)
+	mockDbRepo.On("CompleteScraping", 123).Return(nil)
+	mockStatusRepo.On("UpdateJobStatusFull", mock.Anything, "123", domain.StatusCompleted, mock.Anything).Return(nil)
 
 	err := s.ProcessMessage(msg)
 
 	assert.NoError(t, err)
-	mockRepo.AssertExpectations(t)
+	mockDbRepo.AssertExpectations(t)
+	mockStatusRepo.AssertExpectations(t)
 }
 
 func TestProcessMessage_PageSummary(t *testing.T) {
@@ -136,10 +157,10 @@ func TestProcessMessage_PageSummary(t *testing.T) {
 	s := NewWriterService(WithDBRepository(mockRepo))
 
 	msg := domain.WriterMessage{
-		Type:        "page_summary",
-		URL:         "http://example.com/page",
-		Summary:     "This is a summary",
-		ScrapingID:  123,
+		Type:       "page_summary",
+		URL:        "http://example.com/page",
+		Summary:    "This is a summary",
+		ScrapingID: 123,
 	}
 
 	mockRepo.On("InsertPageSummary", msg).Return(nil)
@@ -148,4 +169,26 @@ func TestProcessMessage_PageSummary(t *testing.T) {
 
 	assert.NoError(t, err)
 	mockRepo.AssertExpectations(t)
+}
+
+func TestProcessMessage_DynamoFullError(t *testing.T) {
+	mockDbRepo := new(MockDBRepository)
+	mockStatusRepo := new(MockJobStatusRepository)
+	s := NewWriterService(
+		WithDBRepository(mockDbRepo),
+		WithJobStatusRepository(mockStatusRepo),
+	)
+
+	msg := domain.WriterMessage{
+		Type:       "scraping_complete",
+		ScrapingID: 123,
+	}
+
+	mockDbRepo.On("CompleteScraping", 123).Return(nil)
+	mockStatusRepo.On("UpdateJobStatusFull", mock.Anything, "123", domain.StatusCompleted, mock.Anything).Return(assert.AnError)
+
+	err := s.ProcessMessage(msg)
+
+	assert.NoError(t, err) // We log the error but don't fail the message processing
+	mockStatusRepo.AssertExpectations(t)
 }

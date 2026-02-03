@@ -25,6 +25,11 @@ class TestMain(unittest.TestCase):
     def tearDown(self) -> None:
         app.dependency_overrides = {}
 
+    def test_health_check(self) -> None:
+        response = self.client.get("/health")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "ok"})
+
     def test_scrape_success(self) -> None:
         self.mock_scraper_service.start_scraping.return_value = 123
         response = self.client.post(

@@ -116,7 +116,7 @@ The system uses a hybrid schema:
 
 ### DynamoDB
 - **`scraping_jobs`**: Logs job lifecycle.
-  - PK: `job_id` (String)
+  - PK: `scraping_id` (String)
   - Attributes: `url`, `depth`, `status`
 
 ### PostgreSQL

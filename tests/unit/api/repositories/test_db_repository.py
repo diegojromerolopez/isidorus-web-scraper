@@ -63,7 +63,7 @@ class TestDbRepository(unittest.IsolatedAsyncioTestCase):
 
         result = await self.repo.create_scraping("http://url.com")
         self.assertEqual(result, 123)
-        mock_create.assert_called_once_with(url="http://url.com", status="PENDING")
+        mock_create.assert_called_once_with(url="http://url.com")
 
     @patch("api.models.Scraping.get_or_none", new_callable=AsyncMock)
     async def test_get_scraping(self, mock_get: AsyncMock) -> None:

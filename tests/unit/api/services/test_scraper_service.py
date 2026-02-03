@@ -53,34 +53,42 @@ class TestScraperService(unittest.IsolatedAsyncioTestCase):
         await service.start_scraping(url, depth)
 
         # Verify DynamoDB Log
-        mock_dynamodb_client.put_item.assert_called_once_with(
-            {
-                "job_id": "123",
-                "url": url,
-                "depth": depth,
-                "status": "PENDING",
-            }
-        )
+        mock_dynamodb_client.put_item.assert_called_once()
+        put_item_call = mock_dynamodb_client.put_item.call_args[0][0]
+        self.assertEqual(put_item_call["scraping_id"], "123")
+        self.assertEqual(put_item_call["url"], url)
+        self.assertEqual(put_item_call["status"], "PENDING")
+        self.assertIn("created_at", put_item_call)
 
     async def test_get_scraping_status(self) -> None:
         mock_sqs_client = AsyncMock()
         mock_redis_client = AsyncMock()
         mock_db_repository = AsyncMock()
+        mock_dynamodb_client = AsyncMock()
 
-        expected_status = {
+        expected_pg = {
             "id": 123,
-            "uuid": "test-uuid",
             "url": "http://example.com",
-            "created_at": "2024-01-01T00:00:00",
         }
-        mock_db_repository.get_scraping.return_value = expected_status
+        mock_db_repository.get_scraping.return_value = expected_pg
 
-        service = ScraperService(mock_sqs_client, mock_redis_client, mock_db_repository)
+        expected_dynamo = {
+            "status": "COMPLETED",
+            "created_at": "2024-01-01T00:00:00",
+            "completed_at": "2024-01-01T01:00:00",
+        }
+        mock_dynamodb_client.get_item.return_value = expected_dynamo
+
+        service = ScraperService(
+            mock_sqs_client, mock_redis_client, mock_db_repository, mock_dynamodb_client
+        )
 
         result = await service.get_scraping_status(123)
 
-        self.assertEqual(result, expected_status)
+        expected_merged = {**expected_pg, **expected_dynamo}
+        self.assertEqual(result, expected_merged)
         mock_db_repository.get_scraping.assert_called_once_with(123)
+        mock_dynamodb_client.get_item.assert_called_once_with({"scraping_id": "123"})
 
     async def test_get_scraping_results(self) -> None:
         mock_sqs_client = AsyncMock()
@@ -99,6 +107,47 @@ class TestScraperService(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result, expected_results)
         mock_db_repository.get_scrape_results.assert_called_once_with(123)
+
+    async def test_get_scraping_status_not_found(self) -> None:
+        mock_db_repository = AsyncMock()
+        mock_db_repository.get_scraping.return_value = None
+
+        service = ScraperService(AsyncMock(), AsyncMock(), mock_db_repository)
+        result = await service.get_scraping_status(999)
+        self.assertIsNone(result)
+
+    async def test_get_scraping_status_no_dynamo(self) -> None:
+        mock_db_repository = AsyncMock()
+        mock_db_repository.get_scraping.return_value = {
+            "id": 123,
+            "url": "http://x.com",
+        }
+
+        service = ScraperService(
+            AsyncMock(), AsyncMock(), mock_db_repository, dynamodb_client=None
+        )
+        result = await service.get_scraping_status(123)
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["status"], "UNKNOWN")
+
+    async def test_get_scraping_status_dynamo_no_item(self) -> None:
+        mock_db_repository = AsyncMock()
+        mock_dynamodb_client = AsyncMock()
+
+        mock_db_repository.get_scraping.return_value = {
+            "id": 123,
+            "url": "http://x.com",
+        }
+        mock_dynamodb_client.get_item.return_value = None
+
+        service = ScraperService(
+            AsyncMock(), AsyncMock(), mock_db_repository, mock_dynamodb_client
+        )
+        result = await service.get_scraping_status(123)
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["status"], "UNKNOWN")
 
 
 if __name__ == "__main__":

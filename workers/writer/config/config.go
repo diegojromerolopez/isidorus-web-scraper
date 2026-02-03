@@ -8,7 +8,8 @@ import (
 
 type Config struct {
 	InputQueueURL string
-	DatabaseURL    string
+	DatabaseURL   string
+	DynamoDBTable string
 	BatchSize     int
 }
 
@@ -21,8 +22,9 @@ func Load() (*Config, error) {
 
 	cfg := &Config{
 		InputQueueURL: os.Getenv("INPUT_QUEUE_URL"),
-		DatabaseURL:    os.Getenv("DATABASE_URL"),
-		BatchSize:      batchSize,
+		DatabaseURL:   os.Getenv("DATABASE_URL"),
+		DynamoDBTable: os.Getenv("DYNAMODB_TABLE"),
+		BatchSize:     batchSize,
 	}
 
 	if cfg.InputQueueURL == "" {

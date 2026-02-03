@@ -31,12 +31,19 @@ class ScraperService:
 
         # Log to DynamoDB if client is available
         if self.dynamodb_client:
+            from datetime import (  # pylint: disable=import-outside-toplevel
+                datetime,
+                timezone,
+            )
+
+            now = datetime.now(timezone.utc).isoformat()
             await self.dynamodb_client.put_item(
                 {
-                    "job_id": str(scraping_id),
+                    "scraping_id": str(scraping_id),
                     "url": url,
                     "depth": depth,
                     "status": "PENDING",
+                    "created_at": now,
                 }
             )
 
@@ -52,9 +59,29 @@ class ScraperService:
 
     async def get_scraping_status(self, scraping_id: int) -> dict[str, Any] | None:
         """
-        Retrieves the status of a scraping session.
+        Retrieves the status of a scraping session, using DynamoDB as
+        the source of truth for lifecycle state (status, timestamps).
         """
-        return await self.db_repository.get_scraping(scraping_id)
+        # 1. Get identity from Postgres
+        scraping_pg = await self.db_repository.get_scraping(scraping_id)
+        if not scraping_pg:
+            return None
+
+        # 2. Get status and timestamps from DynamoDB
+        status_data = {"status": "UNKNOWN", "created_at": None, "completed_at": None}
+        if self.dynamodb_client:
+            item = await self.dynamodb_client.get_item(
+                {"scraping_id": str(scraping_id)}
+            )
+            if item:
+                status_data = {
+                    "status": item.get("status", "UNKNOWN"),
+                    "created_at": item.get("created_at"),
+                    "completed_at": item.get("completed_at"),
+                }
+
+        # 3. Merge
+        return {**scraping_pg, **status_data}
 
     async def get_scraping_results(self, scraping_id: int) -> list[dict[str, Any]]:
         """

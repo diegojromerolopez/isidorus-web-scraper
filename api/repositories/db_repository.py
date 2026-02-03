@@ -30,7 +30,7 @@ class DbRepository:
         """
         Creates a new scraping record.
         """
-        scraping = await models.Scraping.create(url=url, status="PENDING")
+        scraping = await models.Scraping.create(url=url)
         return int(scraping.id)
 
     async def get_scraping(self, scraping_id: int) -> dict[str, Any] | None:
@@ -42,9 +42,6 @@ class DbRepository:
             return {
                 "id": scraping.id,
                 "url": scraping.url,
-                "status": scraping.status,
-                "created_at": scraping.created_at,
-                "completed_at": scraping.completed_at,
             }
         return None
 

@@ -66,14 +66,17 @@ test-unit:
 clean:
 	docker compose -f docker-compose.yml -f docker-compose.e2e.yml -f docker-compose.run.yml down -v --remove-orphans
 
-# Format Python code with black
+# Format code
 format:
 	@echo "Formatting Python code with black..."
 	black .
-	@echo "Sorting imports with isort..."
+	@echo "Sorting Python imports with isort..."
 	isort .
-	@echo "Sorting imports with ruff..."
+	@echo "Sorting Python imports with ruff..."
 	ruff check --select I --fix .
+	@echo "Formatting Go code..."
+	@docker run --rm -v "$$(pwd):/app" -w /app/workers/scraper golang:1.23 go fmt ./...
+	@docker run --rm -v "$$(pwd):/app" -w /app/workers/writer golang:1.23 go fmt ./...
 	@echo "Code formatting complete!"
 
 # Check linting errors (does not modify files)
@@ -90,6 +93,17 @@ lint-check:
 	mypy .
 	@echo "Running pylint..."
 	pylint api/ workers/image_extractor/ workers/page_summarizer/ tests/unit/ tests/e2e/runner/runner.py
+	@echo "Checking Go code formatting..."
+	@if [ -n "$$(docker run --rm -v "$$(pwd):/app" -w /app/workers/scraper golang:1.23 gofmt -l .)" ]; then \
+		echo "Go formatting errors found in scraper worker. Run 'make format' to fix."; \
+		docker run --rm -v "$$(pwd):/app" -w /app/workers/scraper golang:1.23 gofmt -l .; \
+		exit 1; \
+	fi
+	@if [ -n "$$(docker run --rm -v "$$(pwd):/app" -w /app/workers/writer golang:1.23 gofmt -l .)" ]; then \
+		echo "Go formatting errors found in writer worker. Run 'make format' to fix."; \
+		docker run --rm -v "$$(pwd):/app" -w /app/workers/writer golang:1.23 gofmt -l .; \
+		exit 1; \
+	fi
 	@echo "All linting checks passed!"
 
 # Run all linters and show errors (alias for lint-check)

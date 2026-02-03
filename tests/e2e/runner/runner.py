@@ -324,12 +324,15 @@ class TestScrapingE2E(unittest.TestCase):
         table = dynamodb.Table("scraping_jobs")
 
         item = None
-        for _ in range(10):
+        final_status = None
+        for _ in range(30):
             try:
-                resp = table.get_item(Key={"job_id": str(scraping_id)})
+                resp = table.get_item(Key={"scraping_id": str(scraping_id)})
                 if "Item" in resp:
                     item = resp["Item"]
-                    break
+                    final_status = item.get("status")
+                    if final_status == "COMPLETED":
+                        break
             except Exception:  # pylint: disable=broad-exception-caught
                 pass
             time.sleep(1)
@@ -337,8 +340,11 @@ class TestScrapingE2E(unittest.TestCase):
         self.assertIsNotNone(item, "Job not found in DynamoDB")
         assert item is not None
         self.assertEqual(item["url"], url)
-        self.assertEqual(item["status"], "PENDING")
-        self.assertEqual(item["status"], "PENDING")
+        self.assertEqual(
+            final_status,
+            "COMPLETED",
+            f"Status in DynamoDB is {final_status}, expected COMPLETED",
+        )
         print("DynamoDB Job History Test passed!")
 
 

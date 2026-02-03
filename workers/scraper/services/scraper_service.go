@@ -177,9 +177,9 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 	if s.imageExplainerEnabled {
 		for _, imgURL := range images {
 			imgMsg := domain.ImageMessage{
-				URL:          imgURL,
-				OriginalURL:  msg.URL,
-				ScrapingID:   msg.ScrapingID,
+				URL:         imgURL,
+				OriginalURL: msg.URL,
+				ScrapingID:  msg.ScrapingID,
 			}
 			if err := s.sqsClient.SendMessage(ctx, s.imageQueueURL, imgMsg); err != nil {
 				log.Printf("failed to send image to image queue: %v", err)
@@ -222,9 +222,9 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 	failedCount := 0
 	for _, link := range linksToSend {
 		newMsg := domain.ScrapeMessage{
-			URL:          link,
-			Depth:        msg.Depth - 1,
-			ScrapingID:   msg.ScrapingID,
+			URL:        link,
+			Depth:      msg.Depth - 1,
+			ScrapingID: msg.ScrapingID,
 		}
 		err := s.sqsClient.SendMessage(ctx, s.inputQueueURL, newMsg)
 		if err != nil {

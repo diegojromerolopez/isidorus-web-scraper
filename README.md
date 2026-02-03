@@ -38,34 +38,58 @@ The application takes a URL and a search term, recursively scrapes the website t
 graph TD
     User((User)) -->|HTTP POST /scrape| API[API-FastAPI]
     API -->|1. Create Scraping| DB[(PostgreSQL)]
-    API -->|2. Start Job| SQS_S[SQS-Scraper Queue]
+    API -->|2. Log Job Meta| Dynamo[(DynamoDB)]
+    API -->|3. Start Job| SQS_S[SQS-Scraper Queue]
     
     Admin((Admin)) -->|Manage Keys| AuthAdmin[Auth Admin-Django]
-    AuthAdmin -->|3. Sync Keys| DB
-    API -->|4. Validate Key| Redis[(Redis)]
-    API -->|5. Check DB| DB
+    AuthAdmin -->|4. Sync Keys| DB
+    API -->|5. Validate Key| Redis[(Redis)]
+    API -->|6. Check DB| DB
     
     SQS_S --> Scraper[Scraper-Go]
-    Scraper -->|6. Cycle Detection| Redis
-    Scraper -->|7. Track Depth| Redis
-    Scraper -->|8. Found Image| SQS_I[SQS-Image Queue]
-    Scraper -->|9. Page Data| SQS_W[SQS-Writer Queue]
+    Scraper -->|7. Cycle Detection| Redis
+    Scraper -->|8. Track Depth| Redis
+    Scraper -->|9. Found Image| SQS_I[SQS-Image Queue]
+    Scraper -->|10. Page Data| SQS_W[SQS-Writer Queue]
     
     SQS_I --> Extractor[Image Extractor-Python]
-    Extractor -->|10. Upload Image| S3[(S3-LocalStack)]
-    Extractor -->|11. Explain via LangChain| LLM((AI Models))
-    Extractor -->|12. Explanation Result| SQS_W
+    Extractor -->|11. Upload Image| S3[(S3-LocalStack)]
+    Extractor -->|12. Explain via LangChain| LLM((AI Models))
+    Extractor -->|13. Explanation Result| SQS_W
 
-    Scraper -->|9b. Page Text| SQS_PS[SQS-Summarizer Queue]
+    Scraper -->|10b. Page Text| SQS_PS[SQS-Summarizer Queue]
     SQS_PS --> Summarizer[Page Summarizer-Python]
-    Summarizer -->|13. Summarize| LLM
-    Summarizer -->|14. Summary Result| SQS_W
+    Summarizer -->|14. Summarize| LLM
+    Summarizer -->|15. Summary Result| SQS_W
     
     SQS_W --> Writer[Writer-Go]
-    Writer -->|15. Store Results| DB
-    Writer -->|16. Complete| Redis
-    Redis -->|17. Finalize| Writer
+    Writer -->|16. Store Results| DB
+    Writer -->|17. Mark Completion| Dynamo
 ```
+
+## Data Storage Strategy
+
+Isidorus uses a hybrid storage approach to optimize for both relational integrity and high-throughput status monitoring:
+
+### 1. PostgreSQL (Relational Site Content)
+**Location**: `scrapings`, `scraped_pages`, `page_terms`, `page_links`, `page_images`.
+**Purpose**: Stores the core "knowledge graph" extracted from the web. 
+**Why**: 
+- **Relational Integrity**: Perfect for the complex relationships between pages, images, and search terms.
+- **Query Flexibility**: Allows for complex joins and text searches.
+- **Identity**: Acts as the system's "Identity Store" by generating unique incremental IDs for jobs.
+
+### 2. DynamoDB (Job Lifecycle & State)
+**Location**: `scraping_jobs` table.
+**Purpose**: Stores the current **Status** (`PENDING`, `COMPLETED`), `created_at`, `completed_at`, and job-level metadata (`url`, `depth`).
+**Why**:
+- **Scaling Status Polling**: Offloads high-frequency status checks from the relational database.
+- **NoSQL Flexibility**: Allows for job metadata that might vary across different scraping strategies.
+- **Separation of Concerns**: Decouples the transient orchestration state (DynamoDB) from the permanent archived content (PostgreSQL).
+
+### 3. Redis (Distributed Coordination)
+**Location**: In-memory sets and counters.
+**Purpose**: handles **Cycle Detection** and **Distributed Reference Counting** for job completion tracking in a multi-worker environment.
 
 The system is built with a microservices approach:
 

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	config_aws "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -47,8 +48,13 @@ func main() {
 	rawSQSClient := sqs.NewFromConfig(awsCfg)
 	sqsClient := repositories.NewSQSClient(rawSQSClient)
 	dbRepo := repositories.NewDBRepository(db, cfg.BatchSize)
+
+	rawDynamoClient := dynamodb.NewFromConfig(awsCfg)
+	dynamoClient := repositories.NewDynamoDBClient(rawDynamoClient, cfg.DynamoDBTable)
+
 	writerService := services.NewWriterService(
 		services.WithDBRepository(dbRepo),
+		services.WithJobStatusRepository(dynamoClient),
 	)
 
 	log.Println("Writer worker started (DDD Refactor with community standards)")
