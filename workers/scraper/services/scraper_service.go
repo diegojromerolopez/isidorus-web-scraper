@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"scraped-worker/domain"
@@ -187,23 +188,39 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 		}
 	}
 
-	// Prepare new links (with cycle detection)
+	// Prepare new links (with relative resolution and cycle detection)
 	var linksToSend []string
 	if msg.Depth > 0 {
 		vKey := fmt.Sprintf(domain.RedisKeyVisited, msg.ScrapingID)
+		baseURL, err := url.Parse(msg.URL)
+		if err != nil {
+			log.Printf("failed to parse base URL %s: %v", msg.URL, err)
+			return
+		}
 
 		for _, link := range links {
-			if strings.HasPrefix(link, "http") {
-				// Cycle Detection: Atomic check-and-set
-				isNew, err := s.redisClient.SAdd(ctx, vKey, link)
-				if err != nil {
-					log.Printf("error checking visited set for %s: %v", link, err)
-					continue
-				}
+			u, err := url.Parse(link)
+			if err != nil {
+				log.Printf("failed to parse link %s: %v", link, err)
+				continue
+			}
 
-				if isNew > 0 {
-					linksToSend = append(linksToSend, link)
-				}
+			resolved := baseURL.ResolveReference(u)
+			if resolved.Scheme != "http" && resolved.Scheme != "https" {
+				continue
+			}
+
+			fullLink := resolved.String()
+
+			// Cycle Detection: Atomic check-and-set
+			isNew, err := s.redisClient.SAdd(ctx, vKey, fullLink)
+			if err != nil {
+				log.Printf("error checking visited set for %s: %v", fullLink, err)
+				continue
+			}
+
+			if isNew > 0 {
+				linksToSend = append(linksToSend, fullLink)
 			}
 		}
 	}

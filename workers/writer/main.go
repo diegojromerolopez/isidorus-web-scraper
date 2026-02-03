@@ -156,6 +156,14 @@ func main() {
 						Id:            msg.MessageId,
 						ReceiptHandle: msg.ReceiptHandle,
 					})
+
+					// If we see a completion signal, we should flush the buffer immediately after processing
+					// this batch to ensure the completion signal is processed AFTER all page data in this batch.
+					// Actually, to be safer, we could even flush BEFORE appending the completion signal,
+					// but since they are processed in order in ProcessBatch, appending is fine.
+					if body.Type == domain.MsgTypeScrapingComplete {
+						flush()
+					}
 				}
 
 				if len(msgBuffer) >= MaxBufferSize {

@@ -59,7 +59,7 @@ func TestSQSClient_ReceiveMessages(t *testing.T) {
 	})
 
 	repo := NewSQSClient(client)
-	res, err := repo.ReceiveMessages(context.TODO(), "queue-url")
+	res, err := repo.ReceiveMessages(context.TODO(), "queue-url", 10)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(res.Messages))
 
@@ -69,7 +69,7 @@ func TestSQSClient_ReceiveMessages(t *testing.T) {
 	})
 
 	repoErr := NewSQSClient(clientErr)
-	_, err = repoErr.ReceiveMessages(context.TODO(), "queue-url")
+	_, err = repoErr.ReceiveMessages(context.TODO(), "queue-url", 10)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to receive messages")
 }
@@ -108,4 +108,28 @@ func TestSQSClient_SendMessage_MarshalError(t *testing.T) {
 	err := repo.SendMessage(context.TODO(), "queue-url", msg)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to marshal message")
+}
+
+func TestSQSClient_DeleteMessageBatch(t *testing.T) {
+	// Success case
+	client := sqs.NewFromConfig(aws.Config{}, func(o *sqs.Options) {
+		o.APIOptions = append(o.APIOptions, mockSQSMiddleware(&sqs.DeleteMessageBatchOutput{}, nil))
+	})
+
+	repo := NewSQSClient(client)
+	entries := []types.DeleteMessageBatchRequestEntry{
+		{Id: aws.String("id1"), ReceiptHandle: aws.String("handle1")},
+	}
+	err := repo.DeleteMessageBatch(context.TODO(), "queue-url", entries)
+	assert.NoError(t, err)
+
+	// Error case
+	clientErr := sqs.NewFromConfig(aws.Config{}, func(o *sqs.Options) {
+		o.APIOptions = append(o.APIOptions, mockSQSMiddleware(nil, errors.New("aws error")))
+	})
+
+	repoErr := NewSQSClient(clientErr)
+	err = repoErr.DeleteMessageBatch(context.TODO(), "queue-url", entries)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to batch delete messages")
 }

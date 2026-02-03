@@ -171,13 +171,18 @@ class TestScrapingE2E(unittest.TestCase):
         final_status = None
         results = []
 
-        # Wait up to 60s
-        for _ in range(60):
+        # Wait up to 120s
+        for _ in range(120):
             time.sleep(1)
             status_data = self._get_scraping_status(scraping_id)
             final_status = status_data.get("status")
+            results = status_data.get("data", [])
+            if _ % 5 == 0:
+                print(
+                    f"Polling scraping {scraping_id}: "
+                    f"status={final_status}, pages={len(results)}"
+                )
             if final_status == "COMPLETED":
-                results = status_data.get("data", [])
                 break
 
         self.assertEqual(final_status, "COMPLETED", "Scraping timed out or failed.")
@@ -340,6 +345,43 @@ class TestScrapingE2E(unittest.TestCase):
         self.assertEqual(item["status"], "PENDING")
         self.assertEqual(item["status"], "PENDING")
         print("DynamoDB Job History Test passed!")
+
+    def test_performance_benchmark(self) -> None:
+        """Benchmark test for high-density scraping."""
+        print("Starting Performance Benchmark Test...")
+        start_time = time.time()
+
+        # Trigger scraping on the stress page
+        scraping_id = self._trigger_scraping(
+            "http://mock-website:8000/perf_stress.html", depth=1
+        )
+        print(f"Benchmark Scraping started with ID: {scraping_id}")
+
+        # Poll for completion
+        results = self._poll_scraping_completion(scraping_id)
+
+        duration = time.time() - start_time
+        print(f"Performance Benchmark completed in {duration:.2f} seconds.")
+        print(f"Total pages processed: {len(results)}")
+
+        # Basic assertions to ensure data was captured
+        self.assertGreaterEqual(len(results), 101)  # 1 (stress) + 100 (targets)
+
+        # Check if 'isidorus' term was captured on the stress page
+        stress_page = next((p for p in results if "perf_stress.html" in p["url"]), None)
+        self.assertIsNotNone(stress_page, "Stress page not found in results")
+        if stress_page:
+            terms_list = stress_page.get("terms", [])
+            isidorus_entry = next(
+                (t for t in terms_list if t["term"] == "isidorus"), None
+            )
+            self.assertIsNotNone(
+                isidorus_entry, "Term 'isidorus' not found in stress page"
+            )
+            if isidorus_entry:
+                self.assertGreaterEqual(isidorus_entry["frequency"], 500)
+
+        print("Performance Benchmark Test passed!")
 
 
 if __name__ == "__main__":

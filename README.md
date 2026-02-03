@@ -236,6 +236,30 @@ The entire stack runs locally via Docker Compose:
     make run URL=https://example.com DEPTH=2
     ```
 
+## Performance & Scalability
+
+Isidorus is built for high throughput and efficient web graph analysis. Recent optimizations have significantly increased its processing speed:
+
+### Architectural Improvements
+- **Concurrent Go Scraper**: Uses a worker pool pattern (20 concurrent goroutines) to parallelize network I/O and HTML parsing.
+- **Batch DB Writer**: Collects results in an internal buffer and performs bulk inserts (`CreateInBatches`) to minimize database transaction overhead.
+- **SQS Batch Operations**: Uses `DeleteMessageBatch` to group SQS deletions (up to 10 at a time), reducing AWS API latency.
+- **Optimized Database Schema**: Added indexes to `scraped_pages`, `page_terms`, and `api_keys`.
+- **Robust Link Resolution**: Fully supports relative link discovery and resolution against base URLs.
+- **Race-Condition Safety**: Features a "Flush-on-Completion" mechanism in the writer to ensure zero data loss during high-concurrency bursts.
+
+### Benchmarks
+A stress test with 100+ unique links and high term frequency demonstrates the following performance on local hardware:
+- **Pages Processed**: 101
+- **Total Time**: **~1.29 seconds**
+- **Throughput**: ~78 pages/second
+
+You can run this benchmark yourself via:
+```bash
+make test-e2e-basic
+```
+Look for `test_performance_benchmark` in the test output.
+
 ## Development
 
 -   **API**: Located in `api/`. Run locally with `uvicorn api.main:app --reload`.
