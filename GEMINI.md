@@ -148,7 +148,8 @@ The `scrapings` table uses an internal Integer `id` for primary keys and a `uuid
 3.  **Interface Consistency**: When updating Go repositories, update both the interface and the implementation to maintain testability.
 4.  **Python Code Quality Standards**: All Python code must pass the following checks:
     - **Formatting**: `black` (88 char limit).
-    - **Fast Linting**: `ruff` (used for imports sorting and general linting).
+    - **Import Sorting**: `isort` (compatible with Black).
+    - **Fast Linting**: `ruff` (used for general linting).
     - **Style/Bugs**: `flake8` (with Black-compatible config) and `pylint` (targeting a 10.0 score).
     - **Static Analysis**: `mypy` with strict mode (`disallow_untyped_defs = true`).
 5.  **CI/CD Pipeline**: 
@@ -163,8 +164,8 @@ The `scrapings` table uses an internal Integer `id` for primary keys and a `uuid
     - **File I/O**: Use `aiofiles` if needed (currently not used).
     - Never use synchronous libraries like `requests`, `boto3` (use `aioboto3`), or `redis` (use `redis.asyncio`) in async contexts.
 8.  **Pre-Commit Linting and Testing**: All code changes must pass linting checks and tests before committing:
-    - Run `make format` to auto-format code with `black` and sort imports with `ruff`.
-    - Run `make lint` to verify all linting checks pass (`black`, `ruff`, `flake8`, `mypy`, `pylint`).
+    - Run `make format` to auto-format code with `black` and search imports with `isort`.
+    - Run `make lint` to verify all linting checks pass (`black`, `isort`, `ruff`, `flake8`, `mypy`, `pylint`).
     - Run `make test-unit` to verify all unit tests pass.
     - Run `make test-e2e` to verify all end-to-end tests pass.
     - Target a PyLint score of **≥9.5/10**.

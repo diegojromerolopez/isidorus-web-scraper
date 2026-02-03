@@ -16,6 +16,7 @@
 [![LocalStack](https://img.shields.io/badge/LocalStack-AWS-4D4D4D.svg)](https://localstack.cloud/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Imports: isort](https://img.shields.io/badge/%20imports-isort-%231674b1?style=flat&labelColor=ef8336)](https://pycqa.github.io/isort/)
 
 **Isidorus Web Scraper** is named after **Isidore of Seville** (c. 560-636 AD), the renowned scholar and Archbishop of Seville who compiled the *Etymologiae*, the first encyclopedia of all human knowledge. Known as "The Schoolmaster of the Middle Ages," Isidore meticulously gathered, organized, and preserved the wisdom of his time. Just as Isidore collected and systematized knowledge, Isidorus Web Scraper archives and indexes web content with precision and thoroughness.
 
@@ -247,7 +248,8 @@ The entire stack runs locally via Docker Compose:
 
 The project uses several tools to ensure code quality:
 -   **Black**: For deterministic code formatting.
--   **Ruff**: For fast linting and import sorting.
+-   **isort**: For import sorting (compatible with Black).
+-   **Ruff**: For fast linting.
 -   **Flake8**: For legacy style checks.
 -   **Mypy**: For strict static type checking.
 -   **Pylint**: For deep code analysis (Rating ≥ 9.5 required).

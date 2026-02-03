@@ -70,6 +70,8 @@ clean:
 format:
 	@echo "Formatting Python code with black..."
 	black .
+	@echo "Sorting imports with isort..."
+	isort .
 	@echo "Sorting imports with ruff..."
 	ruff check --select I --fix .
 	@echo "Code formatting complete!"
@@ -78,6 +80,8 @@ format:
 lint-check:
 	@echo "Checking code formatting with black..."
 	black --check .
+	@echo "Checking import sorting with isort..."
+	isort --check .
 	@echo "Running ruff linter..."
 	ruff check .
 	@echo "Running flake8..."

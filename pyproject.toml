@@ -3,6 +3,10 @@ line-length = 88
 target-version = ['py310']
 include = '\.pyi?$'
 
+[tool.isort]
+profile = "black"
+known_first_party = ["api", "workers", "shared", "authentication", "auth_admin"]
+
 [tool.ruff]
 line-length = 88
 target-version = "py310"
