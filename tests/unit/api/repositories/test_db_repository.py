@@ -107,7 +107,7 @@ class TestDbRepository(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(result)
 
     @patch("api.models.ScrapedPage.filter")
-    async def test_get_scrape_results(self, mock_filter: MagicMock) -> None:
+    async def test_get_scraping_results(self, mock_filter: MagicMock) -> None:
         # await models.ScrapedPage.filter(...).order_by(...).prefetch_related(...)
         # Code: pages = await models.ScrapedPage.filter(
         # scraping_id=scraping_id).order_by("url").prefetch_related("terms")
@@ -137,7 +137,7 @@ class TestDbRepository(unittest.IsolatedAsyncioTestCase):
         # prefetch_related is awaited and returns the list of pages
         mock_order.prefetch_related = AsyncMock(return_value=[page1])
 
-        results = await self.repo.get_scrape_results(123)
+        results = await self.repo.get_scraping_results(123)
 
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["url"], "http://site1.com")

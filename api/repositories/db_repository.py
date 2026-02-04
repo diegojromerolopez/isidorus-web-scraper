@@ -1,6 +1,34 @@
-from typing import Any
+from typing import TypedDict
 
 from api import models
+
+
+class ScrapingRecord(TypedDict):
+    id: int
+    url: str
+    user_id: int | None
+
+
+class TermOccurrence(TypedDict):
+    term: str
+    occurrence: int
+
+
+class PageTermResult(TypedDict):
+    term: str
+    frequency: int
+
+
+class PageImageResult(TypedDict):
+    url: str
+    explanation: str | None
+
+
+class ScrapedPageRecord(TypedDict):
+    url: str
+    terms: list[PageTermResult]
+    images: list[PageImageResult]
+    summary: str | None
 
 
 class DbRepository:
@@ -17,7 +45,7 @@ class DbRepository:
             .values_list("url", flat=True),
         )
 
-    async def find_terms_by_website(self, website_url: str) -> list[dict[str, Any]]:
+    async def find_terms_by_website(self, website_url: str) -> list[TermOccurrence]:
         """
         Retrieves all terms and their occurrence counts for a specific website URL.
         """
@@ -33,7 +61,7 @@ class DbRepository:
         scraping = await models.Scraping.create(url=url, user_id=user_id)
         return int(scraping.id)
 
-    async def get_scraping(self, scraping_id: int) -> dict[str, Any] | None:
+    async def get_scraping(self, scraping_id: int) -> ScrapingRecord | None:
         """
         Retrieves a scraping by ID.
         """
@@ -48,7 +76,7 @@ class DbRepository:
 
     async def get_scrapings(
         self, user_id: int, offset: int = 0, limit: int = 10
-    ) -> tuple[list[dict[str, Any]], int]:
+    ) -> tuple[list[ScrapingRecord], int]:
         """
         Retrieves a paginated list of scrapings for a specific user.
         Returns (list of scrapings, total_count).
@@ -61,7 +89,7 @@ class DbRepository:
             {"id": s.id, "url": s.url, "user_id": s.user_id} for s in scrapings
         ], total
 
-    async def get_scrape_results(self, scraping_id: int) -> list[dict[str, Any]]:
+    async def get_scraping_results(self, scraping_id: int) -> list[ScrapedPageRecord]:
         """
         Retrieves the scrape results (URLs, terms, and images) for a given scraping.
         """
@@ -71,13 +99,13 @@ class DbRepository:
             .prefetch_related("terms", "images")
         )
 
-        results = []
+        results: list[ScrapedPageRecord] = []
         for page in pages:
             # page.terms is a related manager/list
-            terms_list = [
+            terms_list: list[PageTermResult] = [
                 {"term": t.term, "frequency": t.frequency} for t in page.terms
             ]
-            images_list = [
+            images_list: list[PageImageResult] = [
                 {"url": i.image_url, "explanation": i.explanation} for i in page.images
             ]
 

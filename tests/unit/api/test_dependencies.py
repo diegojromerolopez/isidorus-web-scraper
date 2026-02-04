@@ -36,10 +36,16 @@ class TestDependencies(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(service.sqs_client, mock_sqs)
         self.assertEqual(service.db_repository, mock_repo)
 
-    def test_get_db_service(self) -> None:
-        mock_repo = MagicMock(spec=DbRepository)
+    async def test_get_db_service(self) -> None:
+        mock_repo = AsyncMock(spec=DbRepository)
         service = get_db_service(mock_repo)
-        self.assertEqual(service.data_repo, mock_repo)
+
+        # Verify behavior through public interface instead of private member access
+        mock_repo.find_websites_by_term.return_value = ["http://test.com"]
+        result = await service.search_websites("test")
+
+        self.assertEqual(result, ["http://test.com"])
+        mock_repo.find_websites_by_term.assert_called_once_with("test")
 
     @patch("api.clients.redis_client.redis.Redis")
     def test_get_redis_client(self, _mock_redis: MagicMock) -> None:

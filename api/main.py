@@ -41,12 +41,12 @@ async def health_check() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.post("/scrape", response_model=dict[str, int])
-async def start_scrape(
+@app.post("/scrape")
+async def scrape(
     request: ScrapeRequest,
     scraper_service: ScraperService = Depends(get_scraper_service),
     _api_key: APIKey = Depends(get_api_key),
-) -> dict[str, int]:
+) -> Any:
     try:
         # Extract user_id from the APIKey dependency
         user_id = _api_key.user_id if _api_key else None
@@ -58,24 +58,22 @@ async def start_scrape(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@app.get("/scrape")
-async def get_scrape_status(
+@app.get("/scraping/{scraping_id}")
+async def scraping(
     scraping_id: int,
     service: ScraperService = Depends(get_scraper_service),
     _api_key: APIKey = Depends(get_api_key),
-) -> dict[str, Any]:
+) -> Any:
     try:
-        status = await service.get_scraping_status(scraping_id)
-        if not status:
+        full_scraping = await service.get_full_scraping(scraping_id)
+        if not full_scraping:
             raise HTTPException(status_code=404, detail="Scraping not found")
 
-        response = {"status": status["status"], "scraping": status}
+        pages = []
+        if full_scraping["status"] == "COMPLETED":
+            pages = await service.get_scraping_results(scraping_id)
 
-        if status["status"] == "COMPLETED":
-            results = await service.get_scraping_results(scraping_id)
-            response["data"] = results
-
-        return response
+        return {"scraping": {**full_scraping, "pages": pages}}
     except HTTPException:
         raise
     except Exception as e:
@@ -83,12 +81,12 @@ async def get_scrape_status(
 
 
 @app.get("/scrapings")
-async def list_scrapings(
+async def scrapings(
     page: int = 1,
     size: int = 10,
-    service: DbService = Depends(get_db_service),
+    service: ScraperService = Depends(get_scraper_service),
     _api_key: APIKey = Depends(get_api_key),
-) -> dict[str, Any]:
+) -> Any:
     """
     List scrapings for the authenticated user.
     """
@@ -98,11 +96,11 @@ async def list_scrapings(
 
     try:
         offset = (page - 1) * size
-        scrapings, total = await service.get_scrapings(
+        full_scrapings, total = await service.get_full_scrapings(
             user_id=_api_key.user_id, offset=offset, limit=size
         )
         return {
-            "data": scrapings,
+            "scrapings": full_scrapings,
             "meta": {"page": page, "size": size, "total": total},
         }
     except Exception as e:
@@ -114,7 +112,7 @@ async def search(
     t: str,
     service: DbService = Depends(get_db_service),
     _api_key: APIKey = Depends(get_api_key),
-) -> dict[str, list[str]]:
+) -> Any:
     if not t:
         raise HTTPException(status_code=400, detail="Term 't' is required")
 
@@ -130,7 +128,7 @@ async def terms(
     w: str,
     service: DbService = Depends(get_db_service),
     _api_key: APIKey = Depends(get_api_key),
-) -> dict[str, list[dict[str, Any]]]:
+) -> Any:
     if not w:
         raise HTTPException(status_code=400, detail="Website 'w' is required")
 
@@ -161,7 +159,7 @@ def setup_database(application: FastAPI) -> None:
 setup_database(app)
 
 
-@app.delete("/scrapings/{scraping_id}")
+@app.delete("/scraping/{scraping_id}")
 async def delete_scraping(
     scraping_id: int,
     service: ScraperService = Depends(get_scraper_service),
@@ -172,11 +170,11 @@ async def delete_scraping(
     Deletes a scraping job.
     Sends a message to the Deletion worker to handle clean up asynchronously.
     """
-    scraping = await db_repository.get_scraping(scraping_id)
-    if not scraping:
+    scraping_record = await db_repository.get_scraping(scraping_id)
+    if not scraping_record:
         raise HTTPException(status_code=404, detail="Scraping not found")
 
-    if scraping["user_id"] != _api_key.user_id:
+    if scraping_record["user_id"] != _api_key.user_id:
         raise HTTPException(
             status_code=403, detail="Not authorized to delete this scraping"
         )

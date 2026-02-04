@@ -81,3 +81,26 @@ func (d *DynamoDBClient) UpdateJobStatusFull(ctx context.Context, jobID string, 
 	log.Printf("Successfully updated job %s status to %s and completed_at to %s in DynamoDB (Table: %s)", jobID, status, completedAt, d.tableName)
 	return nil
 }
+
+func (d *DynamoDBClient) IncrementLinkCount(ctx context.Context, jobID string, increment int) error {
+	if d.tableName == "" {
+		return nil
+	}
+
+	_, err := d.client.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName: aws.String(d.tableName),
+		Key: map[string]types.AttributeValue{
+			"scraping_id": &types.AttributeValueMemberS{Value: jobID},
+		},
+		UpdateExpression: aws.String("ADD links_count :inc"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":inc": &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", increment)},
+		},
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to increment link count in DynamoDB for job %s: %w", jobID, err)
+	}
+
+	return nil
+}

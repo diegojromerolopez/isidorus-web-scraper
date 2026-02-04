@@ -1,9 +1,27 @@
-from typing import Any
+from datetime import datetime, timezone
+from typing import TypedDict, cast
 
 from api.clients.dynamodb_client import DynamoDBClient
 from api.clients.redis_client import RedisClient
 from api.clients.sqs_client import SQSClient
-from api.repositories.db_repository import DbRepository
+from api.repositories.db_repository import (
+    DbRepository,
+    ScrapedPageRecord,
+    ScrapingRecord,
+)
+
+
+class ScrapingMetadata(TypedDict):
+    status: str
+    created_at: str | None
+    completed_at: str | None
+    depth: int
+    links_count: int
+    pages: list[ScrapedPageRecord] | None
+
+
+class FullScrapingRecord(ScrapingRecord, ScrapingMetadata):
+    pass
 
 
 class ScraperService:
@@ -35,11 +53,6 @@ class ScraperService:
 
         # Log to DynamoDB if client is available
         if self.dynamodb_client:
-            from datetime import (  # pylint: disable=import-outside-toplevel
-                datetime,
-                timezone,
-            )
-
             now = datetime.now(timezone.utc).isoformat()
             await self.dynamodb_client.put_item(
                 {
@@ -47,6 +60,7 @@ class ScraperService:
                     "url": url,
                     "depth": depth,
                     "status": "PENDING",
+                    "links_count": 0,
                     "created_at": now,
                 }
             )
@@ -61,42 +75,89 @@ class ScraperService:
 
         return scraping_id
 
-    async def get_scraping_status(self, scraping_id: int) -> dict[str, Any] | None:
+    async def get_full_scraping(self, scraping_id: int) -> FullScrapingRecord | None:
         """
         Retrieves the status of a scraping session, using DynamoDB as
-        the source of truth for lifecycle state (status, timestamps).
+        the source of truth for the scraping metadata (status, timestamps).
         """
         # 1. Get identity from Postgres
-        scraping_pg = await self.db_repository.get_scraping(scraping_id)
-        if not scraping_pg:
+        id_record = await self.db_repository.get_scraping(scraping_id)
+        if not id_record:
             return None
 
-        # 2. Get status and timestamps from DynamoDB
-        status_data: dict[str, Any] = {
+        # 2. Get scraping metadata from DynamoDB
+        scraping_metadata: ScrapingMetadata = {
             "status": "UNKNOWN",
             "created_at": None,
             "completed_at": None,
+            "depth": 1,
+            "links_count": 0,
+            "pages": None,
         }
         if self.dynamodb_client:
             item = await self.dynamodb_client.get_item(
                 {"scraping_id": str(scraping_id)}
             )
             if item:
-                status_data = {
+                scraping_metadata = {
                     "status": item.get("status", "UNKNOWN"),
                     "created_at": item.get("created_at"),
                     "completed_at": item.get("completed_at"),
                     "depth": int(item.get("depth", 1)),
+                    "links_count": int(item.get("links_count", 0)),
+                    "pages": None,
                 }
 
         # 3. Merge
-        return {**scraping_pg, **status_data}
+        full_scraping_record = {**id_record, **scraping_metadata}
+        return cast(FullScrapingRecord, full_scraping_record)
 
-    async def get_scraping_results(self, scraping_id: int) -> list[dict[str, Any]]:
+    async def get_full_scrapings(
+        self, user_id: int, offset: int = 0, limit: int = 10
+    ) -> tuple[list[FullScrapingRecord], int]:
+        """
+        Retrieves all scrapings for a user, merging data from Postgres and DynamoDB.
+        """
+        scrapings, total = await self.db_repository.get_scrapings(
+            user_id, offset, limit
+        )
+
+        merged_scrapings: list[FullScrapingRecord] = []
+        for scraping in scrapings:
+            merged_scraping: FullScrapingRecord = cast(FullScrapingRecord, scraping)
+            sid = str(scraping["id"])
+            links_count = 0
+            status = "UNKNOWN"
+
+            if self.dynamodb_client:
+                item = await self.dynamodb_client.get_item({"scraping_id": sid})
+                if item:
+                    links_count = int(item.get("links_count", 0))
+                    status = item.get("status", "UNKNOWN")
+                    merged_scraping = cast(
+                        FullScrapingRecord,
+                        {
+                            **scraping,
+                            **{
+                                "status": status,
+                                "created_at": item.get("created_at"),
+                                "completed_at": item.get("completed_at"),
+                                "depth": int(item.get("depth", 1)),
+                                "links_count": links_count,
+                                "pages": None,
+                            },
+                        },
+                    )
+
+            merged_scrapings.append(merged_scraping)
+
+        return merged_scrapings, total
+
+    async def get_scraping_results(self, scraping_id: int) -> list[ScrapedPageRecord]:
         """
         Retrieves the results of a scraping session.
         """
-        return await self.db_repository.get_scrape_results(scraping_id)
+        return await self.db_repository.get_scraping_results(scraping_id)
 
     async def enqueue_deletion(self, scraping_id: int) -> bool:
         """

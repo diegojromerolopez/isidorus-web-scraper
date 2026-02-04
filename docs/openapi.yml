@@ -7,10 +7,25 @@ servers:
   - url: http://localhost:8000
     description: Local development server
 paths:
+  /health:
+    get:
+      summary: Health check
+      description: Returns the status of the API.
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application: json
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+
   /scrape:
     post:
       summary: Start a new scraping job
-      description: Initiates a recursive scraping process for a given URL and search term.
+      description: Initiates a recursive scraping process for a given URL and user context.
       requestBody:
         required: true
         content:
@@ -25,18 +40,18 @@ paths:
             schema:
               type: object
               properties:
-                message:
-                  type: string
                 scraping_id:
                   type: integer
         '500':
           description: Internal server error
+
+  /scraping/{scraping_id}:
     get:
       summary: Get scraping status and results
       description: Retrieves the current status of a scraping session and its results if completed.
       parameters:
         - name: scraping_id
-          in: query
+          in: path
           required: true
           schema:
             type: integer
@@ -48,16 +63,81 @@ paths:
             schema:
               type: object
               properties:
-                status:
-                  type: string
-                  enum: [PENDING, COMPLETED, FAILED]
                 scraping:
                   type: object
-                data:
-                  type: object
+                pages:
+                  type: array
+                  items:
+                    type: object
                   description: Only present when status is COMPLETED
         '404':
           description: Scraping session not found
+        '500':
+          description: Internal server error
+    delete:
+      summary: Delete a scraping job
+      description: Initiates the deletion of a scraping job and all its related data.
+      parameters:
+        - name: scraping_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Deletion enqueued
+          content:
+            application: json
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+        '404':
+          description: Scraping not found
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+
+  /scrapings:
+    get:
+      summary: List all scraping jobs
+      description: Retrieves a paginated list of all scraping jobs for the authenticated user.
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: List of scrapings retrieved
+          content:
+            application: json
+            schema:
+              type: object
+              properties:
+                scrapings:
+                  type: array
+                  items:
+                    type: object
+                meta:
+                  type: object
+                  properties:
+                    page:
+                      type: integer
+                    size:
+                      type: integer
+                    total:
+                      type: integer
+        '401':
+          description: Unauthorized
         '500':
           description: Internal server error
 
@@ -115,7 +195,7 @@ paths:
                     properties:
                       term:
                         type: string
-                      count:
+                      occurrence:
                         type: integer
         '400':
           description: Website 'w' is required

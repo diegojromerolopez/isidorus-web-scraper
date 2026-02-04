@@ -100,49 +100,87 @@ class TestMain(unittest.TestCase):
         self.assertEqual(response.status_code, 500)
 
     def test_get_scrape_status_pending(self) -> None:
-        self.mock_scraper_service.get_scraping_status.return_value = {
-            "status": "PENDING",
+        self.mock_scraper_service.get_full_scraping.return_value = {
             "id": 123,
+            "url": "http://foo.com",
+            "user_id": 1,
+            "status": "PENDING",
+            "created_at": None,
+            "completed_at": None,
+            "depth": 1,
+            "links_count": 0,
         }
-        response = self.client.get("/scrape?scraping_id=123")
+        response = self.client.get("/scraping/123")
 
         self.assertEqual(response.status_code, 200)
         # Check basic structure
-        self.assertEqual(response.json()["status"], "PENDING")
+        self.assertEqual(response.json()["scraping"]["status"], "PENDING")
         self.assertEqual(response.json()["scraping"]["id"], 123)
-        self.assertNotIn("data", response.json())
-        self.mock_scraper_service.get_scraping_status.assert_called_once_with(123)
+        self.assertEqual(response.json()["scraping"]["pages"], [])
+        self.mock_scraper_service.get_full_scraping.assert_called_once_with(123)
 
     def test_get_scrape_status_completed(self) -> None:
-        self.mock_scraper_service.get_scraping_status.return_value = {
-            "status": "COMPLETED",
+        self.mock_scraper_service.get_full_scraping.return_value = {
             "id": 123,
+            "url": "http://foo.com",
+            "user_id": 1,
+            "status": "COMPLETED",
+            "created_at": None,
+            "completed_at": None,
+            "depth": 1,
+            "links_count": 5,
         }
         self.mock_scraper_service.get_scraping_results.return_value = [
-            {"url": "http://foo.com", "terms": []}
+            {"url": "http://foo.com", "terms": [], "images": [], "summary": None}
         ]
 
-        response = self.client.get("/scrape?scraping_id=123")
+        response = self.client.get("/scraping/123")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["status"], "COMPLETED")
+        self.assertEqual(response.json()["scraping"]["status"], "COMPLETED")
         self.assertEqual(
-            response.json()["data"], [{"url": "http://foo.com", "terms": []}]
+            response.json()["scraping"]["pages"],
+            [{"url": "http://foo.com", "terms": [], "images": [], "summary": None}],
         )
 
     def test_get_scrape_status_not_found(self) -> None:
-        self.mock_scraper_service.get_scraping_status.return_value = None
-        response = self.client.get("/scrape?scraping_id=999")
+        self.mock_scraper_service.get_full_scraping.return_value = None
+        response = self.client.get("/scraping/999")
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["detail"], "Scraping not found")
 
     def test_get_scrape_status_error(self) -> None:
-        self.mock_scraper_service.get_scraping_status.side_effect = Exception(
+        self.mock_scraper_service.get_full_scraping.side_effect = Exception(
             "Unexpected"
         )
-        response = self.client.get("/scrape?scraping_id=123")
+        response = self.client.get("/scraping/123")
         self.assertEqual(response.status_code, 500)
         self.assertIn("Unexpected", response.json()["detail"])
+
+    def test_scrapings_success(self) -> None:
+        self.mock_scraper_service.get_full_scrapings.return_value = (
+            [
+                {
+                    "id": 123,
+                    "url": "http://foo.com",
+                    "user_id": 1,
+                    "status": "COMPLETED",
+                    "created_at": None,
+                    "completed_at": None,
+                    "depth": 1,
+                    "links_count": 5,
+                }
+            ],
+            1,
+        )
+        response = self.client.get("/scrapings?page=1&size=10")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()["scrapings"]), 1)
+        self.assertEqual(response.json()["meta"]["total"], 1)
+        self.mock_scraper_service.get_full_scrapings.assert_called_once_with(
+            user_id=1, offset=0, limit=10
+        )
 
     def test_delete_scraping_success(self) -> None:
         self.mock_db_repository.get_scraping.return_value = {
@@ -152,7 +190,7 @@ class TestMain(unittest.TestCase):
         }
         self.mock_db_repository.delete_scraping.return_value = True
 
-        response = self.client.delete("/scrapings/123")
+        response = self.client.delete("/scraping/123")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"message": "Scraping deletion enqueued"})
@@ -160,7 +198,7 @@ class TestMain(unittest.TestCase):
 
     def test_delete_scraping_not_found(self) -> None:
         self.mock_db_repository.get_scraping.return_value = None
-        response = self.client.delete("/scrapings/999")
+        response = self.client.delete("/scraping/999")
         self.assertEqual(response.status_code, 404)
 
     def test_delete_scraping_unauthorized(self) -> None:
@@ -169,5 +207,5 @@ class TestMain(unittest.TestCase):
             "url": "http://example.com",
             "user_id": 999,  # Different user
         }
-        response = self.client.delete("/scrapings/123")
+        response = self.client.delete("/scraping/123")
         self.assertEqual(response.status_code, 403)
