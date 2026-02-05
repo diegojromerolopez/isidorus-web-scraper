@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from api.dependencies import get_api_key, get_db_service, get_scraper_service
 from api.main import app
+from api.services.scraper_service import NotAuthorizedError, ScrapingNotFoundError
 
 
 class TestMain(unittest.TestCase):
@@ -169,6 +170,7 @@ class TestMain(unittest.TestCase):
                     "completed_at": None,
                     "depth": 1,
                     "links_count": 5,
+                    "pages": None,
                 }
             ],
             1,
@@ -183,29 +185,26 @@ class TestMain(unittest.TestCase):
         )
 
     def test_delete_scraping_success(self) -> None:
-        self.mock_db_repository.get_scraping.return_value = {
-            "id": 123,
-            "url": "http://example.com",
-            "user_id": 1,
-        }
-        self.mock_db_repository.delete_scraping.return_value = True
+        self.mock_scraper_service.delete_scraping.return_value = True
 
         response = self.client.delete("/scraping/123")
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"message": "Scraping deletion enqueued"})
-        self.mock_scraper_service.enqueue_deletion.assert_called_once_with(123)
+        self.mock_scraper_service.delete_scraping.assert_called_once_with(123, 1)
 
     def test_delete_scraping_not_found(self) -> None:
-        self.mock_db_repository.get_scraping.return_value = None
+        self.mock_scraper_service.delete_scraping.side_effect = ScrapingNotFoundError(
+            "not found"
+        )
         response = self.client.delete("/scraping/999")
         self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["detail"], "not found")
 
     def test_delete_scraping_unauthorized(self) -> None:
-        self.mock_db_repository.get_scraping.return_value = {
-            "id": 123,
-            "url": "http://example.com",
-            "user_id": 999,  # Different user
-        }
+        self.mock_scraper_service.delete_scraping.side_effect = NotAuthorizedError(
+            "not authorized"
+        )
         response = self.client.delete("/scraping/123")
         self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["detail"], "not authorized")

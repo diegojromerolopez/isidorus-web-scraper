@@ -181,6 +181,53 @@ class TestScraperService(unittest.IsolatedAsyncioTestCase):
         assert result is not None
         self.assertEqual(result["status"], "UNKNOWN")
 
+    async def test_delete_scraping_success(self) -> None:
+        mock_sqs_client = AsyncMock()
+        mock_db_repository = AsyncMock()
+        mock_db_repository.get_scraping.return_value = {
+            "id": 123,
+            "url": "http://x.com",
+            "user_id": 1,
+        }
+
+        service = ScraperService(
+            mock_sqs_client,
+            AsyncMock(),
+            mock_db_repository,
+            deletion_queue_url="http://deletion-q",
+        )
+
+        result = await service.delete_scraping(123, 1)
+
+        self.assertTrue(result)
+        mock_sqs_client.send_message.assert_called_once_with(
+            {"scraping_id": 123}, queue_url="http://deletion-q"
+        )
+
+    async def test_delete_scraping_not_found(self) -> None:
+        mock_db_repository = AsyncMock()
+        mock_db_repository.get_scraping.return_value = None
+
+        service = ScraperService(AsyncMock(), AsyncMock(), mock_db_repository)
+
+        with self.assertRaises(Exception) as cm:
+            await service.delete_scraping(999, 1)
+        self.assertIn("not found", str(cm.exception))
+
+    async def test_delete_scraping_not_authorized(self) -> None:
+        mock_db_repository = AsyncMock()
+        mock_db_repository.get_scraping.return_value = {
+            "id": 123,
+            "url": "http://x.com",
+            "user_id": 1,
+        }
+
+        service = ScraperService(AsyncMock(), AsyncMock(), mock_db_repository)
+
+        with self.assertRaises(Exception) as cm:
+            await service.delete_scraping(123, 2)
+        self.assertIn("not authorized", str(cm.exception))
+
     async def test_enqueue_deletion(self) -> None:
         mock_sqs_client = AsyncMock()
         service = ScraperService(

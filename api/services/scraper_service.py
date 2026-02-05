@@ -11,6 +11,14 @@ from api.repositories.db_repository import (
 )
 
 
+class ScrapingNotFoundError(Exception):
+    """Exception raised when a scraping is not found."""
+
+
+class NotAuthorizedError(Exception):
+    """Exception raised when a user is not authorized to perform an action."""
+
+
 class ScrapingMetadata(TypedDict):
     status: str
     created_at: str | None
@@ -158,6 +166,22 @@ class ScraperService:
         Retrieves the results of a scraping session.
         """
         return await self.db_repository.get_scraping_results(scraping_id)
+
+    async def delete_scraping(self, scraping_id: int, user_id: int) -> bool:
+        """
+        Initiates the deletion of a scraping job.
+        Verifies existence and ownership before enqueuing to the deletion worker.
+        """
+        scraping_record = await self.db_repository.get_scraping(scraping_id)
+        if not scraping_record:
+            raise ScrapingNotFoundError(f"Scraping with ID {scraping_id} not found")
+
+        if scraping_record["user_id"] != user_id:
+            raise NotAuthorizedError(
+                f"User {user_id} is not authorized to delete scraping {scraping_id}"
+            )
+
+        return await self.enqueue_deletion(scraping_id)
 
     async def enqueue_deletion(self, scraping_id: int) -> bool:
         """
