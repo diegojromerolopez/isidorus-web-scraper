@@ -26,9 +26,9 @@ This application is designed for scenarios where deep content analysis of a web 
 │   ├── image_extractor/# Image Metadata Extractor (Python)
 │   └── page_summarizer/# AI Page Summarizer (Python)
 ├── tests/
-│   ├── unit/           # Python Unit Tests
+│   ├── unit/           # Python, Go, and Frontend Unit Tests
 │   └── e2e/            # End-to-End Test Suite
-│       ├── runner/     # E2E Test Logic
+│       ├── runner/     # E2E Test Logic (Python)
 │       └── mock_website/# Static target for scraping
 ├── Makefile            # Central Developer Entry Point
 └── docker compose.*.yml# Infrastructure Orchestration
@@ -141,13 +141,14 @@ The `scrapings` table uses an internal Integer `id` for primary keys and a `uuid
 
 ### Unit Tests & Coverage
 - **Purpose**: Verify business logic in isolation using mocks.
-- **Coverage**: All core logic components targeted for **100% coverage**.
+- **Coverage**: All core logic components (Backend & Frontend) targeted for **100% coverage**.
+- **Frontend**: Tested using **Vitest** in `frontend/src/test/`.
 - **Execution**: Run via `make test-unit`.
 
 ### End-to-End (E2E) Tests
 - **Infrastructure**: Uses `docker compose` with `docker-compose.e2e.yml` to spin up LocalStack and PostgreSQL.
 - **Mock Website**: Decouples tests from the live internet.
-- **Execution**: Run via `make test`.
+- **Execution**: Run via `make test-e2e`.
 
 ## Development Guidelines
 

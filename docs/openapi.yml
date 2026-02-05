@@ -65,11 +65,31 @@ paths:
               properties:
                 scraping:
                   type: object
-                pages:
-                  type: array
-                  items:
-                    type: object
-                  description: Only present when status is COMPLETED
+                  properties:
+                    id:
+                      type: integer
+                    uuid:
+                      type: string
+                    url:
+                      type: string
+                    depth:
+                      type: integer
+                    search_term:
+                      type: string
+                    status:
+                      type: string
+                    created_at:
+                      type: string
+                      format: date-time
+                    completed_at:
+                      type: string
+                      format: date-time
+                      nullable: true
+                    pages:
+                      type: array
+                      items:
+                        type: object
+                      description: List of scraped pages (present when status is COMPLETED)
         '404':
           description: Scraping session not found
         '500':
@@ -215,5 +235,5 @@ components:
           format: uri
         depth:
           type: integer
-          minimum: 0
+          minimum: 1
           maximum: 5

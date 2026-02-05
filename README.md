@@ -104,7 +104,8 @@ The system is built with a microservices approach:
 0.  **Frontend (React 18)**:
     -   Modern SPA served by Node.js.
     -   Provides a Dashboard for initiating and monitoring scraping jobs.
-    -   Features detailed views for scraping results, including term stats, AI summaries, and image galleries.
+    -   Features detailed views for scraping results, including term stats, AI summaries, and **collapsible page reports** for easy scannability.
+    -   **Improved Navigation**: Clickable URLs in the history table allow direct access to job details.
     -   Interacts with the API via strictly typed TS methods.
 
 1.  **Auth Admin (Django)**:
@@ -172,21 +173,20 @@ The system is built with a microservices approach:
 ## API Endpoints
 
 -   **`POST /scrape`**: Start a new scraping job.
-    -   Body: `{"url": "...", "term": "...", "depth": 2}`
+    -   Body: `{"url": "...", "depth": 2}`
     -   **Example**:
         ```bash
         curl -X POST http://localhost:8000/scrape \
           -H "Content-Type: application/json" \
           -H "X-API-Key: test-api-key-123" \
-          -d '{"url": "https://example.com", "term": "example", "depth": 1}'
-          -d '{"url": "https://example.com", "term": "example", "depth": 1}'
+          -d '{"url": "https://example.com", "depth": 1}'
         ```
         Response:
         ```json
         {"scraping_id": 123}
         ```
--   **`GET /scrape?scraping_id=1`**: Check status and get results of a scraping job.
--   **`DELETE /scrapings/{id}`**: Delete a scraping job and all its related data.
+-   **`GET /scraping/{id}`**: Check status and get results of a scraping job.
+-   **`DELETE /scraping/{id}`**: Delete a scraping job and all its related data.
 -   **`GET /search?term={term}`**: Search for pages containing a specific term.
 -   **`GET /terms`**: List all unique terms found across all scrapings.
 
@@ -234,7 +234,7 @@ The entire stack runs locally via Docker Compose:
 -   **Infrastructure**: LocalStack (AWS SQS/S3/DynamoDB emulation), Docker Compose
 -   **NoSQL**: DynamoDB (Job History)
 -   **AI**: LangChain (Multi-provider support)
--   **Testing**: `unittest` (Python), `go test` (Go), `boto3`/`requests` (E2E)
+-   **Testing**: `unittest` (Python), Vitest (Frontend), `go test` (Go), `boto3`/`requests` (E2E)
 -   **Mock Website**: A static site container for safe, deterministic E2E testing.
 
 ## Prerequisites
@@ -313,7 +313,8 @@ make format
 ## Testing
 
 The project emphasizes high test coverage:
--   **Unit Tests**: ~100% coverage for all components (API, Scraper, Writer, Image Extractor, Page Summarizer).
+-   **Unit Tests**: ~100% coverage for all components (API, Frontend, Scraper, Writer, Image Extractor, Page Summarizer).
+    - **Frontend**: Tested using **Vitest** and **React Testing Library**.
 -   **E2E Tests**: Full integration tests using a local test runner and mock website.
     - **Reliable Verification**: Tests utilize a centralized polling mechanism that monitors the `GET /scrape` endpoint, waiting up to **5 minutes (300 seconds)** for a `COMPLETED` status to ensure all asynchronous background tasks (AI extraction, DB writes) have finished.
 -   **Shared Library Tests**: Located in `tests/unit/shared/` for common client testing.
@@ -340,7 +341,7 @@ Since the system is event-driven, results are retrieved by polling the API or mo
 Use the `scraping_id` returned by the `POST /scrape` endpoint.
 
 ```bash
-curl http://localhost:8000/scrape?scraping_id=<ID> -H "X-API-Key: test-api-key-123"
+curl http://localhost:8000/scraping/<ID> -H "X-API-Key: test-api-key-123"
 ```
 Response (when `COMPLETED`):
 ```json
