@@ -47,6 +47,7 @@ describe('ScrapingDetail Component', () => {
         renderDetail();
 
         await waitFor(() => {
+            expect(mockedAxios.get).toHaveBeenCalledWith('http://localhost:8000/scrape?scraping_id=1', expect.any(Object));
             expect(screen.getByText(/PENDING/i)).toBeDefined();
         });
 

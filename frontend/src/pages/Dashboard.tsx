@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { Plus, Search, Loader2, LogOut } from 'lucide-react';
+import logo from '../assets/logo.png';
 
 const API_Base = 'http://localhost:8000'; // Direct to FastAPI
 
@@ -67,9 +68,9 @@ export default function Dashboard() {
             {/* Header / Nav */}
             <nav className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <div className="h-8 w-8 bg-sky-500 rounded-lg flex items-center justify-center">
-                            <Search className="h-5 w-5 text-slate-900" />
+                    <div className="flex items-center gap-3">
+                        <div className="h-9 w-9 bg-sky-500/10 rounded-lg flex items-center justify-center border border-sky-500/20 overflow-hidden">
+                            <img src={logo} alt="Isidorus" className="w-full h-full object-cover" />
                         </div>
                         <span className="text-xl font-bold tracking-tight bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">
                             Isidorus
@@ -92,23 +93,11 @@ export default function Dashboard() {
                         <p className="text-slate-400">Monitor and launch your web scraping jobs</p>
                     </div>
 
-                    <form onSubmit={handleCreate} className="flex flex-col sm:flex-row gap-3 bg-slate-800/50 p-2 rounded-2xl border border-slate-700 shadow-xl">
-                        <div className="flex flex-col sm:flex-row gap-3 flex-grow">
-                            <div className="relative">
-                                <label htmlFor="depth" className="sr-only">Depth</label>
-                                <input
-                                    id="depth"
-                                    type="number"
-                                    placeholder="Depth"
-                                    required
-                                    min="1"
-                                    value={depth}
-                                    onChange={(e) => setDepth(parseInt(e.target.value))}
-                                    className="px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50 w-full sm:w-24 transition-all"
-                                />
-                            </div>
-                            <div className="relative flex-grow">
-                                <label htmlFor="url" className="sr-only">URL</label>
+                    <form onSubmit={handleCreate} className="flex flex-col md:flex-row gap-6 items-end bg-slate-800/40 p-6 rounded-3xl border border-slate-700/50 shadow-2xl backdrop-blur-xl">
+                        <div className="flex-grow space-y-2 w-full">
+                            <label htmlFor="url" className="block text-sm font-semibold text-slate-400 ml-1 uppercase tracking-wider">Target URL</label>
+                            <div className="relative group">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 group-focus-within:text-sky-400 transition-colors" />
                                 <input
                                     id="url"
                                     type="url"
@@ -116,17 +105,31 @@ export default function Dashboard() {
                                     required
                                     value={url}
                                     onChange={(e) => setUrl(e.target.value)}
-                                    className="px-4 py-2 bg-slate-900/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50 w-full transition-all"
+                                    className="pl-10 pr-4 py-3 bg-slate-900/60 border border-slate-700/80 rounded-2xl text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-sky-500/40 w-full transition-all hover:bg-slate-900"
                                 />
                             </div>
+                        </div>
+                        <div className="space-y-2 w-full md:w-32">
+                            <label htmlFor="depth" className="block text-sm font-semibold text-slate-400 ml-1 uppercase tracking-wider">Depth</label>
+                            <input
+                                id="depth"
+                                type="number"
+                                placeholder="1"
+                                required
+                                min="1"
+                                max="5"
+                                value={depth}
+                                onChange={(e) => setDepth(parseInt(e.target.value))}
+                                className="px-4 py-3 bg-slate-900/60 border border-slate-700/80 rounded-2xl text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-sky-500/40 w-full transition-all hover:bg-slate-900"
+                            />
                         </div>
                         <button
                             type="submit"
                             disabled={creating}
-                            className="bg-sky-500 hover:bg-sky-400 text-slate-900 font-bold px-6 py-2 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50 shadow-lg shadow-sky-500/20"
+                            className="bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold px-8 py-3 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50 shadow-lg shadow-sky-500/20 w-full md:w-auto mt-2 md:mt-0 cursor-pointer h-[50px]"
                         >
                             {creating ? <Loader2 className="animate-spin h-5 w-5" /> : <Plus size={20} />}
-                            <span>Launch Scrape</span>
+                            <span className="uppercase tracking-tight">Launch</span>
                         </button>
                     </form>
                 </div>

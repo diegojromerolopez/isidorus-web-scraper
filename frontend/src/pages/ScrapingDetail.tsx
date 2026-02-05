@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import { Loader2, ArrowLeft, ExternalLink, ImageIcon, FileText, RefreshCw, Search } from 'lucide-react';
+import logo from '../assets/logo.png';
 
 const API_Base = 'http://localhost:8000';
 
@@ -23,86 +24,92 @@ export default function ScrapingDetail() {
     const [rerunning, setRerunning] = useState(false);
     const navigate = useNavigate();
 
+    const fetchStatus = async () => {
+        try {
+            const apiKey = localStorage.getItem('api_key');
+            // Ensure endpoint matches backend (Conversation 99e54c26 mentioned /scrape?scraping_id=${id})
+            // But GEMINI.md says high performance validation and other things.
+            // Let's use the one that was there before I broke it: /api/scrapings/${id}/ or /scrape?scraping_id=${id}
+            // Dashboard uses /api/scrapings/
+            const response = await axios.get(`${API_Base}/scrape?scraping_id=${id}`, {
+                headers: { 'X-API-Key': apiKey }
+            });
+            setData(response.data);
+
+            if (response.data.status === 'PENDING' || response.data.status === 'RUNNING') {
+                setTimeout(fetchStatus, 3000);
+            }
+        } catch (err) {
+            console.error('Failed to fetch scraping status', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchStatus();
+    }, [id]);
+
     const handleRerun = async () => {
         if (!data || !data.scraping) return;
         setRerunning(true);
         try {
             const apiKey = localStorage.getItem('api_key');
             const { url, depth } = data.scraping;
-
-            // Default depth to 1 if missing (for legacy jobs)
-            const response = await axios.post(
-                `${API_Base}/scrape`,
-                { url, depth: depth || 1 },
+            const response = await axios.post(`${API_Base}/scrape`,
+                { url, depth },
                 { headers: { 'X-API-Key': apiKey } }
             );
-
-            navigate(`/scraping/${response.data.scraping_id}`);
-        } catch (error) {
-            console.error('Failed to rerun scraping', error);
+            const newId = response.data.scraping_id;
+            navigate(`/scraping/${newId}`);
+        } catch (err) {
+            console.error('Failed to re-run scraping', err);
         } finally {
             setRerunning(false);
         }
     };
 
-    useEffect(() => {
-        let interval: number;
-
-        const fetchStatus = async () => {
-            try {
-                const apiKey = localStorage.getItem('api_key');
-                const response = await axios.get(`${API_Base}/scrape?scraping_id=${id}`, {
-                    headers: { 'X-API-Key': apiKey },
-                });
-                setData(response.data);
-
-                if (response.data.status === 'COMPLETED') {
-                    setLoading(false);
-                    clearInterval(interval);
-                }
-            } catch (error) {
-                console.error('Failed to fetch scraping status', error);
-                setLoading(false); // Stop trying blindly on error
-                clearInterval(interval);
-            }
-        };
-
-        fetchStatus();
-        interval = setInterval(fetchStatus, 2000); // Poll every 2s
-
-        return () => clearInterval(interval);
-    }, [id]);
-
-    if (!data && loading) {
+    if (loading && !data) {
         return (
-            <div className="min-h-screen flex items-center justify-center">
-                <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
+            <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+                <Loader2 className="animate-spin h-10 w-10 text-sky-500" />
             </div>
-        )
+        );
     }
 
+    const status = data?.status || 'UNKNOWN';
+
     return (
-        <div className="min-h-screen bg-slate-950 text-slate-100 selection:bg-sky-500/30 pb-20">
-            {/* Top Navigation */}
+        <div className="min-h-screen bg-slate-900 text-slate-100 selection:bg-sky-500/30">
+            {/* Header / Nav */}
             <nav className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-                    <Link to="/" className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors group">
-                        <ArrowLeft className="h-5 w-5 group-hover:-translate-x-1 transition-transform" />
-                        <span className="font-medium text-sm">Back to Dashboard</span>
-                    </Link>
+                    <div className="flex items-center gap-6">
+                        <Link to="/" className="p-2 -ml-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all">
+                            <ArrowLeft size={20} />
+                        </Link>
+                        <div className="flex items-center gap-3">
+                            <div className="h-9 w-9 bg-sky-500/10 rounded-lg flex items-center justify-center border border-sky-500/20 overflow-hidden">
+                                <img src={logo} alt="Isidorus" className="w-full h-full object-cover" />
+                            </div>
+                            <span className="text-xl font-bold tracking-tight bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">
+                                Isidorus
+                            </span>
+                        </div>
+                    </div>
                     <div className="flex items-center gap-3">
-                        <span className={`px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${data?.status === 'COMPLETED'
+                        <span className={`px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${status === 'COMPLETED'
                             ? 'bg-green-500/10 border-green-500/50 text-green-400'
-                            : data?.status === 'PENDING'
+                            : status === 'PENDING' || status === 'RUNNING'
                                 ? 'bg-amber-500/10 border-amber-500/50 text-amber-400'
                                 : 'bg-slate-500/10 border-slate-500/50 text-slate-400'
                             }`}>
-                            {data?.status || 'UNKNOWN'}
+                            {status}
                         </span>
                         <button
                             onClick={handleRerun}
                             disabled={rerunning}
-                            className="p-2 bg-slate-800 hover:bg-slate-700 text-sky-400 rounded-lg border border-slate-700 transition-all disabled:opacity-50 active:scale-95"
+                            className="p-2 bg-slate-800 hover:bg-slate-700 text-sky-400 rounded-lg border border-slate-700 transition-all disabled:opacity-50 active:scale-95 cursor-pointer"
                             title="Re-run Scrape"
                         >
                             {rerunning ? <Loader2 className="animate-spin h-5 w-5" /> : <RefreshCw className="h-5 w-5" />}
@@ -124,7 +131,7 @@ export default function ScrapingDetail() {
                 </div>
 
                 {/* Content Grid */}
-                {data?.status === 'COMPLETED' && data.data && (
+                {status === 'COMPLETED' && data?.data && (
                     <div className="grid grid-cols-1 gap-10">
                         {data.data.map((page, idx) => (
                             <div key={idx} className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl ring-1 ring-white/5">
@@ -206,8 +213,14 @@ export default function ScrapingDetail() {
                         ))}
                     </div>
                 )}
+
+                {status === 'PENDING' && (
+                    <div className="flex flex-col items-center justify-center py-20 bg-slate-800/30 rounded-3xl border border-slate-800 dashed animate-pulse">
+                        <Loader2 className="animate-spin h-10 w-10 text-sky-500 mb-4" />
+                        <p className="text-slate-400">Scraping in progress... Please wait.</p>
+                    </div>
+                )}
             </main>
         </div>
     );
 }
-

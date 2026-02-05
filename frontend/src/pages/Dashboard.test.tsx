@@ -32,6 +32,7 @@ describe('Dashboard Component', () => {
         expect(screen.getByText(/Retrieving your scraping history.../i)).toBeDefined();
 
         await waitFor(() => {
+            expect(mockedAxios.get).toHaveBeenCalledWith('http://localhost:8000/scrapings', expect.any(Object));
             expect(screen.getByText('https://example.com')).toBeDefined();
             expect(screen.getByText('#1')).toBeDefined();
         });

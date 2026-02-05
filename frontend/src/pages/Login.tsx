@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { KeyRound, Loader2 } from 'lucide-react';
+import logo from '../assets/logo.png';
 
-const API_Base = 'http://localhost:8001/api'; // Direct to Auth Admin
+const API_Base = 'http://localhost:8001';
 
 export default function Login() {
     const [username, setUsername] = useState('');
@@ -18,16 +19,15 @@ export default function Login() {
         setError('');
 
         try {
-            const response = await axios.post(`${API_Base}/login/`, {
+            const response = await axios.post(`${API_Base}/api/login/`, {
                 username,
                 password,
             });
 
-            const { api_key } = response.data;
-            localStorage.setItem('api_key', api_key);
+            localStorage.setItem('api_key', response.data.api_key);
             navigate('/');
-        } catch (err) {
-            setError('Invalid credentials');
+        } catch (err: any) {
+            setError(err.response?.data?.error || 'Invalid credentials');
         } finally {
             setLoading(false);
         }
@@ -37,8 +37,8 @@ export default function Login() {
         <div className="min-h-screen flex items-center justify-center bg-slate-900 px-4">
             <div className="w-full max-w-md p-8 bg-slate-800/50 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-700/50 ring-1 ring-white/10">
                 <div className="text-center mb-10">
-                    <div className="mx-auto h-16 w-16 bg-sky-500/20 rounded-2xl flex items-center justify-center mb-6 rotate-3 hover:rotate-0 transition-transform duration-300">
-                        <KeyRound className="h-8 w-8 text-sky-400" />
+                    <div className="mx-auto h-20 w-20 bg-sky-500/10 rounded-2xl flex items-center justify-center mb-6 rotate-3 hover:rotate-0 transition-all duration-300 overflow-hidden border border-sky-500/20">
+                        <img src={logo} alt="Isidorus Logo" className="w-full h-full object-cover" />
                     </div>
                     <h2 className="text-3xl font-bold tracking-tight text-white mb-2">
                         Welcome Back
