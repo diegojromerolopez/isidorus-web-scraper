@@ -19,11 +19,13 @@ class ScraperService:
         self.db_repository = db_repository
         self.dynamodb_client = dynamodb_client
 
-    async def start_scraping(self, url: str, depth: int) -> int:
+    async def start_scraping(
+        self, url: str, depth: int, user_id: int | None = None
+    ) -> int:
         """
         Starts a new scraping job.
         """
-        scraping_id = await self.db_repository.create_scraping(url)
+        scraping_id = await self.db_repository.create_scraping(url, user_id)
 
         # Initial Redis Key for Distributed Completion Tracking
         pending_key = f"scrape:{scraping_id}:pending"
@@ -78,6 +80,7 @@ class ScraperService:
                     "status": item.get("status", "UNKNOWN"),
                     "created_at": item.get("created_at"),
                     "completed_at": item.get("completed_at"),
+                    "depth": int(item.get("depth", 1)),
                 }
 
         # 3. Merge

@@ -1,5 +1,6 @@
 CREATE TABLE IF NOT EXISTS scrapings (
     id SERIAL PRIMARY KEY,
+    user_id INTEGER,
     url TEXT NOT NULL
 );
 

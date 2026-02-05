@@ -26,11 +26,11 @@ class DbRepository:
         )
         return [{"term": t["term"], "occurrence": t["frequency"]} for t in terms]
 
-    async def create_scraping(self, url: str) -> int:
+    async def create_scraping(self, url: str, user_id: int | None = None) -> int:
         """
         Creates a new scraping record.
         """
-        scraping = await models.Scraping.create(url=url)
+        scraping = await models.Scraping.create(url=url, user_id=user_id)
         return int(scraping.id)
 
     async def get_scraping(self, scraping_id: int) -> dict[str, Any] | None:
@@ -42,8 +42,24 @@ class DbRepository:
             return {
                 "id": scraping.id,
                 "url": scraping.url,
+                "user_id": scraping.user_id,
             }
         return None
+
+    async def get_scrapings(
+        self, user_id: int, offset: int = 0, limit: int = 10
+    ) -> tuple[list[dict[str, Any]], int]:
+        """
+        Retrieves a paginated list of scrapings for a specific user.
+        Returns (list of scrapings, total_count).
+        """
+        query = models.Scraping.filter(user_id=user_id)
+        total = await query.count()
+        scrapings = await query.offset(offset).limit(limit).order_by("-id")
+
+        return [
+            {"id": s.id, "url": s.url, "user_id": s.user_id} for s in scrapings
+        ], total
 
     async def get_scrape_results(self, scraping_id: int) -> list[dict[str, Any]]:
         """

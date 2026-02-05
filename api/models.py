@@ -4,6 +4,7 @@ from tortoise import fields, models  # type: ignore
 
 class Scraping(models.Model):
     id = fields.IntField(pk=True)
+    user_id = fields.IntField(null=True)
     url = fields.TextField()
 
     class Meta:
