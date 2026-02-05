@@ -92,7 +92,9 @@ class TestExplainerFactory(unittest.TestCase):
 
         explainer = ExplainerFactory.get_explainer("ollama")
 
-        mock_ollama.assert_called_once_with(model="llama3")
+        mock_ollama.assert_called_once_with(
+            model="tinyllama", base_url="http://localhost:11434"
+        )
         self.assertEqual(explainer, mock_instance)
 
     @patch("workers.image_extractor.services.explainer_factory.HuggingFaceEndpoint")

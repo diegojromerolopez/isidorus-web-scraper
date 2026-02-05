@@ -62,8 +62,10 @@ func (s *WriterService) ProcessMessage(msg domain.WriterMessage) error {
 			}
 		}
 	} else if msg.Type == domain.MsgTypeImageExplanation {
+		log.Printf("Writer: Processing ImageExplanation for job %d, URL %s", msg.ScrapingID, msg.URL)
 		err = s.dbRepo.InsertImageExplanation(msg)
 	} else if msg.Type == domain.MsgTypePageSummary {
+		log.Printf("Writer: Processing PageSummary for job %d, URL %s", msg.ScrapingID, msg.URL)
 		err = s.dbRepo.InsertPageSummary(msg)
 	} else if msg.Type == domain.MsgTypeScrapingComplete {
 		// 1. Optional Postgres hook (currently no-op/logging)

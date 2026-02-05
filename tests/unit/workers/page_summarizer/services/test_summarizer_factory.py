@@ -59,6 +59,19 @@ class TestSummarizerFactory(unittest.TestCase):
         llm = MockLLM()
         res = llm.invoke("prompt")
         self.assertEqual(res.content, "Mocked summary for testing")
+    
+    @patch("workers.page_summarizer.services.summarizer_factory.ChatOllama")
+    def test_get_llm_ollama(self, mock_ollama: MagicMock) -> None:
+        """Test factory returns ChatOllama for 'ollama' provider"""
+        mock_instance = MagicMock()
+        mock_ollama.return_value = mock_instance
+
+        llm = SummarizerFactory.get_llm("ollama")
+
+        mock_ollama.assert_called_once_with(
+            model="tinyllama", base_url="http://localhost:11434"
+        )
+        self.assertEqual(llm, mock_instance)
 
     def test_mock_llm_get_num_tokens(self) -> None:
         llm = MockLLM()

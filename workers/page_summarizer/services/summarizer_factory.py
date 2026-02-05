@@ -6,7 +6,7 @@ from langchain_anthropic import ChatAnthropic  # pylint: disable=import-error
 
 # pylint: disable=import-error
 from langchain_classic.chains import load_summarize_chain  # type: ignore
-from langchain_community.chat_models import ChatOllama  # type: ignore
+from langchain_ollama import ChatOllama  # type: ignore
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_huggingface import HuggingFaceEndpoint
 from langchain_openai import ChatOpenAI  # type: ignore
@@ -48,7 +48,10 @@ class SummarizerFactory:
             "openai": lambda: ChatOpenAI(model="gpt-3.5-turbo"),
             "gemini": lambda: ChatGoogleGenerativeAI(model="gemini-pro"),
             "anthropic": lambda: ChatAnthropic(model_name="claude-3-haiku-20240307"),
-            "ollama": lambda: ChatOllama(model="llama3"),
+            "ollama": lambda: ChatOllama(
+                model="tinyllama",
+                base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+            ),
             "huggingface": lambda: HuggingFaceEndpoint(
                 repo_id="mistralai/Mistral-7B-Instruct-v0.2"
             ),

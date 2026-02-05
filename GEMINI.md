@@ -117,6 +117,10 @@ Workers are decoupled and highly testable through repository mocking.
 | `DYNAMODB_TABLE` | DynamoDB Table Name | `scraping_jobs` |
 | `IMAGE_EXPLAINER_ENABLED` | Enable AI image explanation | `true` |
 | `PAGE_SUMMARIZER_ENABLED` | Enable page summarization | `true` |
+| `LLM_PROVIDER` | LLM backend (mock, openai, ollama) | `ollama` |
+
+### Local LLM Support (Ollama)
+The system supports running LLM workloads locally via **Ollama**. This is the default configuration in `docker-compose.yml`, using the `phi3` model for efficiency. Local inference ensures data privacy and eliminates external API costs.
 
 ## Data Schema (PostgreSQL & DynamoDB)
 

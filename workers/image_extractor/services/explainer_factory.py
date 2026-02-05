@@ -42,7 +42,10 @@ class ExplainerFactory:
             "openai": lambda: ChatOpenAI(model="gpt-4o-mini"),
             "gemini": lambda: ChatGoogleGenerativeAI(model="gemini-pro-vision"),
             "anthropic": lambda: ChatAnthropic(model_name="claude-3-haiku-20240307"),
-            "ollama": lambda: ChatOllama(model="llama3"),
+            "ollama": lambda: ChatOllama(
+                model="tinyllama",
+                base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+            ),
             "huggingface": lambda: HuggingFaceEndpoint(
                 repo_id="mistralai/Mistral-7B-Instruct-v0.2"
             ),

@@ -69,6 +69,28 @@ services:
       timeout: 5s
       retries: 5
 
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: [ "CMD", "ollama", "list" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ollama-setup:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      - OLLAMA_HOST=ollama:11434
+    entrypoint: /bin/sh
+    command: -c "ollama pull tinyllama"
+
   api:
     build:
       context: .
@@ -134,12 +156,14 @@ services:
       INDEXER_QUEUE_URL: http://localstack:4566/000000000000/indexer-queue
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      IMAGE_EXPLAINER_ENABLED: "${IMAGE_EXPLAINER_ENABLED:-true}"
-      PAGE_SUMMARIZER_ENABLED: "${PAGE_SUMMARIZER_ENABLED:-true}"
+      IMAGE_EXPLAINER_ENABLED: "false"
+      PAGE_SUMMARIZER_ENABLED: "true"
     depends_on:
       localstack:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      ollama:
         condition: service_healthy
 
   writer-worker:
@@ -173,13 +197,16 @@ services:
       - WRITER_QUEUE_URL=http://localstack:4566/000000000000/writer-queue
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/isidorus
       - IMAGES_BUCKET=isidorus-images
-      - LLM_PROVIDER=mock
+      - LLM_PROVIDER=ollama
       - LLM_API_KEY=${LLM_API_KEY}
+      - OLLAMA_BASE_URL=http://ollama:11434
     depends_on:
       localstack:
         condition: service_healthy
       writer-worker:
         condition: service_started
+      ollama:
+        condition: service_healthy
 
   page-summarizer-worker:
     build:
@@ -193,15 +220,18 @@ services:
       - INPUT_QUEUE_URL=http://localstack:4566/000000000000/page-summarizer-queue
       - WRITER_QUEUE_URL=http://localstack:4566/000000000000/writer-queue
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/isidorus
-      - LLM_PROVIDER=mock
+      - LLM_PROVIDER=ollama
       - LLM_API_KEY=${LLM_API_KEY}
       - INDEXER_QUEUE_URL=http://localstack:4566/000000000000/indexer-queue
       - OPENSEARCH_URL=http://opensearch:9200
+      - OLLAMA_BASE_URL=http://ollama:11434
     depends_on:
       localstack:
         condition: service_healthy
       writer-worker:
         condition: service_started
+      ollama:
+        condition: service_healthy
 
   indexer-worker:
     build:
@@ -240,6 +270,8 @@ services:
 
 volumes:
   postgres_data:
+    driver: local
+  ollama_data:
     driver: local
 
 networks:
