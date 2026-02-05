@@ -51,7 +51,7 @@ The codebase follows several key design principles to ensure reliability and tes
 5.  **Bleeding Edge Runtimes**: Always use the latest stable versions of runtimes to ensure performance and security:
     -   **Python**: Use the latest available version (currently 3.14).
         -   **Exception**: Workers using `langchain` (e.g., `page_summarizer`, `image_extractor`) must use **Python 3.11** as `langchain` dependencies (specifically `numpy` and `pandas`) do not yet support Python 3.14.
-    -   **Go**: Use the latest available version (currently 1.24).
+    -   **Go**: Use the latest available version (currently 1.25).
 
 ## Architecture
 
