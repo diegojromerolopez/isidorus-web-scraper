@@ -157,10 +157,16 @@ func TestProcessMessage_FetchError(t *testing.T) {
 	mockFetcher.On("Fetch", "http://err.com").Return(nil, assert.AnError)
 	// SAdd for seed URL
 	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.Anything).Return(1, nil)
+	// Even on error, Decr is called
+	mockRedis.On("Decr", mock.Anything, mock.Anything).Return(1, nil)
 
 	s.ProcessMessage(domain.ScrapeMessage{URL: "http://err.com"})
 
-	mockSQS.AssertNotCalled(t, "SendMessage", mock.Anything, mock.Anything, mock.Anything)
+	// Verify no data sent, but Decr was called
+	mockSQS.AssertNotCalled(t, "SendMessage", mock.Anything, "writer", mock.MatchedBy(func(m domain.WriterMessage) bool {
+		return m.Type == domain.MsgTypePageData
+	}))
+	mockRedis.AssertExpectations(t)
 }
 
 func TestProcessMessage_Non200(t *testing.T) {
@@ -181,10 +187,16 @@ func TestProcessMessage_Non200(t *testing.T) {
 	mockFetcher.On("Fetch", "http://404.com").Return(resp, nil)
 	// SAdd for seed URL
 	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.Anything).Return(1, nil)
+	// Even on non-200, Decr is called
+	mockRedis.On("Decr", mock.Anything, mock.Anything).Return(1, nil)
 
 	s.ProcessMessage(domain.ScrapeMessage{URL: "http://404.com"})
 
-	mockSQS.AssertNotCalled(t, "SendMessage", mock.Anything, mock.Anything, mock.Anything)
+	// Verify no data sent, but Decr was called
+	mockSQS.AssertNotCalled(t, "SendMessage", mock.Anything, "writer", mock.MatchedBy(func(m domain.WriterMessage) bool {
+		return m.Type == domain.MsgTypePageData
+	}))
+	mockRedis.AssertExpectations(t)
 }
 
 func TestProcessText_Filtering(t *testing.T) {
@@ -224,6 +236,8 @@ func TestProcessMessage_RedisIncrError(t *testing.T) {
 
 	mockSQS.On("SendMessage", mock.Anything, "writer", mock.Anything).Return(nil)
 	mockRedis.On("IncrBy", mock.Anything, "scrape:123:pending", int64(1)).Return(assert.AnError)
+	// Decr is still called at the end
+	mockRedis.On("Decr", mock.Anything, "scrape:123:pending").Return(1, nil)
 
 	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
 
@@ -624,4 +638,64 @@ func TestProcessMessage_IgnoreScriptAndStyle(t *testing.T) {
 	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
 
 	mockSQS.AssertExpectations(t)
+}
+
+func TestProcessMessage_FetchError_SignalsCompletion(t *testing.T) {
+	mockSQS := new(MockSQSClient)
+	mockRedis := new(MockRedisClient)
+	mockFetcher := new(MockPageFetcher)
+	s := NewScraperService(
+		WithSQSClient(mockSQS),
+		WithRedisClient(mockRedis),
+		WithPageFetcher(mockFetcher),
+		WithQueues("input", "writer", "image", "summarizer"),
+	)
+
+	mockFetcher.On("Fetch", "http://err.com").Return(nil, assert.AnError)
+	// SAdd for seed URL
+	mockRedis.On("SAdd", mock.Anything, "scrape:123:visited", mock.Anything).Return(1, nil)
+	// Decr returns 0, meaning this was the last pending task
+	mockRedis.On("Decr", mock.Anything, "scrape:123:pending").Return(0, nil)
+
+	// Expect completion signal
+	mockSQS.On("SendMessage", mock.Anything, "writer", mock.MatchedBy(func(msg domain.WriterMessage) bool {
+		return msg.Type == domain.MsgTypeScrapingComplete && msg.ScrapingID == 123
+	})).Return(nil)
+
+	s.ProcessMessage(domain.ScrapeMessage{URL: "http://err.com", ScrapingID: 123})
+
+	mockSQS.AssertExpectations(t)
+	mockRedis.AssertExpectations(t)
+}
+
+func TestProcessMessage_Non200_SignalsCompletion(t *testing.T) {
+	mockSQS := new(MockSQSClient)
+	mockRedis := new(MockRedisClient)
+	mockFetcher := new(MockPageFetcher)
+	s := NewScraperService(
+		WithSQSClient(mockSQS),
+		WithRedisClient(mockRedis),
+		WithPageFetcher(mockFetcher),
+		WithQueues("input", "writer", "image", "summarizer"),
+	)
+
+	resp := &http.Response{
+		StatusCode: http.StatusNotFound,
+		Body:       io.NopCloser(bytes.NewBufferString("not found")),
+	}
+	mockFetcher.On("Fetch", "http://404.com").Return(resp, nil)
+	// SAdd for seed URL
+	mockRedis.On("SAdd", mock.Anything, "scrape:123:visited", mock.Anything).Return(1, nil)
+	// Decr returns 0, meaning this was the last pending task
+	mockRedis.On("Decr", mock.Anything, "scrape:123:pending").Return(0, nil)
+
+	// Expect completion signal
+	mockSQS.On("SendMessage", mock.Anything, "writer", mock.MatchedBy(func(msg domain.WriterMessage) bool {
+		return msg.Type == domain.MsgTypeScrapingComplete && msg.ScrapingID == 123
+	})).Return(nil)
+
+	s.ProcessMessage(domain.ScrapeMessage{URL: "http://404.com", ScrapingID: 123})
+
+	mockSQS.AssertExpectations(t)
+	mockRedis.AssertExpectations(t)
 }

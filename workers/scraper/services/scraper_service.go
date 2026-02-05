@@ -93,6 +93,27 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 	visitedKey := fmt.Sprintf(domain.RedisKeyVisited, msg.ScrapingID)
 	_, _ = s.redisClient.SAdd(ctx, visitedKey, msg.URL)
 
+	pKey := fmt.Sprintf(domain.RedisKeyPending, msg.ScrapingID)
+	defer func() {
+		val, err := s.redisClient.Decr(ctx, pKey)
+		if err != nil {
+			log.Printf("failed to decrement redis: %v", err)
+			return
+		}
+
+		// 4. Check for Completion
+		if val == 0 {
+			log.Printf("Scraping %d completed! Sending notification to Writer.", msg.ScrapingID)
+			completionMsg := domain.WriterMessage{
+				Type:       domain.MsgTypeScrapingComplete,
+				ScrapingID: msg.ScrapingID,
+			}
+			if err := s.sqsClient.SendMessage(ctx, s.writerQueueURL, completionMsg); err != nil {
+				log.Printf("failed to send completion signal: %v", err)
+			}
+		}
+	}()
+
 	resp, err := s.pageFetcher.Fetch(msg.URL)
 	if err != nil {
 		log.Printf("failed to fetch URL %s: %v", msg.URL, err)
@@ -274,26 +295,6 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 		err := s.redisClient.IncrBy(ctx, pKey, int64(-failedCount))
 		if err != nil {
 			log.Printf("CRITICAL: failed to compensate redis for failed sends (scraping %d, count %d): %v", msg.ScrapingID, failedCount, err)
-		}
-	}
-
-	// 3. Decrement Redis (Completion Check)
-	pKey := fmt.Sprintf(domain.RedisKeyPending, msg.ScrapingID)
-	val, err := s.redisClient.Decr(ctx, pKey)
-	if err != nil {
-		log.Printf("failed to decrement redis: %v", err)
-		return
-	}
-
-	// 4. Check for Completion
-	if val == 0 {
-		log.Printf("Scraping %d completed! Sending notification to Writer.", msg.ScrapingID)
-		completionMsg := domain.WriterMessage{
-			Type:       domain.MsgTypeScrapingComplete,
-			ScrapingID: msg.ScrapingID,
-		}
-		if err := s.sqsClient.SendMessage(ctx, s.writerQueueURL, completionMsg); err != nil {
-			log.Printf("failed to send completion signal: %v", err)
 		}
 	}
 }
