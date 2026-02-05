@@ -29,7 +29,7 @@ test-e2e: migrate seed-db
 test-e2e-basic: migrate seed-db
 	IMAGE_EXPLAINER_ENABLED=false PAGE_SUMMARIZER_ENABLED=false \
 	docker compose -f docker-compose.yml -f docker-compose.e2e.yml up --build --abort-on-container-exit --exit-code-from test-runner \
-		postgres localstack redis api auth-admin scraper-worker writer-worker deletion-worker mock-website test-runner
+		postgres localstack redis api auth-admin scraper-worker writer-worker indexer-worker opensearch deletion-worker mock-website test-runner
 
 # Run the stack and trigger a scrape job
 run: migrate seed-db

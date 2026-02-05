@@ -32,3 +32,12 @@ type PageSummaryMessage struct {
 	ScrapingID int    `json:"scraping_id"`
 	UserID     int    `json:"user_id"`
 }
+
+// IndexMessage represents data sent to the indexer worker
+type IndexMessage struct {
+	URL        string `json:"url"`
+	Content    string `json:"content"`
+	Summary    string `json:"summary"`
+	ScrapingID int    `json:"scraping_id"`
+	UserID     int    `json:"user_id"`
+}

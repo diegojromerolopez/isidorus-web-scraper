@@ -131,6 +131,7 @@ services:
       SUMMARIZER_QUEUE_URL: http://localstack:4566/000000000000/page-summarizer-queue
       IMAGE_QUEUE_URL: http://localstack:4566/000000000000/image-extractor-queue
       WRITER_QUEUE_URL: http://localstack:4566/000000000000/writer-queue
+      INDEXER_QUEUE_URL: http://localstack:4566/000000000000/indexer-queue
       REDIS_HOST: redis
       REDIS_PORT: 6379
       IMAGE_EXPLAINER_ENABLED: "${IMAGE_EXPLAINER_ENABLED:-true}"

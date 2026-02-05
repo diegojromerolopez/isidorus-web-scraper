@@ -36,6 +36,7 @@ type ScraperService struct {
 	writerQueueURL        string
 	imageQueueURL         string
 	summarizerQueueURL    string
+	indexerQueueURL       string
 	imageExplainerEnabled bool
 	pageSummarizerEnabled bool
 }
@@ -55,12 +56,13 @@ func WithPageFetcher(c PageFetcher) ScraperOption {
 	return func(s *ScraperService) { s.pageFetcher = c }
 }
 
-func WithQueues(input, writer, image, summarizer string) ScraperOption {
+func WithQueues(input, writer, image, summarizer, indexer string) ScraperOption {
 	return func(s *ScraperService) {
 		s.inputQueueURL = input
 		s.writerQueueURL = writer
 		s.imageQueueURL = image
 		s.summarizerQueueURL = summarizer
+		s.indexerQueueURL = indexer
 	}
 }
 
@@ -207,6 +209,20 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 	}
 	if err := s.sqsClient.SendMessage(ctx, s.writerQueueURL, writerMsg); err != nil {
 		log.Printf("failed to send page data to writer: %v", err)
+	}
+
+	// Send to Indexer Queue (Page Content)
+	if s.indexerQueueURL != "" {
+		indexerMsg := domain.IndexMessage{
+			URL:        msg.URL,
+			Content:    fullTextBuilder.String(),
+			Summary:    "", // Scraper doesn't have summary yet
+			ScrapingID: msg.ScrapingID,
+			UserID:     msg.UserID,
+		}
+		if err := s.sqsClient.SendMessage(ctx, s.indexerQueueURL, indexerMsg); err != nil {
+			log.Printf("failed to send page content to indexer: %v", err)
+		}
 	}
 
 	// Send to Summarizer Queue (if configured, enabled, and populated)

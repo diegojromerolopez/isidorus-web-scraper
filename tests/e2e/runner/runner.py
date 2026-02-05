@@ -166,6 +166,20 @@ class TestScrapingE2E(unittest.TestCase):
         )
         return cast(dict[Any, Any], response.json())
 
+    def _check_search_persistence(self, term: str) -> bool:
+        """Polls specifically for the presence of a term in the search results."""
+        for _ in range(60):
+            try:
+                response = self.session.get(f"{API_URL}/search?t={term}", timeout=5)
+                if response.status_code == 200:
+                    results = response.json().get("results", [])
+                    if len(results) > 0:
+                        return True
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                print(f"Error checking search: {e}")
+            time.sleep(1)
+        return False
+
     def _poll_scraping_completion(
         self, scraping_id: int, timeout_seconds: int = MAX_TIMEOUT_SECONDS
     ) -> list:
@@ -222,10 +236,13 @@ class TestScrapingE2E(unittest.TestCase):
         # 2. Poll for Completion
         results = self._poll_scraping_completion(scraping_id)
 
-        # 3. Check Terms
+        # 3. Check Terms via Search
         self.assertTrue(len(results) > 0, "No pages returned.")
-        found_terms = any(page.get("terms") for page in results)
-        self.assertTrue(found_terms, "No terms found in results.")
+        search_term = "LocalStack"
+        found_in_search = self._check_search_persistence(search_term)
+        self.assertTrue(
+            found_in_search, f"Term '{search_term}' not found in search results."
+        )
 
         # 4. Check Images
         if IMAGE_EXPLAINER_ENABLED:

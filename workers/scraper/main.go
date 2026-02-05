@@ -38,7 +38,7 @@ func main() {
 		services.WithSQSClient(sqsClient),
 		services.WithRedisClient(redisClient),
 		services.WithPageFetcher(pageFetcher),
-		services.WithQueues(cfg.InputQueueURL, cfg.WriterQueueURL, cfg.ImageQueueURL, cfg.SummarizerQueueURL),
+		services.WithQueues(cfg.InputQueueURL, cfg.WriterQueueURL, cfg.ImageQueueURL, cfg.SummarizerQueueURL, cfg.IndexerQueueURL),
 		services.WithFeatureFlags(cfg.ImageExplainerEnabled, cfg.PageSummarizerEnabled),
 	)
 
