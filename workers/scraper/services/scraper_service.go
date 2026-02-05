@@ -112,6 +112,9 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 
 	// Text accumulation for summarization
 	var fullTextBuilder strings.Builder
+	
+	inScript := false
+	inStyle := false
 
 	for {
 		tt := tokenizer.Next()
@@ -120,18 +123,50 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 		}
 
 		if tt == html.TextToken {
-			text := string(tokenizer.Text())
-			s.processText(text, terms)
+			if !inScript && !inStyle {
+				text := string(tokenizer.Text())
+				s.processText(text, terms)
 
-			// Accumulate text for summarizer (simple append for now)
-			// Limit size to avoid memory issues (e.g. 100KB)
-			if fullTextBuilder.Len() < 100000 {
-				fullTextBuilder.WriteString(text)
-				fullTextBuilder.WriteString(" ")
+				// Accumulate text for summarizer (simple append for now)
+				// Limit size to avoid memory issues (e.g. 100KB)
+				if fullTextBuilder.Len() < 100000 {
+					fullTextBuilder.WriteString(text)
+					fullTextBuilder.WriteString(" ")
+				}
 			}
-		} else if tt == html.StartTagToken || tt == html.SelfClosingTagToken {
+		} else if tt == html.StartTagToken {
 			token := tokenizer.Token()
-			if token.Data == "a" {
+			if token.Data == "script" {
+				inScript = true
+			} else if token.Data == "style" {
+				inStyle = true
+			} else if token.Data == "a" {
+				for _, attr := range token.Attr {
+					if attr.Key == "href" {
+						links = append(links, attr.Val)
+					}
+				}
+			} else if token.Data == "img" {
+				for _, attr := range token.Attr {
+					if attr.Key == "src" {
+						images = append(images, attr.Val)
+					}
+				}
+			}
+		} else if tt == html.EndTagToken {
+			token := tokenizer.Token()
+			if token.Data == "script" {
+				inScript = false
+			} else if token.Data == "style" {
+				inStyle = false
+			}
+		} else if tt == html.SelfClosingTagToken {
+			token := tokenizer.Token()
+			if token.Data == "script" {
+				// Self-closing script tag (rare but possible in XHTML)
+				// effectively enters and leaves, or just stays false if we handle it like this
+				// But strictly if it's self-closing it has no content.
+			} else if token.Data == "a" {
 				for _, attr := range token.Attr {
 					if attr.Key == "href" {
 						links = append(links, attr.Val)

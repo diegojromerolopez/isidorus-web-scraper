@@ -569,3 +569,59 @@ func TestProcessMessage_SQSSendError_Completion(t *testing.T) {
 	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", ScrapingID: 123})
 	mockSQS.AssertExpectations(t)
 }
+func TestProcessMessage_IgnoreScriptAndStyle(t *testing.T) {
+	mockSQS := new(MockSQSClient)
+	mockRedis := new(MockRedisClient)
+	mockFetcher := new(MockPageFetcher)
+	s := NewScraperService(
+		WithSQSClient(mockSQS),
+		WithRedisClient(mockRedis),
+		WithPageFetcher(mockFetcher),
+		WithQueues("input", "writer", "image", ""),
+	)
+
+	// HTML with script and style
+	html := `<html>
+		<head>
+			<style>
+				body { color: red; }
+				.hidden { display: none; }
+			</style>
+			<script>
+				var secret = "sensitive_variable";
+				console.log("runtime_code");
+			</script>
+		</head>
+		<body>
+			<p>Visible content</p>
+		</body>
+	</html>`
+	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(html))}
+	mockFetcher.On("Fetch", "http://site1.com").Return(resp, nil)
+
+	// SAdd for seed URL
+	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.Anything).Return(1, nil)
+	mockRedis.On("Decr", mock.Anything, mock.Anything).Return(1, nil)
+
+	// Expect SendMessage to Writer
+	mockSQS.On("SendMessage", mock.Anything, "writer", mock.MatchedBy(func(msg domain.WriterMessage) bool {
+		// Verify terms
+		if msg.Type != domain.MsgTypePageData {
+			return true // Ignore other message types if any
+		}
+		// Content from script/style should NOT be present
+		_, hasRed := msg.Terms["red"]
+		_, hasSecret := msg.Terms["sensitive_variable"]
+		_, hasRuntime := msg.Terms["runtime_code"]
+		
+		// Visible content SHOULD be present
+		_, hasVisible := msg.Terms["visible"]
+		_, hasContent := msg.Terms["content"]
+
+		return !hasRed && !hasSecret && !hasRuntime && hasVisible && hasContent
+	})).Return(nil)
+
+	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
+
+	mockSQS.AssertExpectations(t)
+}
