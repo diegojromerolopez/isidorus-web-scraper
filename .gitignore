@@ -2,6 +2,7 @@
 docs/todo/
 
 # Coverage
+coverage.out
 frontend/coverage/
 
 # Python
