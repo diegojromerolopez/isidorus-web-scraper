@@ -10,6 +10,7 @@ type Config struct {
 	WriterQueueURL        string
 	SummarizerQueueURL    string
 	ImageQueueURL         string
+	IndexerQueueURL       string
 	RedisHost             string
 	RedisPort             string
 	ImageExplainerEnabled bool
@@ -24,6 +25,7 @@ func Load() (*Config, error) {
 		ImageQueueURL:         os.Getenv("IMAGE_QUEUE_URL"),
 		RedisHost:             os.Getenv("REDIS_HOST"),
 		RedisPort:             os.Getenv("REDIS_PORT"),
+		IndexerQueueURL:       os.Getenv("INDEXER_QUEUE_URL"),
 		ImageExplainerEnabled: os.Getenv("IMAGE_EXPLAINER_ENABLED") == "true",
 		PageSummarizerEnabled: os.Getenv("PAGE_SUMMARIZER_ENABLED") == "true",
 	}

@@ -1,6 +1,6 @@
 module scraped-worker
 
-go 1.21
+go 1.25
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.24.1

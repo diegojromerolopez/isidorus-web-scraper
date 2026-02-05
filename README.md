@@ -26,11 +26,11 @@ This project is a web scraping application designed to scrape, analyze, and arch
 
 ## Overview
 
-The application takes a URL and a search term, recursively scrapes the website to a configurable depth, and stores:
-- **Pages**: Metadata of visited URLs.
-- **Terms**: Frequency of the search term on each page.
+The application takes a URL, recursively scrapes the website to a configurable depth, and stores:
+- **Pages**: Metadata of visited URLs and AI summaries.
+- **Searchable Content**: Full-text index of content and summaries in OpenSearch.
 - **Links**: graph of internal and external links.
-- **Images**: Extracted image URLs, stored in S3 and explained by AI.
+- **Images**: Extracted image URLs, stored in S3.
 
 ## Architecture
 
@@ -63,16 +63,21 @@ graph TD
     SQS_PS --> Summarizer[Page Summarizer-Python]
     Summarizer -->|14. Summarize| LLM
     Summarizer -->|15. Summary Result| SQS_W
+    Summarizer -->|16. Index Request| SQS_Index[SQS-Indexer Queue]
     
-    SQS_W --> Writer[Writer-Go]
-    Writer -->|16. Store Results| DB
-    Writer -->|17. Mark Completion| Dynamo
+    SQS_Index --> Indexer[Indexer-Go]
+    Indexer -->|17. Index Content| OS[(OpenSearch)]
 
-    API -->|18. Enqueue Deletion| SQS_D[SQS-Deletion Queue]
+    SQS_W --> Writer[Writer-Go]
+    Writer -->|18. Store Results| DB
+    Writer -->|19. Mark Completion| Dynamo
+
+    API -->|20. Global Search| OS
+    API -->|21. Enqueue Deletion| SQS_D[SQS-Deletion Queue]
     SQS_D --> Deletion[Deletion Worker-Python]
-    Deletion -->|19. Delete Objects| S3
-    Deletion -->|20. Delete Data| DB
-    Deletion -->|21. Delete Meta| Dynamo
+    Deletion -->|22. Delete Objects| S3
+    Deletion -->|23. Delete Data| DB
+    Deletion -->|24. Delete Meta| Dynamo
 ```
 
 ## Data Storage Strategy
@@ -80,12 +85,19 @@ graph TD
 Isidorus uses a hybrid storage approach to optimize for both relational integrity and high-throughput status monitoring:
 
 ### 1. PostgreSQL (Relational Site Content)
-**Location**: `scrapings`, `scraped_pages`, `page_terms`, `page_links`, `page_images`.
+**Location**: `scrapings`, `scraped_pages`, `page_links`, `page_images`.
 **Purpose**: Stores the core "knowledge graph" extracted from the web. 
 **Why**: 
-- **Relational Integrity**: Perfect for the complex relationships between pages, images, and search terms.
-- **Query Flexibility**: Allows for complex joins and text searches.
+- **Relational Integrity**: Perfect for the complex relationships between pages, images, and links.
 - **Identity**: Acts as the system's "Identity Store" by generating unique incremental IDs for jobs.
+
+### 2. OpenSearch (Full-Text Search)
+**Location**: `scraped_pages` index.
+**Purpose**: Enables high-performance, relevance-based global search across all scraped content and summaries.
+**Why**:
+- **Relevance Scoring**: Provides better search results than simple SQL LIKE or term counting.
+- **Scalability**: Handles large volumes of text data efficiently.
+- **Highlights**: Supports returning snippets of matching content.
 
 ### 2. DynamoDB (Job Lifecycle & State)
 **Location**: `scraping_jobs` table.
@@ -104,7 +116,8 @@ The system is built with a microservices approach:
 0.  **Frontend (React 18)**:
     -   Modern SPA served by Node.js.
     -   Provides a Dashboard for initiating and monitoring scraping jobs.
-    -   Features detailed views for scraping results, including term stats, AI summaries, and image galleries.
+    -   Features detailed views for scraping results, including term stats, AI summaries, and **collapsible page reports** for easy scannability.
+    -   **Improved Navigation**: Clickable URLs in the history table allow direct access to job details.
     -   Interacts with the API via strictly typed TS methods.
 
 1.  **Auth Admin (Django)**:
@@ -138,16 +151,20 @@ The system is built with a microservices approach:
 4.  **Page Summarizer Worker (Python)**:
     -   Consumes text content from `page-summarizer-queue`.
     -   **AI Summarization**: Generates concise summaries of web pages using LLMs.
-    -   Sends results to the Writer.
+    -   Sends results to the Writer and enqueues indexing requests.
 
-5.  **Writer Worker (Go)**:
+5.  **Indexer Worker (Go)**:
+    -   Consumes data from `indexer-queue`.
+    -   **OpenSearch Indexing**: Indexes page content and summaries for global search.
+
+6.  **Writer Worker (Go)**:
     -   Consumes structured data (pages, terms, links, images, job completion events) from SQS.
     -   Writes data to PostgreSQL in a normalized schema.
     -   Handles job completion status updates.
 
 6.  **Deletion Worker (Python)**:
     -   Consumes deletion requests from `deletion-queue`.
-    -   **Batched Deletion**: Efficiently removes large datasets from PostgreSQL and S3.
+    -   **Batched Deletion**: Efficiently removes large datasets from PostgreSQL, S3, and OpenSearch.
     -   Cleanly removes job metadata from DynamoDB.
 
 5.  **Shared Library (Python)**:
@@ -172,23 +189,21 @@ The system is built with a microservices approach:
 ## API Endpoints
 
 -   **`POST /scrape`**: Start a new scraping job.
-    -   Body: `{"url": "...", "term": "...", "depth": 2}`
+    -   Body: `{"url": "...", "depth": 2}`
     -   **Example**:
         ```bash
         curl -X POST http://localhost:8000/scrape \
           -H "Content-Type: application/json" \
           -H "X-API-Key: test-api-key-123" \
-          -d '{"url": "https://example.com", "term": "example", "depth": 1}'
-          -d '{"url": "https://example.com", "term": "example", "depth": 1}'
+          -d '{"url": "https://example.com", "depth": 1}'
         ```
         Response:
         ```json
         {"scraping_id": 123}
         ```
--   **`GET /scrape?scraping_id=1`**: Check status and get results of a scraping job.
--   **`DELETE /scrapings/{id}`**: Delete a scraping job and all its related data.
--   **`GET /search?term={term}`**: Search for pages containing a specific term.
--   **`GET /terms`**: List all unique terms found across all scrapings.
+-   **`GET /scraping/{id}`**: Check status and get results of a scraping job.
+-   **`DELETE /scraping/{id}`**: Delete a scraping job and all its related data.
+-   **`GET /search?t={term}`**: Global full-text search across all content and summaries using OpenSearch.
 
 ## Authentication
 
@@ -234,7 +249,7 @@ The entire stack runs locally via Docker Compose:
 -   **Infrastructure**: LocalStack (AWS SQS/S3/DynamoDB emulation), Docker Compose
 -   **NoSQL**: DynamoDB (Job History)
 -   **AI**: LangChain (Multi-provider support)
--   **Testing**: `unittest` (Python), `go test` (Go), `boto3`/`requests` (E2E)
+-   **Testing**: `unittest` (Python), Vitest (Frontend), `go test` (Go), `boto3`/`requests` (E2E)
 -   **Mock Website**: A static site container for safe, deterministic E2E testing.
 
 ## Prerequisites
@@ -313,7 +328,8 @@ make format
 ## Testing
 
 The project emphasizes high test coverage:
--   **Unit Tests**: ~100% coverage for all components (API, Scraper, Writer, Image Extractor, Page Summarizer).
+-   **Unit Tests**: ~100% coverage for all components (API, Frontend, Scraper, Writer, Image Extractor, Page Summarizer).
+    - **Frontend**: Tested using **Vitest** and **React Testing Library**.
 -   **E2E Tests**: Full integration tests using a local test runner and mock website.
     - **Reliable Verification**: Tests utilize a centralized polling mechanism that monitors the `GET /scrape` endpoint, waiting up to **5 minutes (300 seconds)** for a `COMPLETED` status to ensure all asynchronous background tasks (AI extraction, DB writes) have finished.
 -   **Shared Library Tests**: Located in `tests/unit/shared/` for common client testing.
@@ -340,7 +356,7 @@ Since the system is event-driven, results are retrieved by polling the API or mo
 Use the `scraping_id` returned by the `POST /scrape` endpoint.
 
 ```bash
-curl http://localhost:8000/scrape?scraping_id=<ID> -H "X-API-Key: test-api-key-123"
+curl http://localhost:8000/scraping/<ID> -H "X-API-Key: test-api-key-123"
 ```
 Response (when `COMPLETED`):
 ```json

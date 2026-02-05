@@ -49,6 +49,11 @@ func (m *MockJobStatusRepository) UpdateJobStatusFull(ctx context.Context, jobID
 	return args.Error(0)
 }
 
+func (m *MockJobStatusRepository) IncrementLinkCount(ctx context.Context, jobID string, increment int) error {
+	args := m.Called(ctx, jobID, increment)
+	return args.Error(0)
+}
+
 type MockSQSClient struct {
 	mock.Mock
 }
@@ -190,5 +195,30 @@ func TestProcessMessage_DynamoFullError(t *testing.T) {
 	err := s.ProcessMessage(msg)
 
 	assert.NoError(t, err) // We log the error but don't fail the message processing
+	mockStatusRepo.AssertExpectations(t)
+}
+
+func TestProcessMessage_PageData_IncrementsLinks(t *testing.T) {
+	mockDbRepo := new(MockDBRepository)
+	mockStatusRepo := new(MockJobStatusRepository)
+	s := NewWriterService(
+		WithDBRepository(mockDbRepo),
+		WithJobStatusRepository(mockStatusRepo),
+	)
+
+	msg := domain.WriterMessage{
+		Type:       "page_data",
+		URL:        "http://example.com",
+		ScrapingID: 123,
+		Links:      []string{"http://link1.com", "http://link2.com"},
+	}
+
+	mockDbRepo.On("InsertPageData", msg).Return(nil)
+	mockStatusRepo.On("IncrementLinkCount", mock.Anything, "123", 2).Return(nil)
+
+	err := s.ProcessMessage(msg)
+
+	assert.NoError(t, err)
+	mockDbRepo.AssertExpectations(t)
 	mockStatusRepo.AssertExpectations(t)
 }

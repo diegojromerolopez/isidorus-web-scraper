@@ -13,7 +13,12 @@ class TestSummarizerService(unittest.IsolatedAsyncioTestCase):
         self.api_key = "test-key"
 
     async def test_init(self, mock_factory: MagicMock) -> None:
-        _ = SummarizerService(self.mock_sqs, self.writer_queue, "openai", self.api_key)
+        _ = SummarizerService(
+            sqs_client=self.mock_sqs,
+            writer_queue_url=self.writer_queue,
+            llm_provider="openai",
+            llm_api_key=self.api_key,
+        )
         mock_factory.get_llm.assert_called_with("openai", self.api_key)
 
     async def test_process_message_success(self, mock_factory: MagicMock) -> None:
@@ -21,6 +26,7 @@ class TestSummarizerService(unittest.IsolatedAsyncioTestCase):
         msg_body = json.dumps(
             {
                 "scraping_id": 123,
+                "user_id": 1,
                 "url": "http://example.com",
                 "content": "some text content",
             }
@@ -28,22 +34,31 @@ class TestSummarizerService(unittest.IsolatedAsyncioTestCase):
 
         mock_factory.summarize_text.return_value = "Summary"
 
-        service = SummarizerService(self.mock_sqs, self.writer_queue)
-
-        # We need to ensure service._SummarizerService__llm is set (it is by init)
+        # Test both queues
+        indexer_queue = "indexer-queue"
+        service = SummarizerService(
+            self.mock_sqs, self.writer_queue, indexer_queue_url=indexer_queue
+        )
 
         await service.process_message(msg_body)
 
         mock_factory.summarize_text.assert_called()
-        self.mock_sqs.send_message.assert_called_once()
 
-        # Check args
-        args = self.mock_sqs.send_message.call_args[0]
-        payload = args[0]
-        self.assertEqual(payload["type"], "page_summary")
-        self.assertEqual(payload["scraping_id"], 123)
-        self.assertEqual(payload["summary"], "Summary")
-        self.assertEqual(args[1], self.writer_queue)
+        # Should be called twice: once for writer, once for indexer
+        self.assertEqual(self.mock_sqs.send_message.call_count, 2)
+
+        # Check Writer Message
+        writer_args = self.mock_sqs.send_message.call_args_list[0][0]
+        self.assertEqual(writer_args[0]["type"], "page_summary")
+        self.assertEqual(writer_args[0]["summary"], "Summary")
+        self.assertEqual(writer_args[1], self.writer_queue)
+
+        # Check Indexer Message
+        indexer_args = self.mock_sqs.send_message.call_args_list[1][0]
+        self.assertEqual(indexer_args[0]["url"], "http://example.com")
+        self.assertEqual(indexer_args[0]["content"], "some text content")
+        self.assertEqual(indexer_args[0]["summary"], "Summary")
+        self.assertEqual(indexer_args[1], indexer_queue)
 
     async def test_process_message_with_page_id(self, mock_factory: MagicMock) -> None:
         # Setup message

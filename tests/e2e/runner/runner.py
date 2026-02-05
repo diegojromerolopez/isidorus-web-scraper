@@ -160,13 +160,25 @@ class TestScrapingE2E(unittest.TestCase):
 
     def _get_scraping_status(self, scraping_id: int) -> dict:
         """Gets the status of a scraping job."""
-        response = self.session.get(
-            f"{API_URL}/scrape", params={"scraping_id": scraping_id}, timeout=5
-        )
+        response = self.session.get(f"{API_URL}/scraping/{scraping_id}", timeout=5)
         self.assertEqual(
             response.status_code, 200, f"Failed to get status: {response.text}"
         )
         return cast(dict[Any, Any], response.json())
+
+    def _check_search_persistence(self, term: str) -> bool:
+        """Polls specifically for the presence of a term in the search results."""
+        for _ in range(60):
+            try:
+                response = self.session.get(f"{API_URL}/search?t={term}", timeout=5)
+                if response.status_code == 200:
+                    results = response.json().get("results", [])
+                    if len(results) > 0:
+                        return True
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                print(f"Error checking search: {e}")
+            time.sleep(1)
+        return False
 
     def _poll_scraping_completion(
         self, scraping_id: int, timeout_seconds: int = MAX_TIMEOUT_SECONDS
@@ -179,9 +191,10 @@ class TestScrapingE2E(unittest.TestCase):
         for _ in range(timeout_seconds):
             time.sleep(1)
             status_data = self._get_scraping_status(scraping_id)
-            final_status = status_data.get("status")
+            scraping_data = status_data.get("scraping", {})
+            final_status = scraping_data.get("status")
             if final_status == "COMPLETED":
-                results = status_data.get("data", [])
+                results = scraping_data.get("pages", [])
                 break
 
         self.assertEqual(
@@ -203,7 +216,7 @@ class TestScrapingE2E(unittest.TestCase):
         for _ in range(60):
             try:
                 status_data = self._get_scraping_status(scraping_id)
-                results = status_data.get("data", [])
+                results = status_data.get("scraping", {}).get("pages", [])
                 if self._is_image_found(results):
                     return True
             except Exception as e:  # pylint: disable=broad-exception-caught
@@ -223,10 +236,13 @@ class TestScrapingE2E(unittest.TestCase):
         # 2. Poll for Completion
         results = self._poll_scraping_completion(scraping_id)
 
-        # 3. Check Terms
+        # 3. Check Terms via Search
         self.assertTrue(len(results) > 0, "No pages returned.")
-        found_terms = any(page.get("terms") for page in results)
-        self.assertTrue(found_terms, "No terms found in results.")
+        search_term = "LocalStack"
+        found_in_search = self._check_search_persistence(search_term)
+        self.assertTrue(
+            found_in_search, f"Term '{search_term}' not found in search results."
+        )
 
         # 4. Check Images
         if IMAGE_EXPLAINER_ENABLED:
@@ -249,7 +265,7 @@ class TestScrapingE2E(unittest.TestCase):
         for _ in range(60):
             try:
                 status_data = self._get_scraping_status(scraping_id)
-                results = status_data.get("data", [])
+                results = status_data.get("scraping", {}).get("pages", [])
                 found_summary = any(
                     page.get("summary") and "Mocked summary" in page.get("summary")
                     for page in results
@@ -355,7 +371,7 @@ class TestScrapingE2E(unittest.TestCase):
         self._poll_scraping_completion(scraping_id)
 
         # 3. Trigger Deletion
-        response = self.session.delete(f"{API_URL}/scrapings/{scraping_id}", timeout=5)
+        response = self.session.delete(f"{API_URL}/scraping/{scraping_id}", timeout=5)
         self.assertEqual(
             response.status_code, 200, f"Failed to delete scraping: {response.text}"
         )
@@ -363,9 +379,7 @@ class TestScrapingE2E(unittest.TestCase):
 
         # 4. Verify Deletion (Poll API until 404)
         for _ in range(300):
-            response = self.session.get(
-                f"{API_URL}/scrape", params={"scraping_id": scraping_id}, timeout=5
-            )
+            response = self.session.get(f"{API_URL}/scraping/{scraping_id}", timeout=5)
             if response.status_code == 404:
                 print("API returned 404. Scraping deleted from relational DB.")
                 break

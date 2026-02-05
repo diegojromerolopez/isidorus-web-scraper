@@ -1,4 +1,4 @@
-from typing import Any
+from typing import TypedDict
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,14 +8,17 @@ from tortoise.contrib.fastapi import register_tortoise  # pylint: disable=import
 from api.config import Configuration
 from api.dependencies import (
     get_api_key,
-    get_db_repository,
-    get_db_service,
     get_scraper_service,
+    get_search_service,
 )
 from api.models import APIKey
-from api.repositories.db_repository import DbRepository
-from api.services.db_service import DbService
-from api.services.scraper_service import ScraperService
+from api.services.scraper_service import (
+    FullScrapingRecord,
+    NotAuthorizedError,
+    ScraperService,
+    ScrapingNotFoundError,
+)
+from api.services.search_service import SearchPageResult, SearchService
 
 app = FastAPI()
 app.add_middleware(
@@ -36,17 +39,48 @@ class ScrapeRequest(BaseModel):
     depth: int = 1
 
 
+class MessageResponse(TypedDict):
+    message: str
+
+
+class ScrapingsMeta(TypedDict):
+    page: int
+    size: int
+    total: int
+
+
+class ScrapingsResponse(TypedDict):
+    scrapings: list[FullScrapingRecord]
+    meta: ScrapingsMeta
+
+
+class SearchResponse(TypedDict):
+    results: list[SearchPageResult]
+
+
+class StatusResponse(TypedDict):
+    status: str
+
+
+class ScrapeResponse(TypedDict):
+    scraping_id: int
+
+
+class ScrapingResponse(TypedDict):
+    scraping: FullScrapingRecord
+
+
 @app.get("/health")
-async def health_check() -> dict[str, str]:
+async def health_check() -> StatusResponse:
     return {"status": "ok"}
 
 
-@app.post("/scrape", response_model=dict[str, int])
-async def start_scrape(
+@app.post("/scrape")
+async def scrape(
     request: ScrapeRequest,
     scraper_service: ScraperService = Depends(get_scraper_service),
     _api_key: APIKey = Depends(get_api_key),
-) -> dict[str, int]:
+) -> ScrapeResponse:
     try:
         # Extract user_id from the APIKey dependency
         user_id = _api_key.user_id if _api_key else None
@@ -54,28 +88,29 @@ async def start_scrape(
             request.url, request.depth, user_id
         )
         return {"scraping_id": scraping_id}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@app.get("/scrape")
-async def get_scrape_status(
+@app.get("/scraping/{scraping_id}")
+async def scraping(
     scraping_id: int,
     service: ScraperService = Depends(get_scraper_service),
     _api_key: APIKey = Depends(get_api_key),
-) -> dict[str, Any]:
+) -> ScrapingResponse:
     try:
-        status = await service.get_scraping_status(scraping_id)
-        if not status:
+        full_scraping = await service.get_full_scraping(scraping_id)
+        if not full_scraping:
             raise HTTPException(status_code=404, detail="Scraping not found")
 
-        response = {"status": status["status"], "scraping": status}
+        pages = []
+        if full_scraping["status"] == "COMPLETED":
+            pages = await service.get_scraping_results(scraping_id)
 
-        if status["status"] == "COMPLETED":
-            results = await service.get_scraping_results(scraping_id)
-            response["data"] = results
-
-        return response
+        full_scraping["pages"] = pages
+        return {"scraping": full_scraping}
     except HTTPException:
         raise
     except Exception as e:
@@ -83,12 +118,12 @@ async def get_scrape_status(
 
 
 @app.get("/scrapings")
-async def list_scrapings(
+async def scrapings(
     page: int = 1,
     size: int = 10,
-    service: DbService = Depends(get_db_service),
+    service: ScraperService = Depends(get_scraper_service),
     _api_key: APIKey = Depends(get_api_key),
-) -> dict[str, Any]:
+) -> ScrapingsResponse:
     """
     List scrapings for the authenticated user.
     """
@@ -98,13 +133,15 @@ async def list_scrapings(
 
     try:
         offset = (page - 1) * size
-        scrapings, total = await service.get_scrapings(
+        full_scrapings, total = await service.get_full_scrapings(
             user_id=_api_key.user_id, offset=offset, limit=size
         )
         return {
-            "data": scrapings,
+            "scrapings": full_scrapings,
             "meta": {"page": page, "size": size, "total": total},
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -112,31 +149,17 @@ async def list_scrapings(
 @app.get("/search")
 async def search(
     t: str,
-    service: DbService = Depends(get_db_service),
     _api_key: APIKey = Depends(get_api_key),
-) -> dict[str, list[str]]:
+    search_service: SearchService = Depends(get_search_service),
+) -> SearchResponse:
     if not t:
-        raise HTTPException(status_code=400, detail="Term 't' is required")
+        raise HTTPException(status_code=400, detail="Search term 't' is required")
 
     try:
-        results = await service.search_websites(t)
-        return {"websites": results}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@app.get("/terms")
-async def terms(
-    w: str,
-    service: DbService = Depends(get_db_service),
-    _api_key: APIKey = Depends(get_api_key),
-) -> dict[str, list[dict[str, Any]]]:
-    if not w:
-        raise HTTPException(status_code=400, detail="Website 'w' is required")
-
-    try:
-        results = await service.get_website_terms(w)
-        return {"terms": results}
+        results = await search_service.search_pages(t, _api_key.user_id)
+        return {"results": results}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -161,29 +184,26 @@ def setup_database(application: FastAPI) -> None:
 setup_database(app)
 
 
-@app.delete("/scrapings/{scraping_id}")
+@app.delete("/scraping/{scraping_id}")
 async def delete_scraping(
     scraping_id: int,
     service: ScraperService = Depends(get_scraper_service),
-    db_repository: DbRepository = Depends(get_db_repository),
     _api_key: APIKey = Depends(get_api_key),
-) -> dict[str, str]:
+) -> MessageResponse:
     """
     Deletes a scraping job.
-    Sends a message to the Deletion worker to handle clean up asynchronously.
+    Delegates existence and ownership checks to the ScraperService.
     """
-    scraping = await db_repository.get_scraping(scraping_id)
-    if not scraping:
-        raise HTTPException(status_code=404, detail="Scraping not found")
-
-    if scraping["user_id"] != _api_key.user_id:
-        raise HTTPException(
-            status_code=403, detail="Not authorized to delete this scraping"
-        )
-
-    # Orchestrate deletion via Deletion worker
-    success = await service.enqueue_deletion(scraping_id)
-    if not success:
-        raise HTTPException(status_code=500, detail="Failed to enqueue deletion")
-
-    return {"message": "Scraping deletion enqueued"}
+    try:
+        success = await service.delete_scraping(scraping_id, _api_key.user_id)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to enqueue deletion")
+        return {"message": "Scraping deletion enqueued"}
+    except ScrapingNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except NotAuthorizedError as e:
+        raise HTTPException(status_code=403, detail=str(e)) from e
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e

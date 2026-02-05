@@ -1,6 +1,8 @@
 import logging
 from typing import Any
 
+from opensearchpy import AsyncOpenSearch
+
 from api import models as api_models
 from api.clients.dynamodb_client import DynamoDBClient
 from shared.clients.s3_client import S3Client
@@ -13,12 +15,14 @@ class DeletionService:  # pylint: disable=too-few-public-methods
         self,
         dynamodb_client: DynamoDBClient,
         s3_client: S3Client,
+        os_client: AsyncOpenSearch,
         images_bucket: str,
         batch_size: int = 5000,
         s3_batch_size: int = 1000,
     ):
         self.__dynamodb_client = dynamodb_client
         self.__s3_client = s3_client
+        self.__os_client = os_client
         self.__images_bucket = images_bucket
         self.__batch_size = batch_size
         self.__s3_batch_size = s3_batch_size
@@ -33,7 +37,10 @@ class DeletionService:  # pylint: disable=too-few-public-methods
             # 1. Delete S3 Objects first (we need the paths from DB)
             await self.__cleanup_s3_objects(scraping_id)
 
-            # 2. Delete Relational Data in batches
+            # 2. Delete OpenSearch Data
+            await self.__cleanup_opensearch_data(scraping_id)
+
+            # 3. Delete Relational Data in batches
             await self.__cleanup_relational_data(scraping_id)
 
             # 3. Delete from DynamoDB
@@ -90,9 +97,6 @@ class DeletionService:  # pylint: disable=too-few-public-methods
         # Order of deletion is important for foreign keys if not cascaded,
         # but here we use manual batching for performance.
 
-        # 1. Delete PageTerms
-        await self.__batch_delete(api_models.PageTerm, scraping_id)
-
         # 2. Delete PageLinks
         await self.__batch_delete(api_models.PageLink, scraping_id)
 
@@ -123,3 +127,24 @@ class DeletionService:  # pylint: disable=too-few-public-methods
             if len(ids) < self.__batch_size:
                 break
             # We don't need offset because records are being deleted
+
+    async def __cleanup_opensearch_data(self, scraping_id: int) -> None:
+        """
+        Deletes documents from OpenSearch associated with the scraping.
+        """
+        logger.info("Cleaning up OpenSearch for scraping_id: %s", scraping_id)
+        try:
+            query = {"query": {"term": {"scraping_id": scraping_id}}}
+            await self.__os_client.delete_by_query(
+                index="scraped_pages",
+                body=query,
+                wait_for_completion=True,
+                refresh=True,
+            )
+            logger.info("OpenSearch cleanup finished for scraping_id: %s", scraping_id)
+        except Exception as e:
+            # We log but don't fail the whole cleanup if OpenSearch fails
+            # This is to avoid leaving inconsistent state in DB/S3
+            logger.error(
+                "Failed to cleanup OpenSearch for scraping_id %s: %s", scraping_id, e
+            )

@@ -1,6 +1,10 @@
 # TODO
 docs/todo/
 
+# Coverage
+coverage.out
+frontend/coverage/
+
 # Python
 __pycache__/
 *.py[cod]

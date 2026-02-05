@@ -20,6 +20,7 @@ type DBRepository interface {
 type JobStatusRepository interface {
 	UpdateJobStatus(ctx context.Context, jobID string, status string) error
 	UpdateJobStatusFull(ctx context.Context, jobID string, status string, completedAt string) error
+	IncrementLinkCount(ctx context.Context, jobID string, increment int) error
 }
 
 type WriterService struct {
@@ -51,7 +52,15 @@ func (s *WriterService) ProcessMessage(msg domain.WriterMessage) error {
 	ctx := context.Background()
 
 	if msg.Type == domain.MsgTypePageData {
+		log.Printf("Writer: Processing PageData for job %d, URL %s", msg.ScrapingID, msg.URL)
 		err = s.dbRepo.InsertPageData(msg)
+		if err == nil && s.statusRepo != nil && len(msg.Links) > 0 {
+			jobID := strconv.Itoa(msg.ScrapingID)
+			log.Printf("Writer: Incrementing links_count for job %s by %d", jobID, len(msg.Links))
+			if lErr := s.statusRepo.IncrementLinkCount(ctx, jobID, len(msg.Links)); lErr != nil {
+				log.Printf("Error incrementing link count for job %s: %v", jobID, lErr)
+			}
+		}
 	} else if msg.Type == domain.MsgTypeImageExplanation {
 		err = s.dbRepo.InsertImageExplanation(msg)
 	} else if msg.Type == domain.MsgTypePageSummary {

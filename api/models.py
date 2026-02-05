@@ -24,21 +24,6 @@ class ScrapedPage(models.Model):
         table = "scraped_pages"
 
 
-class PageTerm(models.Model):
-    id = fields.IntField(pk=True)
-    scraping = fields.ForeignKeyField(
-        "models.Scraping", related_name="terms", source_field="scraping_id"
-    )
-    page = fields.ForeignKeyField(
-        "models.ScrapedPage", related_name="terms", source_field="page_id"
-    )
-    term = fields.TextField()
-    frequency = fields.IntField(default=1)
-
-    class Meta:
-        table = "page_terms"
-
-
 class PageLink(models.Model):
     id = fields.IntField(pk=True)
     scraping = fields.ForeignKeyField(

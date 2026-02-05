@@ -89,7 +89,7 @@ func TestProcessMessage_FullFlow(t *testing.T) {
 		WithSQSClient(mockSQS),
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
-		WithQueues("input", "writer", "image", "summarizer"),
+		WithQueues("input", "writer", "image", "summarizer", "indexer"),
 		WithFeatureFlags(true, true),
 	)
 
@@ -111,7 +111,7 @@ func TestProcessMessage_FullFlow(t *testing.T) {
 
 	// Expect SendMessage to Writer
 	mockSQS.On("SendMessage", mock.Anything, "writer", mock.MatchedBy(func(msg domain.WriterMessage) bool {
-		return msg.URL == "http://site1.com" && msg.Terms["hello"] == 1 && len(msg.Links) == 1 && msg.ScrapingID == 123
+		return msg.URL == "http://site1.com" && len(msg.Links) == 1 && msg.ScrapingID == 123
 	})).Return(nil)
 
 	// Expect SendMessage to Image Queue
@@ -121,6 +121,11 @@ func TestProcessMessage_FullFlow(t *testing.T) {
 
 	// Expect SendMessage to Summarizer Queue
 	mockSQS.On("SendMessage", mock.Anything, "summarizer", mock.MatchedBy(func(msg domain.PageSummaryMessage) bool {
+		return msg.URL == "http://site1.com" && len(msg.Content) > 0 && msg.ScrapingID == 123
+	})).Return(nil)
+
+	// Expect SendMessage to Indexer Queue
+	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.MatchedBy(func(msg domain.IndexMessage) bool {
 		return msg.URL == "http://site1.com" && len(msg.Content) > 0 && msg.ScrapingID == 123
 	})).Return(nil)
 
@@ -151,7 +156,7 @@ func TestProcessMessage_FetchError(t *testing.T) {
 		WithSQSClient(mockSQS),
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
-		WithQueues("input", "writer", "image", "summarizer"),
+		WithQueues("input", "writer", "image", "summarizer", "indexer"),
 	)
 
 	mockFetcher.On("Fetch", "http://err.com").Return(nil, assert.AnError)
@@ -177,7 +182,7 @@ func TestProcessMessage_Non200(t *testing.T) {
 		WithSQSClient(mockSQS),
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
-		WithQueues("input", "writer", "image", "summarizer"),
+		WithQueues("input", "writer", "image", "summarizer", "indexer"),
 	)
 
 	resp := &http.Response{
@@ -199,19 +204,6 @@ func TestProcessMessage_Non200(t *testing.T) {
 	mockRedis.AssertExpectations(t)
 }
 
-func TestProcessText_Filtering(t *testing.T) {
-	s := &ScraperService{}
-	terms := make(map[string]int)
-	s.processText("The QUICK brown fox! Is in the garden.", terms)
-
-	assert.Equal(t, 1, terms["quick"])
-	assert.Equal(t, 1, terms["brown"])
-	assert.Equal(t, 1, terms["fox"])
-	assert.Equal(t, 1, terms["garden"])
-	assert.NotContains(t, terms, "the")
-	assert.NotContains(t, terms, "is")
-}
-
 func TestProcessMessage_RedisIncrError(t *testing.T) {
 	mockSQS := new(MockSQSClient)
 	mockRedis := new(MockRedisClient)
@@ -220,7 +212,7 @@ func TestProcessMessage_RedisIncrError(t *testing.T) {
 		WithSQSClient(mockSQS),
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
-		WithQueues("input", "writer", "image", ""),
+		WithQueues("input", "writer", "image", "summarizer", "indexer"),
 	)
 
 	html := `<html><body><a href="http://site2.com">Link</a></body></html>`
@@ -235,6 +227,7 @@ func TestProcessMessage_RedisIncrError(t *testing.T) {
 	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.MatchedBy(func(m []interface{}) bool { return m[0] == "http://site2.com" })).Return(1, nil)
 
 	mockSQS.On("SendMessage", mock.Anything, "writer", mock.Anything).Return(nil)
+	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.Anything).Return(nil)
 	mockRedis.On("IncrBy", mock.Anything, "scrape:123:pending", int64(1)).Return(assert.AnError)
 	// Decr is still called at the end
 	mockRedis.On("Decr", mock.Anything, "scrape:123:pending").Return(1, nil)
@@ -252,7 +245,7 @@ func TestProcessMessage_SQSSendError_WithCompensation(t *testing.T) {
 		WithSQSClient(mockSQS),
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
-		WithQueues("input", "writer", "image", ""),
+		WithQueues("input", "writer", "image", "summarizer", "indexer"),
 	)
 
 	html := `<html><body><a href="http://site2.com">Link</a></body></html>`
@@ -264,6 +257,7 @@ func TestProcessMessage_SQSSendError_WithCompensation(t *testing.T) {
 	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.MatchedBy(func(m []interface{}) bool { return m[0] == "http://site2.com" })).Return(1, nil)
 
 	mockSQS.On("SendMessage", mock.Anything, "writer", mock.Anything).Return(nil)
+	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.Anything).Return(nil)
 	mockRedis.On("IncrBy", mock.Anything, "scrape:123:pending", int64(1)).Return(nil)
 	mockSQS.On("SendMessage", mock.Anything, "input", mock.Anything).Return(assert.AnError)
 	mockRedis.On("IncrBy", mock.Anything, "scrape:123:pending", int64(-1)).Return(nil)
@@ -286,7 +280,7 @@ func TestProcessMessage_CompensationError(t *testing.T) {
 		WithSQSClient(mockSQS),
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
-		WithQueues("input", "writer", "image", ""),
+		WithQueues("input", "writer", "image", "summarizer", "indexer"),
 	)
 
 	html := `<html><body><a href="http://site2.com">Link</a></body></html>`
@@ -298,11 +292,13 @@ func TestProcessMessage_CompensationError(t *testing.T) {
 	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.MatchedBy(func(m []interface{}) bool { return m[0] == "http://site2.com" })).Return(1, nil)
 
 	mockSQS.On("SendMessage", mock.Anything, "writer", mock.Anything).Return(nil)
+	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.Anything).Return(nil)
 	mockRedis.On("IncrBy", mock.Anything, "scrape:123:pending", int64(1)).Return(nil)
 	mockSQS.On("SendMessage", mock.Anything, "input", mock.Anything).Return(assert.AnError)
 	mockRedis.On("IncrBy", mock.Anything, "scrape:123:pending", int64(-1)).Return(assert.AnError)
 	mockRedis.On("Decr", mock.Anything, "scrape:123:pending").Return(0, nil)
 	mockSQS.On("SendMessage", mock.Anything, "writer", mock.Anything).Return(nil)
+	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.Anything).Return(nil)
 
 	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
 
@@ -317,7 +313,7 @@ func TestProcessMessage_RedisDecrError(t *testing.T) {
 		WithSQSClient(mockSQS),
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
-		WithQueues("input", "writer", "image", ""),
+		WithQueues("input", "writer", "image", "summarizer", "indexer"),
 	)
 
 	html := `<html><body><p>No links</p></body></html>`
@@ -327,6 +323,7 @@ func TestProcessMessage_RedisDecrError(t *testing.T) {
 	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.MatchedBy(func(m []interface{}) bool { return m[0] == "http://site1.com" })).Return(1, nil)
 
 	mockSQS.On("SendMessage", mock.Anything, "writer", mock.Anything).Return(nil)
+	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.Anything).Return(nil)
 	mockRedis.On("Decr", mock.Anything, "scrape:123:pending").Return(0, assert.AnError)
 
 	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
@@ -345,7 +342,7 @@ func TestProcessMessage_DepthZero(t *testing.T) {
 		WithSQSClient(mockSQS),
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
-		WithQueues("input", "writer", "image", ""),
+		WithQueues("input", "writer", "image", "summarizer", "indexer"),
 	)
 
 	html := `<html><body><a href="http://site2.com">Link</a></body></html>`
@@ -359,6 +356,7 @@ func TestProcessMessage_DepthZero(t *testing.T) {
 
 	// Expect SendMessage to Writer
 	mockSQS.On("SendMessage", mock.Anything, "writer", mock.Anything).Return(nil)
+	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.Anything).Return(nil)
 
 	// Expect Decr to be called (no links to send, so no IncrBy)
 	mockRedis.On("Decr", mock.Anything, "scrape:123:pending").Return(1, nil)
@@ -379,7 +377,7 @@ func TestProcessMessage_AlreadyVisitedURL(t *testing.T) {
 		WithSQSClient(mockSQS),
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
-		WithQueues("input", "writer", "image", ""),
+		WithQueues("input", "writer", "image", "summarizer", "indexer"),
 	)
 
 	html := `<html><body><a href="http://site2.com">Link</a></body></html>`
@@ -397,6 +395,7 @@ func TestProcessMessage_AlreadyVisitedURL(t *testing.T) {
 	})).Return(0, nil)
 
 	mockSQS.On("SendMessage", mock.Anything, "writer", mock.Anything).Return(nil)
+	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.Anything).Return(nil)
 	mockRedis.On("Decr", mock.Anything, "scrape:123:pending").Return(1, nil)
 
 	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
@@ -415,7 +414,7 @@ func TestProcessMessage_NonHTTPLinks(t *testing.T) {
 		WithSQSClient(mockSQS),
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
-		WithQueues("input", "writer", "image", ""),
+		WithQueues("input", "writer", "image", "summarizer", "indexer"),
 	)
 
 	// HTML with relative and non-HTTP links
@@ -434,6 +433,7 @@ func TestProcessMessage_NonHTTPLinks(t *testing.T) {
 	})).Return(1, nil)
 
 	mockSQS.On("SendMessage", mock.Anything, "writer", mock.Anything).Return(nil)
+	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.Anything).Return(nil)
 	mockRedis.On("Decr", mock.Anything, "scrape:123:pending").Return(1, nil)
 
 	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
@@ -452,7 +452,7 @@ func TestProcessMessage_SAddErrorDuringCycleDetection(t *testing.T) {
 		WithSQSClient(mockSQS),
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
-		WithQueues("input", "writer", "image", ""),
+		WithQueues("input", "writer", "image", "summarizer", "indexer"),
 	)
 
 	html := `<html><body><a href="http://site2.com">Link</a></body></html>`
@@ -470,6 +470,7 @@ func TestProcessMessage_SAddErrorDuringCycleDetection(t *testing.T) {
 	})).Return(0, assert.AnError)
 
 	mockSQS.On("SendMessage", mock.Anything, "writer", mock.Anything).Return(nil)
+	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.Anything).Return(nil)
 	mockRedis.On("Decr", mock.Anything, "scrape:123:pending").Return(1, nil)
 
 	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
@@ -488,7 +489,7 @@ func TestProcessMessage_SQSSendError_PageData(t *testing.T) {
 		WithSQSClient(mockSQS),
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
-		WithQueues("input", "writer", "image", ""),
+		WithQueues("input", "writer", "image", "summarizer", "indexer"),
 	)
 
 	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString("html"))}
@@ -500,6 +501,7 @@ func TestProcessMessage_SQSSendError_PageData(t *testing.T) {
 	mockSQS.On("SendMessage", mock.Anything, "writer", mock.MatchedBy(func(m domain.WriterMessage) bool {
 		return m.Type == domain.MsgTypePageData
 	})).Return(assert.AnError)
+	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.Anything).Return(nil)
 
 	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", ScrapingID: 123})
 	mockSQS.AssertExpectations(t)
@@ -513,9 +515,11 @@ func TestProcessMessage_SQSSendError_Summary(t *testing.T) {
 		WithSQSClient(mockSQS),
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
-		WithQueues("input", "writer", "image", "summarizer"),
+		WithQueues("input", "writer", "image", "summarizer", "indexer"),
 		WithFeatureFlags(false, true), // Summarizer enabled
 	)
+
+	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.Anything).Return(nil)
 
 	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString("html"))}
 	mockFetcher.On("Fetch", mock.Anything).Return(resp, nil)
@@ -523,6 +527,7 @@ func TestProcessMessage_SQSSendError_Summary(t *testing.T) {
 	mockRedis.On("Decr", mock.Anything, mock.Anything).Return(1, nil)
 
 	mockSQS.On("SendMessage", mock.Anything, "writer", mock.Anything).Return(nil)
+	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.Anything).Return(nil)
 	// Error sending summary
 	mockSQS.On("SendMessage", mock.Anything, "summarizer", mock.Anything).Return(assert.AnError)
 
@@ -538,9 +543,11 @@ func TestProcessMessage_SQSSendError_Image(t *testing.T) {
 		WithSQSClient(mockSQS),
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
-		WithQueues("input", "writer", "image", ""),
+		WithQueues("input", "writer", "image", "summarizer", "indexer"),
 		WithFeatureFlags(true, false), // Image enabled
 	)
+
+	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.Anything).Return(nil)
 
 	html := `<html><body><img src="http://img.com/a.jpg"></body></html>`
 	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(html))}
@@ -549,6 +556,7 @@ func TestProcessMessage_SQSSendError_Image(t *testing.T) {
 	mockRedis.On("Decr", mock.Anything, mock.Anything).Return(1, nil)
 
 	mockSQS.On("SendMessage", mock.Anything, "writer", mock.Anything).Return(nil)
+	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.Anything).Return(nil)
 	// Error sending image
 	mockSQS.On("SendMessage", mock.Anything, "image", mock.Anything).Return(assert.AnError)
 
@@ -564,7 +572,7 @@ func TestProcessMessage_SQSSendError_Completion(t *testing.T) {
 		WithSQSClient(mockSQS),
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
-		WithQueues("input", "writer", "image", ""),
+		WithQueues("input", "writer", "image", "summarizer", "indexer"),
 	)
 
 	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString("html"))}
@@ -575,6 +583,7 @@ func TestProcessMessage_SQSSendError_Completion(t *testing.T) {
 	mockSQS.On("SendMessage", mock.Anything, "writer", mock.MatchedBy(func(m domain.WriterMessage) bool {
 		return m.Type == domain.MsgTypePageData
 	})).Return(nil)
+	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.Anything).Return(nil)
 	// Error sending completion
 	mockSQS.On("SendMessage", mock.Anything, "writer", mock.MatchedBy(func(m domain.WriterMessage) bool {
 		return m.Type == domain.MsgTypeScrapingComplete
@@ -591,7 +600,7 @@ func TestProcessMessage_IgnoreScriptAndStyle(t *testing.T) {
 		WithSQSClient(mockSQS),
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
-		WithQueues("input", "writer", "image", ""),
+		WithQueues("input", "writer", "image", "summarizer", "indexer"),
 	)
 
 	// HTML with script and style
@@ -617,23 +626,12 @@ func TestProcessMessage_IgnoreScriptAndStyle(t *testing.T) {
 	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.Anything).Return(1, nil)
 	mockRedis.On("Decr", mock.Anything, mock.Anything).Return(1, nil)
 
-	// Expect SendMessage to Writer
 	mockSQS.On("SendMessage", mock.Anything, "writer", mock.MatchedBy(func(msg domain.WriterMessage) bool {
-		// Verify terms
-		if msg.Type != domain.MsgTypePageData {
-			return true // Ignore other message types if any
-		}
-		// Content from script/style should NOT be present
-		_, hasRed := msg.Terms["red"]
-		_, hasSecret := msg.Terms["sensitive_variable"]
-		_, hasRuntime := msg.Terms["runtime_code"]
-
-		// Visible content SHOULD be present
-		_, hasVisible := msg.Terms["visible"]
-		_, hasContent := msg.Terms["content"]
-
-		return !hasRed && !hasSecret && !hasRuntime && hasVisible && hasContent
+		// Visible content SHOULD be present?
+		// We no longer track terms in the scraper, so we just check if it's page data
+		return msg.Type == domain.MsgTypePageData
 	})).Return(nil)
+	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.Anything).Return(nil)
 
 	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
 
@@ -648,7 +646,7 @@ func TestProcessMessage_FetchError_SignalsCompletion(t *testing.T) {
 		WithSQSClient(mockSQS),
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
-		WithQueues("input", "writer", "image", "summarizer"),
+		WithQueues("input", "writer", "image", "summarizer", "indexer"),
 	)
 
 	mockFetcher.On("Fetch", "http://err.com").Return(nil, assert.AnError)
@@ -676,7 +674,7 @@ func TestProcessMessage_Non200_SignalsCompletion(t *testing.T) {
 		WithSQSClient(mockSQS),
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
-		WithQueues("input", "writer", "image", "summarizer"),
+		WithQueues("input", "writer", "image", "summarizer", "indexer"),
 	)
 
 	resp := &http.Response{

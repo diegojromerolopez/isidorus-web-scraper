@@ -35,23 +35,6 @@ func (repo *PostgresDBRepository) InsertPageData(msg domain.WriterMessage) error
 		return fmt.Errorf("failed to insert scraped page for URL %s: %w", msg.URL, err)
 	}
 
-	// Insert Page Terms (Batch)
-	if len(msg.Terms) > 0 {
-		var terms []models.PageTerm
-		for term, freq := range msg.Terms {
-			terms = append(terms, models.PageTerm{
-				ScrapingID: msg.ScrapingID,
-				PageID:     page.ID,
-				Term:       term,
-				Frequency:  freq,
-			})
-		}
-
-		if err := repo.db.CreateInBatches(terms, repo.batchSize).Error; err != nil {
-			log.Printf("Error batch inserting terms for page %d: %v", page.ID, err)
-		}
-	}
-
 	// Insert Page Links (Batch)
 	if len(msg.Links) > 0 {
 		var links []models.PageLink

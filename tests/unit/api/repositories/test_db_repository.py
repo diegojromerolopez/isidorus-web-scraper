@@ -8,53 +8,6 @@ class TestDbRepository(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self.repo = DbRepository()
 
-    @patch("api.models.ScrapedPage.filter")
-    async def test_find_websites_by_term(self, mock_filter: MagicMock) -> None:
-        # filter(...).distinct().values_list(...)
-        mock_qs = MagicMock()
-        mock_filter.return_value = mock_qs
-        mock_distinct = MagicMock()
-        mock_qs.distinct.return_value = mock_distinct
-
-        # values_list should be awaited?
-        # In Tortoise, filter() returns QuerySet. Await happens on execution
-        # method or await queryset. But values_list() returns ValuesListQuery
-        # which is awaitable. So we mock the return of values_list logic.
-
-        # Actually repo code: await models.ScrapedPage.filter(
-        # terms__term=term).distinct().values_list("url", flat=True)
-        # So values_list returns an awaitable that yields result.
-
-        mock_distinct.values_list = AsyncMock(
-            return_value=["http://site1.com", "http://site2.com"]
-        )
-
-        websites = await self.repo.find_websites_by_term("test")
-
-        self.assertEqual(len(websites), 2)
-        self.assertEqual(websites[0], "http://site1.com")
-        mock_filter.assert_called_once_with(terms__term="test")
-
-    @patch("api.models.PageTerm.filter")
-    async def test_find_terms_by_website(self, mock_filter: MagicMock) -> None:
-        # await models.PageTerm.filter(...).values("term", "frequency")
-        mock_qs = MagicMock()
-        mock_filter.return_value = mock_qs
-
-        mock_qs.values = AsyncMock(
-            return_value=[
-                {"term": "term1", "frequency": 5},
-                {"term": "term2", "frequency": 3},
-            ]
-        )
-
-        terms = await self.repo.find_terms_by_website("http://site.com")
-
-        self.assertEqual(len(terms), 2)
-        self.assertEqual(terms[0]["term"], "term1")
-        self.assertEqual(terms[0]["occurrence"], 5)
-        mock_filter.assert_called_once_with(page__url="http://site.com")
-
     @patch("api.models.Scraping.create", new_callable=AsyncMock)
     async def test_create_scraping(self, mock_create: AsyncMock) -> None:
         mock_scraping = MagicMock()
@@ -107,28 +60,15 @@ class TestDbRepository(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(result)
 
     @patch("api.models.ScrapedPage.filter")
-    async def test_get_scrape_results(self, mock_filter: MagicMock) -> None:
-        # await models.ScrapedPage.filter(...).order_by(...).prefetch_related(...)
-        # Code: pages = await models.ScrapedPage.filter(
-        # scraping_id=scraping_id).order_by("url").prefetch_related("terms")
-        # filter -> queryset
-        # order_by -> queryset
-        # prefetch_related -> queryset (awaitable)
-
+    async def test_get_scraping_results(self, mock_filter: MagicMock) -> None:
         mock_qs = MagicMock()
         mock_filter.return_value = mock_qs
         mock_order = MagicMock()
         mock_qs.order_by.return_value = mock_order
 
-        # prefetch_related is awaited.
-
         page1 = MagicMock()
         page1.url = "http://site1.com"
-        term1 = MagicMock()
-        term1.term = "t1"
-        term1.frequency = 10
-        page1.terms = [term1]
-
+        page1.summary = "sum"
         image1 = MagicMock()
         image1.image_url = "http://img.com"
         image1.explanation = "desc"
@@ -137,11 +77,11 @@ class TestDbRepository(unittest.IsolatedAsyncioTestCase):
         # prefetch_related is awaited and returns the list of pages
         mock_order.prefetch_related = AsyncMock(return_value=[page1])
 
-        results = await self.repo.get_scrape_results(123)
+        results = await self.repo.get_scraping_results(123)
 
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["url"], "http://site1.com")
-        self.assertEqual(results[0]["terms"][0]["term"], "t1")
+        self.assertEqual(results[0]["summary"], "sum")
         self.assertEqual(results[0]["images"][0]["url"], "http://img.com")
 
         mock_filter.assert_called_once_with(scraping_id=123)

@@ -26,6 +26,7 @@ async def main() -> None:
     summarizer_service = SummarizerService(
         sqs_client=sqs_client,
         writer_queue_url=config.writer_queue_url,
+        indexer_queue_url=config.indexer_queue_url,
         llm_provider=config.llm_provider,
         llm_api_key=config.llm_api_key,
     )

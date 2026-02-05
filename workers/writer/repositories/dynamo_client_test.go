@@ -87,3 +87,35 @@ func TestUpdateJobStatusFull_Error(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to update job status full")
 }
+
+func TestIncrementLinkCount_NoTable(t *testing.T) {
+	client := NewDynamoDBClient(nil, "")
+	err := client.IncrementLinkCount(context.Background(), "123", 5)
+	assert.NoError(t, err)
+}
+
+func TestIncrementLinkCount_Success(t *testing.T) {
+	mockDB := new(MockDynamoDB)
+	client := NewDynamoDBClient(mockDB, "test-table")
+
+	mockDB.On("UpdateItem", mock.Anything, mock.MatchedBy(func(input *dynamodb.UpdateItemInput) bool {
+		return *input.TableName == "test-table" &&
+			input.UpdateExpression != nil &&
+			*input.UpdateExpression == "ADD links_count :inc"
+	}), mock.Anything).Return(&dynamodb.UpdateItemOutput{}, nil)
+
+	err := client.IncrementLinkCount(context.Background(), "123", 5)
+	assert.NoError(t, err)
+	mockDB.AssertExpectations(t)
+}
+
+func TestIncrementLinkCount_Error(t *testing.T) {
+	mockDB := new(MockDynamoDB)
+	client := NewDynamoDBClient(mockDB, "test-table")
+
+	mockDB.On("UpdateItem", mock.Anything, mock.Anything, mock.Anything).Return(nil, errors.New("dynamo error"))
+
+	err := client.IncrementLinkCount(context.Background(), "123", 5)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to increment link count")
+}
