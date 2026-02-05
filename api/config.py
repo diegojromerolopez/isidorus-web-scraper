@@ -1,12 +1,15 @@
 import os
 from dataclasses import dataclass
+
 from shared.config import Configuration as BaseConfiguration
+
 
 @dataclass
 class Configuration(BaseConfiguration):
     """
     API-specific configuration.
     """
+
     deletion_queue_url: str
 
     @classmethod
@@ -37,5 +40,6 @@ class Configuration(BaseConfiguration):
                 "http://localstack:4566/000000000000/deletion-queue",
             ),
         )
+
 
 __all__ = ["Configuration"]

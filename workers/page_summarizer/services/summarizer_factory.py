@@ -2,14 +2,15 @@ import logging
 import os
 from typing import Any
 
+from langchain_anthropic import ChatAnthropic  # pylint: disable=import-error
+
 # pylint: disable=import-error
 from langchain_classic.chains import load_summarize_chain  # type: ignore
-from langchain_text_splitters import RecursiveCharacterTextSplitter  # type: ignore
-from langchain_anthropic import ChatAnthropic
 from langchain_community.chat_models import ChatOllama  # type: ignore
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_huggingface import HuggingFaceEndpoint
 from langchain_openai import ChatOpenAI  # type: ignore
+from langchain_text_splitters import RecursiveCharacterTextSplitter  # type: ignore
 
 logger = logging.getLogger(__name__)
 

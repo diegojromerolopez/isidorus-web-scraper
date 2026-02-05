@@ -85,7 +85,6 @@ class TestDbRepository(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(paths, ["s3://b/k1", "s3://b/k2"])
         mock_filter.assert_called_once_with(scraping_id=123)
 
-
     @patch("api.models.Scraping.get_or_none", new_callable=AsyncMock)
     async def test_get_scraping(self, mock_get: AsyncMock) -> None:
         mock_scraping = MagicMock()

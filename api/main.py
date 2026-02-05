@@ -1,6 +1,7 @@
 from typing import Any
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from tortoise.contrib.fastapi import register_tortoise  # pylint: disable=import-error
 
@@ -17,12 +18,13 @@ from api.services.db_service import DbService
 from api.services.scraper_service import ScraperService
 
 app = FastAPI()
-
-from fastapi.middleware.cors import CORSMiddleware
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:8000", "http://localhost:8001"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:8000",
+        "http://localhost:8001",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -157,6 +159,8 @@ def setup_database(application: FastAPI) -> None:
 
 
 setup_database(app)
+
+
 @app.delete("/scrapings/{scraping_id}")
 async def delete_scraping(
     scraping_id: int,
@@ -173,7 +177,9 @@ async def delete_scraping(
         raise HTTPException(status_code=404, detail="Scraping not found")
 
     if scraping["user_id"] != _api_key.user_id:
-        raise HTTPException(status_code=403, detail="Not authorized to delete this scraping")
+        raise HTTPException(
+            status_code=403, detail="Not authorized to delete this scraping"
+        )
 
     # Orchestrate deletion via Deletion worker
     success = await service.enqueue_deletion(scraping_id)

@@ -112,7 +112,7 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 
 	// Text accumulation for summarization
 	var fullTextBuilder strings.Builder
-	
+
 	inScript := false
 	inStyle := false
 

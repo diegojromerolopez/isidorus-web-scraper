@@ -7,7 +7,7 @@ from api.repositories.db_repository import DbRepository
 
 
 class ScraperService:
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         sqs_client: SQSClient,
         redis_client: RedisClient,
@@ -72,7 +72,11 @@ class ScraperService:
             return None
 
         # 2. Get status and timestamps from DynamoDB
-        status_data = {"status": "UNKNOWN", "created_at": None, "completed_at": None}
+        status_data: dict[str, Any] = {
+            "status": "UNKNOWN",
+            "created_at": None,
+            "completed_at": None,
+        }
         if self.dynamodb_client:
             item = await self.dynamodb_client.get_item(
                 {"scraping_id": str(scraping_id)}

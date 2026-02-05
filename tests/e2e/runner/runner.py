@@ -168,7 +168,9 @@ class TestScrapingE2E(unittest.TestCase):
         )
         return cast(dict[Any, Any], response.json())
 
-    def _poll_scraping_completion(self, scraping_id: int, timeout_seconds: int = MAX_TIMEOUT_SECONDS) -> list:
+    def _poll_scraping_completion(
+        self, scraping_id: int, timeout_seconds: int = MAX_TIMEOUT_SECONDS
+    ) -> list:
         """Polls the API until the scraping job completes, returning the results."""
         final_status = None
         results = []
@@ -182,7 +184,11 @@ class TestScrapingE2E(unittest.TestCase):
                 results = status_data.get("data", [])
                 break
 
-        self.assertEqual(final_status, "COMPLETED", f"Scraping {scraping_id} timed out after {timeout_seconds}s or failed.")
+        self.assertEqual(
+            final_status,
+            "COMPLETED",
+            f"Scraping {scraping_id} timed out after {timeout_seconds}s or failed.",
+        )
         return results
 
     def _is_image_found(self, results: list) -> bool:
@@ -322,7 +328,7 @@ class TestScrapingE2E(unittest.TestCase):
                     final_status = item.get("status")
                     if final_status == "COMPLETED":
                         break
-            except Exception: # pylint: disable=broad-exception-caught
+            except Exception:  # pylint: disable=broad-exception-caught
                 pass
             time.sleep(1)
 
@@ -332,7 +338,8 @@ class TestScrapingE2E(unittest.TestCase):
         self.assertEqual(
             final_status,
             "COMPLETED",
-            f"Status in DynamoDB for {scraping_id} is {final_status}, expected COMPLETED after timeout",
+            f"Status in DynamoDB for {scraping_id} is {final_status}, "
+            f"expected COMPLETED after timeout",
         )
         print("DynamoDB Job History Test passed!")
 
@@ -349,12 +356,16 @@ class TestScrapingE2E(unittest.TestCase):
 
         # 3. Trigger Deletion
         response = self.session.delete(f"{API_URL}/scrapings/{scraping_id}", timeout=5)
-        self.assertEqual(response.status_code, 200, f"Failed to delete scraping: {response.text}")
+        self.assertEqual(
+            response.status_code, 200, f"Failed to delete scraping: {response.text}"
+        )
         print(f"Deletion triggered for ID: {scraping_id}")
 
         # 4. Verify Deletion (Poll API until 404)
         for _ in range(300):
-            response = self.session.get(f"{API_URL}/scrape", params={"scraping_id": scraping_id}, timeout=5)
+            response = self.session.get(
+                f"{API_URL}/scrape", params={"scraping_id": scraping_id}, timeout=5
+            )
             if response.status_code == 404:
                 print("API returned 404. Scraping deleted from relational DB.")
                 break
@@ -371,16 +382,16 @@ class TestScrapingE2E(unittest.TestCase):
             aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
         )
         table = dynamodb.Table("scraping_jobs")
-        
+
         # Poll DynamoDB to ensure item is gone
         for _ in range(30):
-             resp = table.get_item(Key={"scraping_id": str(scraping_id)})
-             if "Item" not in resp:
-                 print("DynamoDB item deleted.")
-                 break
-             time.sleep(1)
+            resp = table.get_item(Key={"scraping_id": str(scraping_id)})
+            if "Item" not in resp:
+                print("DynamoDB item deleted.")
+                break
+            time.sleep(1)
         else:
-             self.fail("DynamoDB item was not deleted")
+            self.fail("DynamoDB item was not deleted")
 
         print("Scraping Deletion Test passed!")
 

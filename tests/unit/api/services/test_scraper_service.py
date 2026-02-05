@@ -115,7 +115,10 @@ class TestScraperService(unittest.IsolatedAsyncioTestCase):
         mock_db_repository.get_scrape_results.return_value = expected_results
 
         service = ScraperService(
-            mock_sqs_client, mock_redis_client, mock_db_repository, deletion_queue_url="http://deletion-q"
+            mock_sqs_client,
+            mock_redis_client,
+            mock_db_repository,
+            deletion_queue_url="http://deletion-q",
         )
 
         result = await service.get_scraping_results(123)

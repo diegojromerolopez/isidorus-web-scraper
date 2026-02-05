@@ -85,4 +85,3 @@ class DynamoDBClient:
         except Exception as e:
             logger.error("Failed to delete item from DynamoDB: %s", e)
             raise e
-

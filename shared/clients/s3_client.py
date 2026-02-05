@@ -63,7 +63,7 @@ class S3Client:
             async with self.__session.client(
                 "s3",
                 endpoint_url=self.__endpoint_url,
-                region_name=self.__region,
+                region_name=self.__region_name,
                 aws_access_key_id=self.__access_key,
                 aws_secret_access_key=self.__secret_key,
             ) as client:
@@ -83,7 +83,7 @@ class S3Client:
             async with self.__session.client(
                 "s3",
                 endpoint_url=self.__endpoint_url,
-                region_name=self.__region,
+                region_name=self.__region_name,
                 aws_access_key_id=self.__access_key,
                 aws_secret_access_key=self.__secret_key,
             ) as client:
@@ -93,4 +93,3 @@ class S3Client:
         except ClientError as e:
             logger.error("Failed to batch delete from S3: %s", e)
             raise e
-

@@ -1,12 +1,12 @@
 import asyncio
 import json
 import logging
-import os
 import signal
+
 from tortoise import Tortoise
 
-from shared.clients.s3_client import S3Client
 from api.clients.dynamodb_client import DynamoDBClient
+from shared.clients.s3_client import S3Client
 from shared.clients.sqs_client import SQSClient
 from workers.deletion.config import Configuration
 from workers.deletion.services.deletion_service import DeletionService
@@ -18,13 +18,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-async def init_db(database_url: str):
+
+async def init_db(database_url: str) -> None:
     await Tortoise.init(
         db_url=database_url,
         modules={"models": ["api.models"]},
     )
 
-async def main(stop_event: asyncio.Event | None = None):
+
+async def main(stop_event: asyncio.Event | None = None) -> None:
     # Configuration
     config = Configuration.from_env()
 
@@ -68,7 +70,7 @@ async def main(stop_event: asyncio.Event | None = None):
     if stop_event is None:
         stop_event = asyncio.Event()
 
-    def signal_handler():
+    def signal_handler() -> None:
         logger.info("Shutdown signal received")
         if stop_event:
             stop_event.set()
@@ -83,15 +85,19 @@ async def main(stop_event: asyncio.Event | None = None):
 
     while not stop_event.is_set():
         try:
-            messages = await sqs_client.receive_messages(config.input_queue_url, max_messages=1, wait_time=5)
+            messages = await sqs_client.receive_messages(
+                config.input_queue_url, max_messages=1, wait_time=5
+            )
             for msg in messages:
                 try:
                     body = json.loads(msg["Body"])
                     scraping_id = body.get("scraping_id")
                     if scraping_id:
                         await deletion_service.cleanup_scraping(scraping_id)
-                    
-                    await sqs_client.delete_message(config.input_queue_url, msg["ReceiptHandle"])
+
+                    await sqs_client.delete_message(
+                        config.input_queue_url, msg["ReceiptHandle"]
+                    )
                 except Exception as e:
                     logger.error(f"Error processing message: {e}")
         except Exception as e:
@@ -100,5 +106,6 @@ async def main(stop_event: asyncio.Event | None = None):
 
     await Tortoise.close_connections()
 
-if __name__ == "__main__":
+
+if __name__ == "__main__":  # pragma: no cover
     asyncio.run(main())

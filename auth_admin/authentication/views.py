@@ -1,19 +1,21 @@
-from django.conf import settings
-from django.contrib.auth import authenticate
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import status
-import uuid
 import hashlib
 import secrets
+import uuid
+from typing import Any
+
+from django.contrib.auth import authenticate
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from .models import APIKey
 
-class LoginAPIView(APIView):
-    authentication_classes = []
-    permission_classes = []
 
-    def post(self, request):
+class LoginAPIView(APIView):
+    authentication_classes: list[Any] = []
+    permission_classes: list[Any] = []
+
+    def post(self, request: Any) -> Response:
         username = request.data.get("username")
         password = request.data.get("password")
 
@@ -35,7 +37,7 @@ class LoginAPIView(APIView):
             )
 
             return Response({"api_key": key_string}, status=status.HTTP_200_OK)
-        
+
         return Response(
             {"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED
         )

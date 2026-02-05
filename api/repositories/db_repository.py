@@ -91,6 +91,7 @@ class DbRepository:
             )
 
         return results
+
     async def get_scraping_s3_paths(self, scraping_id: int) -> list[str]:
         """
         Retrieves all S3 paths for images associated with a scraping.

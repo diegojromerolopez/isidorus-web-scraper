@@ -613,7 +613,7 @@ func TestProcessMessage_IgnoreScriptAndStyle(t *testing.T) {
 		_, hasRed := msg.Terms["red"]
 		_, hasSecret := msg.Terms["sensitive_variable"]
 		_, hasRuntime := msg.Terms["runtime_code"]
-		
+
 		// Visible content SHOULD be present
 		_, hasVisible := msg.Terms["visible"]
 		_, hasContent := msg.Terms["content"]

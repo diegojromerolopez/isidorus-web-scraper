@@ -26,7 +26,6 @@ class TestDependencies(unittest.IsolatedAsyncioTestCase):
     def test_get_scraper_service(self) -> None:
         from api.clients.dynamodb_client import DynamoDBClient
         from api.clients.redis_client import RedisClient
-        from shared.clients.s3_client import S3Client
 
         mock_sqs = MagicMock(spec=SQSClient)
         mock_redis = MagicMock(spec=RedisClient)

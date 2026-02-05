@@ -5,7 +5,6 @@ from fastapi.testclient import TestClient
 
 from api.dependencies import get_api_key, get_db_service, get_scraper_service
 from api.main import app
-from api.models import APIKey
 
 
 class TestMain(unittest.TestCase):
@@ -23,7 +22,10 @@ class TestMain(unittest.TestCase):
         )
         app.dependency_overrides[get_db_service] = lambda: self.mock_db_service
         app.dependency_overrides[get_api_key] = lambda: self.mock_api_key
-        from api.dependencies import get_db_repository
+        from api.dependencies import (  # pylint: disable=import-outside-toplevel
+            get_db_repository,
+        )
+
         app.dependency_overrides[get_db_repository] = lambda: self.mock_db_repository
 
     def tearDown(self) -> None:
@@ -169,4 +171,3 @@ class TestMain(unittest.TestCase):
         }
         response = self.client.delete("/scrapings/123")
         self.assertEqual(response.status_code, 403)
-
