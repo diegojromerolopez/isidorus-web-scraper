@@ -108,24 +108,18 @@ func (repo *PostgresDBRepository) InsertPageSummary(msg domain.WriterMessage) er
 	if result.Error != nil {
 		return fmt.Errorf("failed to update page summary for URL %s: %w", msg.URL, result.Error)
 	}
-	
+
 	if result.RowsAffected == 0 {
 		return fmt.Errorf("no page found to update summary for URL %s (ScrapingID %d) - will retry", msg.URL, msg.ScrapingID)
 	}
-	
+
 	return nil
 }
 
 func (repo *PostgresDBRepository) CompleteScraping(scrapingID int) error {
-	err := repo.db.
-		Model(&models.Scraping{}).
-		Where("id = ?", scrapingID).
-		Updates(map[string]interface{}{
-			"status":       domain.StatusCompleted,
-			"completed_at": gorm.Expr("NOW()"),
-		}).Error
-	if err != nil {
-		return fmt.Errorf("failed to complete scraping for ID %d: %w", scrapingID, err)
-	}
+	// Job completion is now handled entirely in DynamoDB.
+	// We keep this hook for now to satisfy the interface,
+	// but it no longer modifies PostgreSQL.
+	log.Printf("Postgres hook: Scraping %d marked complete (No DB changes)", scrapingID)
 	return nil
 }

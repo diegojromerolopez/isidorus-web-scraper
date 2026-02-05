@@ -4,10 +4,8 @@ from tortoise import fields, models  # type: ignore
 
 class Scraping(models.Model):
     id = fields.IntField(pk=True)
+    user_id = fields.IntField(null=True)
     url = fields.TextField()
-    status = fields.TextField(default="PENDING")
-    created_at = fields.DatetimeField(auto_now_add=True)
-    completed_at = fields.DatetimeField(null=True)
 
     class Meta:
         table = "scrapings"

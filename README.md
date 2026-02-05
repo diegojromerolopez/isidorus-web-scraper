@@ -7,8 +7,8 @@
 [![Unit Tests](https://github.com/diegojromerolopez/isidorus-web-scraper/actions/workflows/tests-unit.yml/badge.svg)](https://github.com/diegojromerolopez/isidorus-web-scraper/actions/workflows/tests-unit.yml)
 [![Python Lint](https://github.com/diegojromerolopez/isidorus-web-scraper/actions/workflows/python-lint.yml/badge.svg)](https://github.com/diegojromerolopez/isidorus-web-scraper/actions/workflows/python-lint.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Go 1.21+](https://img.shields.io/badge/go-1.21+-00ADD8.svg)](https://golang.org/dl/)
+[![Python 3.14+](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
+[![Go 1.24+](https://img.shields.io/badge/go-1.24+-00ADD8.svg)](https://golang.org/dl/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg)](https://fastapi.tiangolo.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791.svg)](https://www.postgresql.org/)
 [![Redis](https://img.shields.io/badge/Redis-7-DC382D.svg)](https://redis.io/)
@@ -36,40 +36,78 @@ The application takes a URL and a search term, recursively scrapes the website t
 
 ```mermaid
 graph TD
-    User((User)) -->|HTTP POST /scrape| API[API-FastAPI]
+    User((User)) -->|HTTP| Frontend[Frontend-React]
+    Frontend -->|HTTP API Requests| API[API-FastAPI]
+    
     API -->|1. Create Scraping| DB[(PostgreSQL)]
-    API -->|2. Start Job| SQS_S[SQS-Scraper Queue]
+    API -->|2. Log Job Meta| Dynamo[(DynamoDB)]
+    API -->|3. Start Job| SQS_S[SQS-Scraper Queue]
     
     Admin((Admin)) -->|Manage Keys| AuthAdmin[Auth Admin-Django]
-    AuthAdmin -->|3. Sync Keys| DB
-    API -->|4. Validate Key| Redis[(Redis)]
-    API -->|5. Check DB| DB
+    AuthAdmin -->|4. Sync Keys| DB
+    API -->|5. Validate Key| Redis[(Redis)]
+    API -->|6. Check DB| DB
     
     SQS_S --> Scraper[Scraper-Go]
-    Scraper -->|6. Cycle Detection| Redis
-    Scraper -->|7. Track Depth| Redis
-    Scraper -->|8. Found Image| SQS_I[SQS-Image Queue]
-    Scraper -->|9. Page Data| SQS_W[SQS-Writer Queue]
+    Scraper -->|7. Cycle Detection| Redis
+    Scraper -->|8. Track Depth| Redis
+    Scraper -->|9. Found Image| SQS_I[SQS-Image Queue]
+    Scraper -->|10. Page Data| SQS_W[SQS-Writer Queue]
     
     SQS_I --> Extractor[Image Extractor-Python]
-    Extractor -->|10. Upload Image| S3[(S3-LocalStack)]
-    Extractor -->|11. Explain via LangChain| LLM((AI Models))
-    Extractor -->|12. Explanation Result| SQS_W
+    Extractor -->|11. Upload Image| S3[(S3-LocalStack)]
+    Extractor -->|12. Explain via LangChain| LLM((AI Models))
+    Extractor -->|13. Explanation Result| SQS_W
 
-    Scraper -->|9b. Page Text| SQS_PS[SQS-Summarizer Queue]
+    Scraper -->|10b. Page Text| SQS_PS[SQS-Summarizer Queue]
     SQS_PS --> Summarizer[Page Summarizer-Python]
-    Summarizer -->|13. Summarize| LLM
-    Summarizer -->|14. Summary Result| SQS_W
+    Summarizer -->|14. Summarize| LLM
+    Summarizer -->|15. Summary Result| SQS_W
     
     SQS_W --> Writer[Writer-Go]
-    Writer -->|15. Store Results| DB
-    Writer -->|16. Complete| Redis
-    Redis -->|17. Finalize| Writer
+    Writer -->|16. Store Results| DB
+    Writer -->|17. Mark Completion| Dynamo
+
+    API -->|18. Enqueue Deletion| SQS_D[SQS-Deletion Queue]
+    SQS_D --> Deletion[Deletion Worker-Python]
+    Deletion -->|19. Delete Objects| S3
+    Deletion -->|20. Delete Data| DB
+    Deletion -->|21. Delete Meta| Dynamo
 ```
+
+## Data Storage Strategy
+
+Isidorus uses a hybrid storage approach to optimize for both relational integrity and high-throughput status monitoring:
+
+### 1. PostgreSQL (Relational Site Content)
+**Location**: `scrapings`, `scraped_pages`, `page_terms`, `page_links`, `page_images`.
+**Purpose**: Stores the core "knowledge graph" extracted from the web. 
+**Why**: 
+- **Relational Integrity**: Perfect for the complex relationships between pages, images, and search terms.
+- **Query Flexibility**: Allows for complex joins and text searches.
+- **Identity**: Acts as the system's "Identity Store" by generating unique incremental IDs for jobs.
+
+### 2. DynamoDB (Job Lifecycle & State)
+**Location**: `scraping_jobs` table.
+**Purpose**: Stores the current **Status** (`PENDING`, `COMPLETED`), `created_at`, `completed_at`, and job-level metadata (`url`, `depth`).
+**Why**:
+- **Scaling Status Polling**: Offloads high-frequency status checks from the relational database.
+- **NoSQL Flexibility**: Allows for job metadata that might vary across different scraping strategies.
+- **Separation of Concerns**: Decouples the transient orchestration state (DynamoDB) from the permanent archived content (PostgreSQL).
+
+### 3. Redis (Distributed Coordination)
+**Location**: In-memory sets and counters.
+**Purpose**: handles **Cycle Detection** and **Distributed Reference Counting** for job completion tracking in a multi-worker environment.
 
 The system is built with a microservices approach:
 
-0.  **Auth Admin (Django)**:
+0.  **Frontend (React 18)**:
+    -   Modern SPA served by Node.js.
+    -   Provides a Dashboard for initiating and monitoring scraping jobs.
+    -   Features detailed views for scraping results, including term stats, AI summaries, and image galleries.
+    -   Interacts with the API via strictly typed TS methods.
+
+1.  **Auth Admin (Django)**:
     -   Control plane for managing API keys and users.
     -   Securely hashes keys and provides a UI for revocation and expiration.
     -   Shares the PostgreSQL database with the API for high-performance validation.
@@ -107,6 +145,11 @@ The system is built with a microservices approach:
     -   Writes data to PostgreSQL in a normalized schema.
     -   Handles job completion status updates.
 
+6.  **Deletion Worker (Python)**:
+    -   Consumes deletion requests from `deletion-queue`.
+    -   **Batched Deletion**: Efficiently removes large datasets from PostgreSQL and S3.
+    -   Cleanly removes job metadata from DynamoDB.
+
 5.  **Shared Library (Python)**:
     -   Common package (`shared/`) containing reusable components.
     -   **Async AWS Clients**: `SQSClient` and `S3Client` using `aioboto3` for non-blocking I/O.
@@ -143,6 +186,7 @@ The system is built with a microservices approach:
         {"scraping_id": 123}
         ```
 -   **`GET /scrape?scraping_id=1`**: Check status and get results of a scraping job.
+-   **`DELETE /scrapings/{id}`**: Delete a scraping job and all its related data.
 -   **`GET /search?term={term}`**: Search for pages containing a specific term.
 -   **`GET /terms`**: List all unique terms found across all scrapings.
 
@@ -181,7 +225,8 @@ The entire stack runs locally via Docker Compose:
 
 ## Technologies
 
--   **Backend**: Python 3.10+ (FastAPI), Go 1.21+
+-   **Frontend**: React 18, TypeScript, TailwindCSS, Vite
+-   **Backend**: Python 3.14+ (FastAPI), Go 1.24+
 -   **Async I/O**: `redis.asyncio` (async Redis client), `aioboto3` (async AWS SDK), `httpx` (async HTTP client)
 -   **ORM**: Tortoise ORM (API)
 -   **Database**: PostgreSQL 15
@@ -195,8 +240,8 @@ The entire stack runs locally via Docker Compose:
 ## Prerequisites
 
 -   Docker & Docker Compose (v2+)
--   Python 3.10+
--   Go 1.21+
+-   Python 3.14+
+-   Go 1.24+
 -   Make
 
 ## Getting Started
@@ -238,6 +283,7 @@ The entire stack runs locally via Docker Compose:
 
 ## Development
 
+-   **Frontend**: Located in `frontend/`. Run locally with `cd frontend && npm run dev` (Access at `http://localhost:3000`).
 -   **API**: Located in `api/`. Run locally with `uvicorn api.main:app --reload`.
 -   **Scraper**: Located in `workers/scraper/`.
 -   **Writer**: Located in `workers/writer/`.
@@ -269,6 +315,7 @@ make format
 The project emphasizes high test coverage:
 -   **Unit Tests**: ~100% coverage for all components (API, Scraper, Writer, Image Extractor, Page Summarizer).
 -   **E2E Tests**: Full integration tests using a local test runner and mock website.
+    - **Reliable Verification**: Tests utilize a centralized polling mechanism that monitors the `GET /scrape` endpoint, waiting up to **5 minutes (300 seconds)** for a `COMPLETED` status to ensure all asynchronous background tasks (AI extraction, DB writes) have finished.
 -   **Shared Library Tests**: Located in `tests/unit/shared/` for common client testing.
 
 ### AI Worker Testing

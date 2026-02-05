@@ -57,3 +57,39 @@ class S3Client:
         except ClientError as e:
             logger.error("Failed to upload to S3: %s", e)
             raise
+
+    async def delete_object(self, bucket: str, key: str) -> bool:
+        try:
+            async with self.__session.client(
+                "s3",
+                endpoint_url=self.__endpoint_url,
+                region_name=self.__region_name,
+                aws_access_key_id=self.__access_key,
+                aws_secret_access_key=self.__secret_key,
+            ) as client:
+                await client.delete_object(Bucket=bucket, Key=key)
+                return True
+        except ClientError as e:
+            logger.error("Failed to delete from S3: %s", e)
+            raise
+
+    async def delete_objects(self, bucket: str, keys: list[str]) -> bool:
+        """
+        Deletes multiple objects from S3 in a single request (max 1000).
+        """
+        if not keys:
+            return True
+        try:
+            async with self.__session.client(
+                "s3",
+                endpoint_url=self.__endpoint_url,
+                region_name=self.__region_name,
+                aws_access_key_id=self.__access_key,
+                aws_secret_access_key=self.__secret_key,
+            ) as client:
+                delete_dict = {"Objects": [{"Key": k} for k in keys]}
+                await client.delete_objects(Bucket=bucket, Delete=delete_dict)
+                return True
+        except ClientError as e:
+            logger.error("Failed to batch delete from S3: %s", e)
+            raise e

@@ -69,3 +69,19 @@ class DynamoDBClient:
         except Exception as e:
             logger.error("Failed to get item from DynamoDB: %s", e)
             raise e
+
+    async def delete_item(self, key: dict) -> bool:
+        try:
+            async with self.__session.resource(
+                "dynamodb",
+                endpoint_url=self.__endpoint_url,
+                region_name=self.__region,
+                aws_access_key_id=self.__access_key,
+                aws_secret_access_key=self.__secret_key,
+            ) as dynamodb:
+                table = await dynamodb.Table(self.__table_name)
+                await table.delete_item(Key=key)
+                return True
+        except Exception as e:
+            logger.error("Failed to delete item from DynamoDB: %s", e)
+            raise e

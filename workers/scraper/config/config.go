@@ -6,12 +6,12 @@ import (
 )
 
 type Config struct {
-	InputQueueURL        string
-	WriterQueueURL       string
-	SummarizerQueueURL   string
-	ImageQueueURL        string
-	RedisHost            string
-	RedisPort            string
+	InputQueueURL         string
+	WriterQueueURL        string
+	SummarizerQueueURL    string
+	ImageQueueURL         string
+	RedisHost             string
+	RedisPort             string
 	ImageExplainerEnabled bool
 	PageSummarizerEnabled bool
 }
@@ -35,7 +35,7 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("WRITER_QUEUE_URL is required")
 	}
 	// Summarizer is optional
-    // Image Queue is optional locally if disabled, but code currently requires it. Keeping requirement for now unless refactored.
+	// Image Queue is optional locally if disabled, but code currently requires it. Keeping requirement for now unless refactored.
 	if cfg.ImageQueueURL == "" {
 		return nil, fmt.Errorf("IMAGE_QUEUE_URL is required")
 	}

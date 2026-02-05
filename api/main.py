@@ -1,16 +1,34 @@
 from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from tortoise.contrib.fastapi import register_tortoise  # pylint: disable=import-error
 
 from api.config import Configuration
-from api.dependencies import get_api_key, get_db_service, get_scraper_service
+from api.dependencies import (
+    get_api_key,
+    get_db_repository,
+    get_db_service,
+    get_scraper_service,
+)
 from api.models import APIKey
+from api.repositories.db_repository import DbRepository
 from api.services.db_service import DbService
 from api.services.scraper_service import ScraperService
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:8000",
+        "http://localhost:8001",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class ScrapeRequest(BaseModel):
@@ -30,7 +48,11 @@ async def start_scrape(
     _api_key: APIKey = Depends(get_api_key),
 ) -> dict[str, int]:
     try:
-        scraping_id = await scraper_service.start_scraping(request.url, request.depth)
+        # Extract user_id from the APIKey dependency
+        user_id = _api_key.user_id if _api_key else None
+        scraping_id = await scraper_service.start_scraping(
+            request.url, request.depth, user_id
+        )
         return {"scraping_id": scraping_id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -56,6 +78,33 @@ async def get_scrape_status(
         return response
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.get("/scrapings")
+async def list_scrapings(
+    page: int = 1,
+    size: int = 10,
+    service: DbService = Depends(get_db_service),
+    _api_key: APIKey = Depends(get_api_key),
+) -> dict[str, Any]:
+    """
+    List scrapings for the authenticated user.
+    """
+    if not _api_key.user_id:
+        # Should be handled by get_api_key usually, but for safety
+        raise HTTPException(status_code=401, detail="User context required")
+
+    try:
+        offset = (page - 1) * size
+        scrapings, total = await service.get_scrapings(
+            user_id=_api_key.user_id, offset=offset, limit=size
+        )
+        return {
+            "data": scrapings,
+            "meta": {"page": page, "size": size, "total": total},
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -110,3 +159,31 @@ def setup_database(application: FastAPI) -> None:
 
 
 setup_database(app)
+
+
+@app.delete("/scrapings/{scraping_id}")
+async def delete_scraping(
+    scraping_id: int,
+    service: ScraperService = Depends(get_scraper_service),
+    db_repository: DbRepository = Depends(get_db_repository),
+    _api_key: APIKey = Depends(get_api_key),
+) -> dict[str, str]:
+    """
+    Deletes a scraping job.
+    Sends a message to the Deletion worker to handle clean up asynchronously.
+    """
+    scraping = await db_repository.get_scraping(scraping_id)
+    if not scraping:
+        raise HTTPException(status_code=404, detail="Scraping not found")
+
+    if scraping["user_id"] != _api_key.user_id:
+        raise HTTPException(
+            status_code=403, detail="Not authorized to delete this scraping"
+        )
+
+    # Orchestrate deletion via Deletion worker
+    success = await service.enqueue_deletion(scraping_id)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to enqueue deletion")
+
+    return {"message": "Scraping deletion enqueued"}

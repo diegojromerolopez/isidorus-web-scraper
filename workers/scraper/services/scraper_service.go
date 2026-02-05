@@ -93,6 +93,27 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 	visitedKey := fmt.Sprintf(domain.RedisKeyVisited, msg.ScrapingID)
 	_, _ = s.redisClient.SAdd(ctx, visitedKey, msg.URL)
 
+	pKey := fmt.Sprintf(domain.RedisKeyPending, msg.ScrapingID)
+	defer func() {
+		val, err := s.redisClient.Decr(ctx, pKey)
+		if err != nil {
+			log.Printf("failed to decrement redis: %v", err)
+			return
+		}
+
+		// 4. Check for Completion
+		if val == 0 {
+			log.Printf("Scraping %d completed! Sending notification to Writer.", msg.ScrapingID)
+			completionMsg := domain.WriterMessage{
+				Type:       domain.MsgTypeScrapingComplete,
+				ScrapingID: msg.ScrapingID,
+			}
+			if err := s.sqsClient.SendMessage(ctx, s.writerQueueURL, completionMsg); err != nil {
+				log.Printf("failed to send completion signal: %v", err)
+			}
+		}
+	}()
+
 	resp, err := s.pageFetcher.Fetch(msg.URL)
 	if err != nil {
 		log.Printf("failed to fetch URL %s: %v", msg.URL, err)
@@ -113,6 +134,9 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 	// Text accumulation for summarization
 	var fullTextBuilder strings.Builder
 
+	inScript := false
+	inStyle := false
+
 	for {
 		tt := tokenizer.Next()
 		if tt == html.ErrorToken {
@@ -120,18 +144,50 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 		}
 
 		if tt == html.TextToken {
-			text := string(tokenizer.Text())
-			s.processText(text, terms)
+			if !inScript && !inStyle {
+				text := string(tokenizer.Text())
+				s.processText(text, terms)
 
-			// Accumulate text for summarizer (simple append for now)
-			// Limit size to avoid memory issues (e.g. 100KB)
-			if fullTextBuilder.Len() < 100000 {
-				fullTextBuilder.WriteString(text)
-				fullTextBuilder.WriteString(" ")
+				// Accumulate text for summarizer (simple append for now)
+				// Limit size to avoid memory issues (e.g. 100KB)
+				if fullTextBuilder.Len() < 100000 {
+					fullTextBuilder.WriteString(text)
+					fullTextBuilder.WriteString(" ")
+				}
 			}
-		} else if tt == html.StartTagToken || tt == html.SelfClosingTagToken {
+		} else if tt == html.StartTagToken {
 			token := tokenizer.Token()
-			if token.Data == "a" {
+			if token.Data == "script" {
+				inScript = true
+			} else if token.Data == "style" {
+				inStyle = true
+			} else if token.Data == "a" {
+				for _, attr := range token.Attr {
+					if attr.Key == "href" {
+						links = append(links, attr.Val)
+					}
+				}
+			} else if token.Data == "img" {
+				for _, attr := range token.Attr {
+					if attr.Key == "src" {
+						images = append(images, attr.Val)
+					}
+				}
+			}
+		} else if tt == html.EndTagToken {
+			token := tokenizer.Token()
+			if token.Data == "script" {
+				inScript = false
+			} else if token.Data == "style" {
+				inStyle = false
+			}
+		} else if tt == html.SelfClosingTagToken {
+			token := tokenizer.Token()
+			if token.Data == "script" {
+				// Self-closing script tag (rare but possible in XHTML)
+				// effectively enters and leaves, or just stays false if we handle it like this
+				// But strictly if it's self-closing it has no content.
+			} else if token.Data == "a" {
 				for _, attr := range token.Attr {
 					if attr.Key == "href" {
 						links = append(links, attr.Val)
@@ -177,9 +233,9 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 	if s.imageExplainerEnabled {
 		for _, imgURL := range images {
 			imgMsg := domain.ImageMessage{
-				URL:          imgURL,
-				OriginalURL:  msg.URL,
-				ScrapingID:   msg.ScrapingID,
+				URL:         imgURL,
+				OriginalURL: msg.URL,
+				ScrapingID:  msg.ScrapingID,
 			}
 			if err := s.sqsClient.SendMessage(ctx, s.imageQueueURL, imgMsg); err != nil {
 				log.Printf("failed to send image to image queue: %v", err)
@@ -222,9 +278,9 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 	failedCount := 0
 	for _, link := range linksToSend {
 		newMsg := domain.ScrapeMessage{
-			URL:          link,
-			Depth:        msg.Depth - 1,
-			ScrapingID:   msg.ScrapingID,
+			URL:        link,
+			Depth:      msg.Depth - 1,
+			ScrapingID: msg.ScrapingID,
 		}
 		err := s.sqsClient.SendMessage(ctx, s.inputQueueURL, newMsg)
 		if err != nil {
@@ -239,26 +295,6 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 		err := s.redisClient.IncrBy(ctx, pKey, int64(-failedCount))
 		if err != nil {
 			log.Printf("CRITICAL: failed to compensate redis for failed sends (scraping %d, count %d): %v", msg.ScrapingID, failedCount, err)
-		}
-	}
-
-	// 3. Decrement Redis (Completion Check)
-	pKey := fmt.Sprintf(domain.RedisKeyPending, msg.ScrapingID)
-	val, err := s.redisClient.Decr(ctx, pKey)
-	if err != nil {
-		log.Printf("failed to decrement redis: %v", err)
-		return
-	}
-
-	// 4. Check for Completion
-	if val == 0 {
-		log.Printf("Scraping %d completed! Sending notification to Writer.", msg.ScrapingID)
-		completionMsg := domain.WriterMessage{
-			Type:       domain.MsgTypeScrapingComplete,
-			ScrapingID: msg.ScrapingID,
-		}
-		if err := s.sqsClient.SendMessage(ctx, s.writerQueueURL, completionMsg); err != nil {
-			log.Printf("failed to send completion signal: %v", err)
 		}
 	}
 }

@@ -33,6 +33,11 @@ func newMockDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock) {
 	return gormDB, mock
 }
 
+func TestNewDBRepository_Default(t *testing.T) {
+	repo := NewDBRepository(nil, 0)
+	assert.Equal(t, 100, repo.batchSize)
+}
+
 func TestInsertPageData_Success(t *testing.T) {
 	db, mock := newMockDB(t)
 	repo := NewDBRepository(db, 100)
@@ -129,14 +134,10 @@ func TestCompleteScraping_Success(t *testing.T) {
 	db, mock := newMockDB(t)
 	repo := NewDBRepository(db, 100)
 
-	mock.ExpectBegin()
-	mock.ExpectExec(`UPDATE "scrapings" SET`).
-		WithArgs("COMPLETED", 123).
-		WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectCommit()
-
+	// CompleteScraping is now a no-op hook that doesn't execute SQL
 	err := repo.CompleteScraping(123)
 	assert.NoError(t, err)
+
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("there were unfulfilled expectations: %s", err)
 	}
@@ -257,7 +258,7 @@ func TestInsertPageData_Error_Links(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
 	mock.ExpectCommit()
 
-    // Terms skipped because empty
+	// Terms skipped because empty
 
 	// Insert Page Links Failure
 	mock.ExpectBegin()
@@ -296,4 +297,25 @@ func TestInsertImageExplanation_InsertError(t *testing.T) {
 	err := repo.InsertImageExplanation(msg)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to insert image explanation")
+}
+
+func TestInsertPageSummary_Error_DB(t *testing.T) {
+	db, mock := newMockDB(t)
+	repo := NewDBRepository(db, 100)
+
+	msg := domain.WriterMessage{
+		URL:        "http://example.com",
+		ScrapingID: 123,
+		Summary:    "This is a summary",
+	}
+
+	mock.ExpectBegin()
+	mock.ExpectExec(`UPDATE "scraped_pages" SET`).
+		WithArgs("This is a summary", msg.URL, msg.ScrapingID).
+		WillReturnError(errors.New("db error"))
+	mock.ExpectRollback()
+
+	err := repo.InsertPageSummary(msg)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to update page summary")
 }

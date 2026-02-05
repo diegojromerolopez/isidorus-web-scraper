@@ -63,7 +63,27 @@ class TestDbRepository(unittest.IsolatedAsyncioTestCase):
 
         result = await self.repo.create_scraping("http://url.com")
         self.assertEqual(result, 123)
-        mock_create.assert_called_once_with(url="http://url.com", status="PENDING")
+        mock_create.assert_called_once_with(url="http://url.com", user_id=None)
+
+    @patch("api.models.Scraping.get_or_none", new_callable=AsyncMock)
+    async def test_delete_scraping(self, mock_get: AsyncMock) -> None:
+        mock_scraping = AsyncMock()
+        mock_get.return_value = mock_scraping
+
+        result = await self.repo.delete_scraping(123)
+        self.assertTrue(result)
+        mock_get.assert_called_once_with(id=123)
+        mock_scraping.delete.assert_called_once()
+
+    @patch("api.models.PageImage.filter")
+    async def test_get_scraping_s3_paths(self, mock_filter: MagicMock) -> None:
+        mock_qs = MagicMock()
+        mock_filter.return_value = mock_qs
+        mock_qs.values_list = AsyncMock(return_value=["s3://b/k1", None, "s3://b/k2"])
+
+        paths = await self.repo.get_scraping_s3_paths(123)
+        self.assertEqual(paths, ["s3://b/k1", "s3://b/k2"])
+        mock_filter.assert_called_once_with(scraping_id=123)
 
     @patch("api.models.Scraping.get_or_none", new_callable=AsyncMock)
     async def test_get_scraping(self, mock_get: AsyncMock) -> None:

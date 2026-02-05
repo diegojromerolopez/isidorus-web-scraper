@@ -12,3 +12,8 @@ class DbService:
 
     async def get_website_terms(self, website_url: str) -> list[dict[str, Any]]:
         return await self.data_repo.find_terms_by_website(website_url)
+
+    async def get_scrapings(
+        self, user_id: int, offset: int, limit: int
+    ) -> tuple[list[dict[str, Any]], int]:
+        return await self.data_repo.get_scrapings(user_id, offset, limit)

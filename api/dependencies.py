@@ -57,7 +57,13 @@ def get_scraper_service(
     Dependency provider for ScraperService.
     Requires SQSClient, RedisClient, DynamoDBClient, DbRepository.
     """
-    return ScraperService(sqs_client, redis_client, db_repository, dynamodb_client)
+    return ScraperService(
+        sqs_client,
+        redis_client,
+        db_repository,
+        dynamodb_client,
+        config.deletion_queue_url,
+    )
 
 
 def get_db_service(
@@ -88,13 +94,20 @@ async def get_api_key(
     cache_key = f"auth:key:{hashed_key}"
 
     # 1. Try Redis Cache
-    cached_name = await redis_client.get(cache_key)
-    if cached_name:
-        # If cached, we return a shell model.
-        # Note: We might want to cache the expiration date too if we
-        # want to be paranoid.
-        # But usually keys are cached only if they were valid.
-        return APIKey(name=cached_name, hashed_key=hashed_key, is_active=True)
+    cached_val = await redis_client.get(cache_key)
+    if cached_val:
+        # Format: "name:user_id"
+        try:
+            name, user_id_str = cached_val.split(":", 1)
+            return APIKey(
+                name=name,
+                user_id=int(user_id_str),
+                hashed_key=hashed_key,
+                is_active=True,
+            )
+        except ValueError:
+            # If cache is malformed (or old format), fallback to DB
+            pass
 
     # 2. Try Database
     api_key = await APIKey.filter(hashed_key=hashed_key, is_active=True).first()
@@ -112,7 +125,8 @@ async def get_api_key(
         )
 
     # 3. Cache it for 5 minutes
-    await redis_client.set(cache_key, api_key.name, ex=300)
+    # Store as "name:user_id"
+    await redis_client.set(cache_key, f"{api_key.name}:{api_key.user_id}", ex=300)
 
     # Update last_used_at (Asynchronous fire-and-forget or background
     # task would be better)

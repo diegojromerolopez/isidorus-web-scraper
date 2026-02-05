@@ -44,10 +44,14 @@ The codebase follows several key design principles to ensure reliability and tes
     - **Repositories/Clients**: Handles I/O operations (DB, SQS, Network).
 2.  **Dependency Injection**: Services receive their dependencies (repositories/clients) as interfaces (Go) or objects (Python) during initialization.
 3.  **Absolute Imports**: To ensure module resolution consistency across local development, Docker, and CI/CD, all Python imports are absolute (e.g., `from api.services...`).
-4.  **Modern Python Typing**: Python 3.10+ syntax is required for all type hints:
+4.  **Modern Python Typing**: Python 3.14+ syntax is required for all type hints:
     - Use `Type | None` instead of `Optional[Type]`.
     - Use lowercase `list`, `dict`, `tuple` instead of `List`, `Dict`, `Tuple`.
     - Avoid `Any` where possible; use `cast` only when necessary for library types.
+5.  **Bleeding Edge Runtimes**: Always use the latest stable versions of runtimes to ensure performance and security:
+    -   **Python**: Use the latest available version (currently 3.14).
+        -   **Exception**: Workers using `langchain` (e.g., `page_summarizer`, `image_extractor`) must use **Python 3.11** as `langchain` dependencies (specifically `numpy` and `pandas`) do not yet support Python 3.14.
+    -   **Go**: Use the latest available version (currently 1.24).
 
 ## Architecture
 
@@ -90,9 +94,13 @@ Workers are decoupled and highly testable through repository mocking.
     -   Generates concise summaries of web pages using LLMs.
 
 4.  **Writer** (Golang):
-    -   **Batch Processing**: Listens for results and performs efficient bulk inserts using a `DBRepository` interface.
     -   **Identifier Resolution**: Uses the provided internal integer ID for optimized storage and relationship mapping.
     -   **Job Management**: Updates job status in Postgres upon receiving completion signals.
+
+5.  **Deletion Worker** (Python):
+    -   **Async Processing**: Consumes deletion requests from `deletion-queue`.
+    -   **Resource Cleanup**: Orchestrates the removal of S3 objects, PostgreSQL records, and DynamoDB items.
+    -   **Batching**: Uses batch operations to handle large scraping jobs efficiently.
 
 ## Configuration & Environment Variables
 
@@ -116,7 +124,7 @@ The system uses a hybrid schema:
 
 ### DynamoDB
 - **`scraping_jobs`**: Logs job lifecycle.
-  - PK: `job_id` (String)
+  - PK: `scraping_id` (String)
   - Attributes: `url`, `depth`, `status`
 
 ### PostgreSQL
@@ -170,6 +178,7 @@ The `scrapings` table uses an internal Integer `id` for primary keys and a `uuid
     - Run `make test-e2e` to verify all end-to-end tests pass.
     - Target a PyLint score of **≥9.5/10**.
     - **All tests must pass before committing any changes.**
-9.  **Private Methods and Attributes**: Use double underscore prefix (`__`) for truly private methods and attributes.
+9.  **Private Methods and Attributes**: Use double underscore prefix (`__`) for truly private methods and attributes. This includes all class instance attributes initialized in the `__init__` method, unless they are intended to be part of the public interface.
     - **Public interface**: Only expose methods and attributes that are part of the class's contract.
     - **Testing Private Members**: **Do not access private attributes or methods in tests** (e.g., `client._Class__attribute`). Instead, use `unittest.mock.patch` to mock dependencies or inject mocks via the constructor. Tests should verify behavior through the public interface.
+10. **Constant-Driven Defaults**: Never define default values in function parameters with raw values (literals). Always use class constants or module-level constants to ensure maintainability and a single source of truth for configuration values.

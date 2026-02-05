@@ -1,0 +1,4 @@
+aioboto3==13.3.0
+tortoise-orm==0.24.2
+asyncpg==0.31.0
+typing-extensions
