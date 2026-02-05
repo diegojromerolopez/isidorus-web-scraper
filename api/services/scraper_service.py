@@ -78,6 +78,7 @@ class ScraperService:
             "url": url,
             "depth": depth,
             "scraping_id": scraping_id,
+            "user_id": user_id,
         }
         await self.sqs_client.send_message(message)
 

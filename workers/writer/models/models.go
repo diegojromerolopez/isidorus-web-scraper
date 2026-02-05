@@ -25,7 +25,6 @@ type ScrapedPage struct {
 
 	// Relationships
 	Scraping Scraping    `gorm:"foreignKey:ScrapingID;constraint:OnDelete:CASCADE"`
-	Terms    []PageTerm  `gorm:"foreignKey:PageID;constraint:OnDelete:CASCADE"`
 	Links    []PageLink  `gorm:"foreignKey:SourcePageID;constraint:OnDelete:CASCADE"`
 	Images   []PageImage `gorm:"foreignKey:PageID;constraint:OnDelete:CASCADE"`
 }
@@ -33,24 +32,6 @@ type ScrapedPage struct {
 // TableName overrides the table name
 func (ScrapedPage) TableName() string {
 	return "scraped_pages"
-}
-
-// PageTerm represents a term found on a page
-type PageTerm struct {
-	ID         int    `gorm:"primaryKey;autoIncrement"`
-	ScrapingID int    `gorm:"not null"`
-	PageID     int    `gorm:"not null"`
-	Term       string `gorm:"type:text;not null;index:idx_page_terms_term"`
-	Frequency  int    `gorm:"default:1"`
-
-	// Relationships
-	Scraping Scraping    `gorm:"foreignKey:ScrapingID;constraint:OnDelete:CASCADE"`
-	Page     ScrapedPage `gorm:"foreignKey:PageID;constraint:OnDelete:CASCADE"`
-}
-
-// TableName overrides the table name
-func (PageTerm) TableName() string {
-	return "page_terms"
 }
 
 // PageImage represents an image found on a page

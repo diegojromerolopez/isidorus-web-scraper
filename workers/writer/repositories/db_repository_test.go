@@ -45,7 +45,6 @@ func TestInsertPageData_Success(t *testing.T) {
 	msg := domain.WriterMessage{
 		URL:        "http://example.com",
 		ScrapingID: 123,
-		Terms:      map[string]int{"term1": 5},
 		Links:      []string{"http://link1.com"},
 	}
 
@@ -53,12 +52,6 @@ func TestInsertPageData_Success(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectQuery(`INSERT INTO "scraped_pages"`).
 		WithArgs(msg.ScrapingID, msg.URL, "").
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
-	mock.ExpectCommit()
-
-	// Insert Page Terms
-	mock.ExpectBegin()
-	mock.ExpectQuery(`INSERT INTO "page_terms"`).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
 	mock.ExpectCommit()
 
@@ -211,34 +204,6 @@ func TestInsertImageExplanation_Error_NoPage(t *testing.T) {
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("there were unfulfilled expectations: %s", err)
 	}
-}
-
-func TestInsertPageData_Error_Terms(t *testing.T) {
-	db, mock := newMockDB(t)
-	repo := NewDBRepository(db, 100)
-
-	msg := domain.WriterMessage{
-		URL:        "http://example.com",
-		ScrapingID: 123,
-		Terms:      map[string]int{"term1": 5},
-	}
-
-	// Insert Scraped Page Success
-	mock.ExpectBegin()
-	mock.ExpectQuery(`INSERT INTO "scraped_pages"`).
-		WithArgs(msg.ScrapingID, msg.URL, "").
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
-	mock.ExpectCommit()
-
-	// Insert Page Terms Failure
-	mock.ExpectBegin()
-	mock.ExpectQuery(`INSERT INTO "page_terms"`).
-		WillReturnError(errors.New("terms db error"))
-	mock.ExpectRollback()
-
-	err := repo.InsertPageData(msg)
-	assert.NoError(t, err)
-	// We expect the function to succeed (return nil) despite sub-insert failure, as it just logs.
 }
 
 func TestInsertPageData_Error_Links(t *testing.T) {

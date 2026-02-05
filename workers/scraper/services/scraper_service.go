@@ -28,10 +28,6 @@ type PageFetcher interface {
 	Fetch(url string) (*http.Response, error)
 }
 
-var stopWords = map[string]bool{
-	"the": true, "and": true, "is": true, "in": true, "to": true, "of": true, "a": true,
-}
-
 type ScraperService struct {
 	sqsClient             SQSClient
 	redisClient           RedisClient
@@ -127,7 +123,6 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 	}
 
 	tokenizer := html.NewTokenizer(resp.Body)
-	terms := make(map[string]int)
 	links := []string{}
 	images := []string{}
 
@@ -146,7 +141,6 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 		if tt == html.TextToken {
 			if !inScript && !inStyle {
 				text := string(tokenizer.Text())
-				s.processText(text, terms)
 
 				// Accumulate text for summarizer (simple append for now)
 				// Limit size to avoid memory issues (e.g. 100KB)
@@ -208,7 +202,6 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 	writerMsg := domain.WriterMessage{
 		Type:       domain.MsgTypePageData,
 		URL:        msg.URL,
-		Terms:      terms,
 		Links:      links,
 		ScrapingID: msg.ScrapingID,
 	}
@@ -223,6 +216,7 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 			URL:        msg.URL,
 			Content:    fullTextBuilder.String(),
 			ScrapingID: msg.ScrapingID,
+			UserID:     msg.UserID,
 		}
 		if err := s.sqsClient.SendMessage(ctx, s.summarizerQueueURL, summaryMsg); err != nil {
 			log.Printf("failed to send page summary request: %v", err)
@@ -295,17 +289,6 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 		err := s.redisClient.IncrBy(ctx, pKey, int64(-failedCount))
 		if err != nil {
 			log.Printf("CRITICAL: failed to compensate redis for failed sends (scraping %d, count %d): %v", msg.ScrapingID, failedCount, err)
-		}
-	}
-}
-
-func (s *ScraperService) processText(text string, terms map[string]int) {
-	words := strings.Fields(text)
-	for _, word := range words {
-		word = strings.ToLower(word)
-		word = strings.Trim(word, ".,!?:;\"'()")
-		if len(word) > 2 && !stopWords[word] {
-			terms[word]++
 		}
 	}
 }

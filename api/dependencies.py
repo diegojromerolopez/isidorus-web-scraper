@@ -11,8 +11,10 @@ from api.clients.sqs_client import SQSClient
 from api.config import Configuration
 from api.models import APIKey
 from api.repositories.db_repository import DbRepository
+from api.repositories.search_repository import SearchRepository
 from api.services.db_service import DbService
 from api.services.scraper_service import ScraperService
+from api.services.search_service import SearchService
 
 config = Configuration.from_env()
 
@@ -38,6 +40,13 @@ def get_db_repository() -> DbRepository:
     Creates and returns a DbRepository instance connected to the configured database.
     """
     return DbRepository()
+
+
+def get_search_repository() -> SearchRepository:
+    """
+    Creates and returns a SearchRepository instance for OpenSearch.
+    """
+    return SearchRepository(config)
 
 
 def get_redis_client() -> RedisClient:
@@ -73,6 +82,15 @@ def get_db_service(
     Dependency to get the DB service.
     """
     return DbService(repository)
+
+
+def get_search_service(
+    repository: SearchRepository = Depends(get_search_repository),
+) -> SearchService:
+    """
+    Dependency to get the search service.
+    """
+    return SearchService(repository)
 
 
 async def get_api_key(

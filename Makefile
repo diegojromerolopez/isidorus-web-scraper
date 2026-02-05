@@ -53,17 +53,17 @@ test-unit:
 	docker build -t isidorus-extractor-test -f workers/image_extractor/Dockerfile .
 	docker run --rm -v "$$(pwd):/app" -e PYTHONPATH=/app isidorus-extractor-test sh -c "pip install coverage && coverage run --branch --source=workers/image_extractor -m unittest discover -v -p 'test_*.py' -s tests/unit/workers/image_extractor -t /app && coverage report"
 	@echo "Running Scraper unit tests..."
-	docker build -t isidorus-scraper-test workers/scraper/
-	docker run --rm -v "$$(pwd):/app" -w /app/workers/scraper isidorus-scraper-test sh -c "go mod tidy && go test -v -cover ./..."
+	docker run --rm -v "$$(pwd):/app" -w /app/workers/scraper golang:1.24-alpine sh -c "go mod tidy && go test -v -cover ./..."
 	@echo "Running Writer unit tests..."
-	docker build -t isidorus-writer-test workers/writer/
-	docker run --rm -v "$$(pwd):/app" -w /app/workers/writer isidorus-writer-test sh -c "go mod tidy && go test -v -cover ./..."
+	docker run --rm -v "$$(pwd):/app" -w /app/workers/writer golang:1.24-alpine sh -c "go mod tidy && go test -v -cover ./..."
 	@echo "Running Page Summarizer unit tests..."
 	docker build -t isidorus-summarizer-test -f workers/page_summarizer/Dockerfile .
 	docker run --rm -v "$$(pwd):/app" -e PYTHONPATH=/app isidorus-summarizer-test sh -c "pip install coverage && coverage run --branch --source=workers/page_summarizer -m unittest discover -v -p 'test_*.py' -s tests/unit/workers/page_summarizer -t /app && coverage report"
 	@echo "Running Deletion worker unit tests..."
 	docker build -t isidorus-deletion-test -f workers/deletion/Dockerfile .
 	docker run --rm -v "$$(pwd):/app" -e PYTHONPATH=/app isidorus-deletion-test sh -c "pip install coverage && coverage run --branch --source=workers/deletion -m unittest discover -v -p 'test_*.py' -s tests/unit/workers/deletion -t /app && coverage report"
+	@echo "Running Indexer unit tests..."
+	docker run --rm -v "$$(pwd):/app" -w /app/workers/indexer golang:1.24-alpine sh -c "go mod tidy && go test -v -cover ./..."
 
 # Clean up volumes and orphans
 clean:
@@ -78,8 +78,9 @@ format:
 	@echo "Sorting Python imports with ruff..."
 	ruff check --select I --fix .
 	@echo "Formatting Go code..."
-	@docker run --rm -v "$$(pwd):/app" -w /app/workers/scraper golang:1.23 go fmt ./...
-	@docker run --rm -v "$$(pwd):/app" -w /app/workers/writer golang:1.23 go fmt ./...
+	@docker run --rm -v "$$(pwd):/app" -w /app/workers/scraper golang:1.24 go fmt ./...
+	@docker run --rm -v "$$(pwd):/app" -w /app/workers/writer golang:1.24 go fmt ./...
+	@docker run --rm -v "$$(pwd):/app" -w /app/workers/indexer golang:1.24 go fmt ./...
 	@echo "Code formatting complete!"
 
 # Check linting errors (does not modify files)
@@ -97,14 +98,14 @@ lint-check:
 	@echo "Running pylint..."
 	pylint api/ workers/image_extractor/ workers/page_summarizer/ tests/unit/ tests/e2e/runner/runner.py
 	@echo "Checking Go code formatting..."
-	@if [ -n "$$(docker run --rm -v "$$(pwd):/app" -w /app/workers/scraper golang:1.23 gofmt -l .)" ]; then \
+	@if [ -n "$$(docker run --rm -v "$$(pwd):/app" -w /app/workers/scraper golang:1.24 gofmt -l .)" ]; then \
 		echo "Go formatting errors found in scraper worker. Run 'make format' to fix."; \
-		docker run --rm -v "$$(pwd):/app" -w /app/workers/scraper golang:1.23 gofmt -l .; \
+		docker run --rm -v "$$(pwd):/app" -w /app/workers/scraper golang:1.24 gofmt -l .; \
 		exit 1; \
 	fi
-	@if [ -n "$$(docker run --rm -v "$$(pwd):/app" -w /app/workers/writer golang:1.23 gofmt -l .)" ]; then \
+	@if [ -n "$$(docker run --rm -v "$$(pwd):/app" -w /app/workers/writer golang:1.24 gofmt -l .)" ]; then \
 		echo "Go formatting errors found in writer worker. Run 'make format' to fix."; \
-		docker run --rm -v "$$(pwd):/app" -w /app/workers/writer golang:1.23 gofmt -l .; \
+		docker run --rm -v "$$(pwd):/app" -w /app/workers/writer golang:1.24 gofmt -l .; \
 		exit 1; \
 	fi
 	@echo "All linting checks passed!"
@@ -112,3 +113,4 @@ lint-check:
 # Run all linters and show errors (alias for lint-check)
 lint: lint-check
 
+.PHONY: all up down build logs test test-e2e test-e2e-basic run migrate seed-db test-unit clean format lint-check lint

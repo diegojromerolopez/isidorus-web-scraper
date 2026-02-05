@@ -3,6 +3,7 @@ import json
 import logging
 import signal
 
+from opensearchpy import AsyncOpenSearch
 from tortoise import Tortoise
 
 from api.clients.dynamodb_client import DynamoDBClient
@@ -59,9 +60,19 @@ async def main(stop_event: asyncio.Event | None = None) -> None:
         secret_key=config.aws_secret_access_key,
     )
 
+    os_client = AsyncOpenSearch(
+        hosts=[config.opensearch_url],
+        http_compress=True,
+        use_ssl=False,
+        verify_certs=False,
+        ssl_assert_hostname=False,
+        ssl_show_warn=False,
+    )
+
     deletion_service = DeletionService(
         dynamodb_client=dynamodb_client,
         s3_client=s3_client,
+        os_client=os_client,
         images_bucket=config.images_bucket,
     )
 
@@ -104,6 +115,7 @@ async def main(stop_event: asyncio.Event | None = None) -> None:
             logger.error(f"Error receiving messages: {e}")
             await asyncio.sleep(5)
 
+    await os_client.close()
     await Tortoise.close_connections()
 
 

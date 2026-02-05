@@ -10,9 +10,11 @@ class TestDeletionService(
     def setUp(self) -> None:
         self.mock_dynamodb = AsyncMock()
         self.mock_s3 = AsyncMock()
+        self.mock_os = AsyncMock()
         self.service = DeletionService(
             dynamodb_client=self.mock_dynamodb,
             s3_client=self.mock_s3,
+            os_client=self.mock_os,
             images_bucket="test-bucket",
             batch_size=2,
             s3_batch_size=2,
@@ -20,14 +22,12 @@ class TestDeletionService(
 
     @patch("api.models.Scraping.get_or_none", new_callable=AsyncMock)
     @patch("api.models.PageImage.filter")
-    @patch("api.models.PageTerm.filter")
     @patch("api.models.PageLink.filter")
     @patch("api.models.ScrapedPage.filter")
     async def test_cleanup_scraping_success(
         self,
         mock_page_filter: MagicMock,
         mock_link_filter: MagicMock,
-        mock_term_filter: MagicMock,
         mock_image_filter: MagicMock,
         mock_scraping_get: AsyncMock,
     ) -> None:
@@ -48,9 +48,6 @@ class TestDeletionService(
         )
 
         # 2. Mock relational deletions
-        mock_term_values = AsyncMock(side_effect=[[1], []])
-        mock_term_filter.return_value.limit.return_value.values_list = mock_term_values
-
         mock_link_values = AsyncMock(side_effect=[[2], []])
         mock_link_filter.return_value.limit.return_value.values_list = mock_link_values
 
@@ -69,7 +66,6 @@ class TestDeletionService(
         mock_scraping_get.return_value = mock_scraping
 
         # Ensure delete() is awaitable
-        mock_term_filter.return_value.delete = AsyncMock()
         mock_link_filter.return_value.delete = AsyncMock()
         mock_image_qs.delete = AsyncMock()
         mock_page_filter.return_value.delete = AsyncMock()
@@ -85,6 +81,9 @@ class TestDeletionService(
 
         # Verify Scraping record deletion
         mock_scraping.delete.assert_called_once()
+
+        # Verify OpenSearch deletion
+        self.mock_os.delete_by_query.assert_called_once()
 
     @patch("api.models.Scraping.get_or_none", new_callable=AsyncMock)
     async def test_cleanup_scraping_not_found(
@@ -141,7 +140,7 @@ class TestDeletionService(
         await self.service._DeletionService__cleanup_s3_objects(123)  # type: ignore[attr-defined]  # noqa: E501  # pylint: disable=line-too-long
         self.mock_s3.delete_objects.assert_not_called()
 
-    @patch("api.models.PageTerm.filter")
+    @patch("api.models.PageLink.filter")
     async def test_batch_delete_multiple_batches(self, mock_filter: MagicMock) -> None:
         mock_qs = MagicMock()
         mock_filter.return_value = mock_qs
@@ -154,7 +153,7 @@ class TestDeletionService(
 
         from api import models as api_models  # pylint: disable=import-outside-toplevel
 
-        await self.service._DeletionService__batch_delete(api_models.PageTerm, 123)  # type: ignore[attr-defined]  # noqa: E501  # pylint: disable=line-too-long
+        await self.service._DeletionService__batch_delete(api_models.PageLink, 123)  # type: ignore[attr-defined]  # noqa: E501  # pylint: disable=line-too-long
 
         # Verify filter called with ids
         # filter called:

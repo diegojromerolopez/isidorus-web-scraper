@@ -89,9 +89,10 @@ Workers are decoupled and highly testable through repository mocking.
     -   Extracts image metadata and links them to the source page and job.
     -   *Renamed from Image Explainer (AI removed for efficiency).*
 
-3.  **Page Summarizer** (Python):
-    -   Consumes text content found by the scraper (queue: `page-summarizer-queue`).
-    -   Generates concise summaries of web pages using LLMs.
+3.  **Indexer Worker** (Golang):
+    -   Consumes text content and summaries (queue: `indexer-queue`).
+    -   Indexes documents into **OpenSearch** for full-text search and relevance scoring.
+    -   Replaces the legacy `page_terms` SQL storage with high-performance search capabilities.
 
 4.  **Writer** (Golang):
     -   **Identifier Resolution**: Uses the provided internal integer ID for optimized storage and relationship mapping.
@@ -99,7 +100,7 @@ Workers are decoupled and highly testable through repository mocking.
 
 5.  **Deletion Worker** (Python):
     -   **Async Processing**: Consumes deletion requests from `deletion-queue`.
-    -   **Resource Cleanup**: Orchestrates the removal of S3 objects, PostgreSQL records, and DynamoDB items.
+    -   **Resource Cleanup**: Orchestrates the removal of S3 objects, PostgreSQL records, DynamoDB items, and OpenSearch documents.
     -   **Batching**: Uses batch operations to handle large scraping jobs efficiently.
 
 ## Configuration & Environment Variables
@@ -110,6 +111,7 @@ Workers are decoupled and highly testable through repository mocking.
 | `DATABASE_URL` | Postgres Connection String | `postgres://user:pass@localhost:5432/isidorus` |
 | `INPUT_QUEUE_URL` | Queue for scrape requests | `http://localstack:4566/000000000000/scraper-input` |
 | `WRITER_QUEUE_URL`| Queue for results to be written | `http://localstack:4566/000000000000/writer-queue` |
+| `INDEXER_QUEUE_URL`| Queue for OpenSearch indexing | `http://localstack:4566/000000000000/indexer-queue` |
 | `IMAGE_QUEUE_URL` | Queue for image processing | `http://localstack:4566/000000000000/image-extractor-queue` |
 | `SUMMARIZER_QUEUE_URL`| Queue for page summarizer | `http://localstack:4566/000000000000/page-summarizer-queue` |
 | `DYNAMODB_TABLE` | DynamoDB Table Name | `scraping_jobs` |
@@ -118,9 +120,10 @@ Workers are decoupled and highly testable through repository mocking.
 
 ## Data Schema (PostgreSQL & DynamoDB)
 
-The system uses a hybrid schema:
+The system uses a triple-store architecture:
 - **DynamoDB**: Key-value store for Job History.
-- **PostgreSQL**: Relational graph data for scraped content.
+- **OpenSearch**: Full-text index for scraped content and AI summaries.
+- **PostgreSQL**: Relational graph data for scraped pages and links.
 
 ### DynamoDB
 - **`scraping_jobs`**: Logs job lifecycle.
@@ -132,7 +135,6 @@ The `scrapings` table uses an internal Integer `id` for primary keys and a `uuid
 
 - **`scrapings`**: Tracks scraping jobs. `id` (SERIAL PK).
 - **`scraped_pages`**: Unique URLs and metadata. Linked via `scraping_id` (INT).
-- **`page_terms`**: Map of terms and frequencies. Denormalized with `scraping_id` (INT) and `page_id` (INT).
 - **`page_links`**: Adjacency list for the web graph. Denormalized with `scraping_id` (INT) and `source_page_id` (INT).
 - **`page_images`**: Metadata and URLs. Denormalized with `scraping_id` (INT) and `page_id` (INT).
 - **`api_keys`**: Managed by Django. Used for FastAPI authentication.

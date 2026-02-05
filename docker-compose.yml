@@ -43,6 +43,32 @@ services:
       timeout: 5s
       retries: 5
 
+  opensearch:
+    image: opensearchproject/opensearch:2.11.0
+    environment:
+      - cluster.name=isidorus-cluster
+      - node.name=isidorus-node
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+      - DISABLE_SECURITY_PLUGIN=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    ports:
+      - "9200:9200"
+      - "9600:9600"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9200" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   api:
     build:
       context: .
@@ -59,12 +85,15 @@ services:
       - DELETION_QUEUE_URL=http://localstack:4566/000000000000/deletion-queue
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - OPENSEARCH_URL=http://opensearch:9200
     depends_on:
       localstack:
         condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      opensearch:
         condition: service_healthy
 
   auth-admin:
@@ -165,11 +194,29 @@ services:
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/isidorus
       - LLM_PROVIDER=mock
       - LLM_API_KEY=${LLM_API_KEY}
+      - INDEXER_QUEUE_URL=http://localstack:4566/000000000000/indexer-queue
+      - OPENSEARCH_URL=http://opensearch:9200
     depends_on:
       localstack:
         condition: service_healthy
       writer-worker:
         condition: service_started
+
+  indexer-worker:
+    build:
+      context: ./workers/indexer
+    environment:
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - INPUT_QUEUE_URL=http://localstack:4566/000000000000/indexer-queue
+      - OPENSEARCH_URL=http://opensearch:9200
+    depends_on:
+      localstack:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
 
   deletion-worker:
     build:

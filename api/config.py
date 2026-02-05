@@ -11,6 +11,7 @@ class Configuration(BaseConfiguration):
     """
 
     deletion_queue_url: str
+    opensearch_url: str
 
     @classmethod
     def from_env(cls) -> "Configuration":
@@ -39,6 +40,7 @@ class Configuration(BaseConfiguration):
                 "DELETION_QUEUE_URL",
                 "http://localstack:4566/000000000000/deletion-queue",
             ),
+            opensearch_url=os.getenv("OPENSEARCH_URL", "http://opensearch:9200"),
         )
 
 

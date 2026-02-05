@@ -100,6 +100,27 @@ export default function Dashboard() {
                             Isidorus
                         </span>
                     </div>
+
+                    <form
+                        onSubmit={(e) => {
+                            e.preventDefault();
+                            const formData = new FormData(e.currentTarget);
+                            const q = formData.get('q');
+                            if (q) navigate(`/search?q=${encodeURIComponent(q.toString())}`);
+                        }}
+                        className="hidden md:flex flex-grow max-w-md mx-8"
+                    >
+                        <div className="relative w-full group">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500 group-focus-within:text-sky-400" />
+                            <input
+                                name="q"
+                                type="text"
+                                placeholder="Search everything..."
+                                className="w-full pl-10 pr-4 py-2 bg-slate-800/50 border border-slate-700/80 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-sky-500/40 transition-all font-medium"
+                            />
+                        </div>
+                    </form>
+
                     <button
                         onClick={handleLogout}
                         className="flex items-center gap-2 px-4 py-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-all duration-200"

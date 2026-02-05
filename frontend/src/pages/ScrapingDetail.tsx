@@ -6,10 +6,6 @@ import logo from '../assets/logo.png';
 
 const API_Base = 'http://localhost:8000';
 
-interface Term {
-    term: string;
-    frequency: number;
-}
 
 interface ScrapedImage {
     url: string;
@@ -19,7 +15,6 @@ interface ScrapedImage {
 interface ScrapedPage {
     url: string;
     summary: string | null;
-    terms: Term[];
     images: ScrapedImage[];
 }
 
@@ -275,25 +270,6 @@ export default function ScrapingDetail() {
                                                 </section>
                                             )}
 
-                                            {/* Terms Analysis */}
-                                            {page.terms.length > 0 && (
-                                                <section>
-                                                    <div className="flex items-center gap-2 mb-6 text-slate-300">
-                                                        <RefreshCw className="h-5 w-5 text-sky-400" />
-                                                        <h3 className="text-sm font-bold uppercase tracking-widest">Semantic Frequency Analysis</h3>
-                                                    </div>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {page.terms.slice(0, 20).map((term, t) => (
-                                                            <div key={t} className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm font-medium hover:border-sky-500/50 hover:bg-sky-500/5 transition-all cursor-default">
-                                                                <span className="text-slate-200">{term.term}</span>
-                                                                <span className="ml-2 px-1.5 py-0.5 bg-slate-900 text-sky-400 rounded-md text-[10px] font-bold">
-                                                                    {term.frequency}
-                                                                </span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </section>
-                                            )}
                                         </div>
                                     )}
                                 </div>

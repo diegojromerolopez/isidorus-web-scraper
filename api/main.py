@@ -8,18 +8,17 @@ from tortoise.contrib.fastapi import register_tortoise  # pylint: disable=import
 from api.config import Configuration
 from api.dependencies import (
     get_api_key,
-    get_db_service,
     get_scraper_service,
+    get_search_service,
 )
 from api.models import APIKey
-from api.repositories.db_repository import TermOccurrence
-from api.services.db_service import DbService
 from api.services.scraper_service import (
     FullScrapingRecord,
     NotAuthorizedError,
     ScraperService,
     ScrapingNotFoundError,
 )
+from api.services.search_service import SearchPageResult, SearchService
 
 app = FastAPI()
 app.add_middleware(
@@ -56,15 +55,11 @@ class ScrapingsResponse(TypedDict):
 
 
 class SearchResponse(TypedDict):
-    websites: list[str]
+    results: list[SearchPageResult]
 
 
 class StatusResponse(TypedDict):
     status: str
-
-
-class TermsResponse(TypedDict):
-    terms: list[TermOccurrence]
 
 
 class ScrapeResponse(TypedDict):
@@ -93,6 +88,8 @@ async def scrape(
             request.url, request.depth, user_id
         )
         return {"scraping_id": scraping_id}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -114,6 +111,8 @@ async def scraping(
 
         full_scraping["pages"] = pages
         return {"scraping": full_scraping}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -141,6 +140,8 @@ async def scrapings(
             "scrapings": full_scrapings,
             "meta": {"page": page, "size": size, "total": total},
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -148,31 +149,17 @@ async def scrapings(
 @app.get("/search")
 async def search(
     t: str,
-    service: DbService = Depends(get_db_service),
     _api_key: APIKey = Depends(get_api_key),
+    search_service: SearchService = Depends(get_search_service),
 ) -> SearchResponse:
     if not t:
-        raise HTTPException(status_code=400, detail="Term 't' is required")
+        raise HTTPException(status_code=400, detail="Search term 't' is required")
 
     try:
-        results = await service.search_websites(t)
-        return {"websites": results}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@app.get("/terms")
-async def terms(
-    w: str,
-    service: DbService = Depends(get_db_service),
-    _api_key: APIKey = Depends(get_api_key),
-) -> TermsResponse:
-    if not w:
-        raise HTTPException(status_code=400, detail="Website 'w' is required")
-
-    try:
-        results = await service.get_website_terms(w)
-        return {"terms": results}
+        results = await search_service.search_pages(t, _api_key.user_id)
+        return {"results": results}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -216,5 +203,7 @@ async def delete_scraping(
         raise HTTPException(status_code=404, detail=str(e)) from e
     except NotAuthorizedError as e:
         raise HTTPException(status_code=403, detail=str(e)) from e
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e

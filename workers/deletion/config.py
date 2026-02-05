@@ -12,6 +12,7 @@ class Configuration(BaseConfiguration):
 
     input_queue_url: str
     images_bucket: str
+    opensearch_url: str
 
     @classmethod
     def from_env(cls) -> "Configuration":
@@ -41,4 +42,5 @@ class Configuration(BaseConfiguration):
                 "http://localstack:4566/000000000000/deletion-queue",
             ),
             images_bucket=os.getenv("IMAGES_BUCKET", "isidorus-images"),
+            opensearch_url=os.getenv("OPENSEARCH_URL", "http://opensearch:9200"),
         )

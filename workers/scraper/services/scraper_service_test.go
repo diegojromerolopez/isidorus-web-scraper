@@ -111,7 +111,7 @@ func TestProcessMessage_FullFlow(t *testing.T) {
 
 	// Expect SendMessage to Writer
 	mockSQS.On("SendMessage", mock.Anything, "writer", mock.MatchedBy(func(msg domain.WriterMessage) bool {
-		return msg.URL == "http://site1.com" && msg.Terms["hello"] == 1 && len(msg.Links) == 1 && msg.ScrapingID == 123
+		return msg.URL == "http://site1.com" && len(msg.Links) == 1 && msg.ScrapingID == 123
 	})).Return(nil)
 
 	// Expect SendMessage to Image Queue
@@ -197,19 +197,6 @@ func TestProcessMessage_Non200(t *testing.T) {
 		return m.Type == domain.MsgTypePageData
 	}))
 	mockRedis.AssertExpectations(t)
-}
-
-func TestProcessText_Filtering(t *testing.T) {
-	s := &ScraperService{}
-	terms := make(map[string]int)
-	s.processText("The QUICK brown fox! Is in the garden.", terms)
-
-	assert.Equal(t, 1, terms["quick"])
-	assert.Equal(t, 1, terms["brown"])
-	assert.Equal(t, 1, terms["fox"])
-	assert.Equal(t, 1, terms["garden"])
-	assert.NotContains(t, terms, "the")
-	assert.NotContains(t, terms, "is")
 }
 
 func TestProcessMessage_RedisIncrError(t *testing.T) {
@@ -619,20 +606,9 @@ func TestProcessMessage_IgnoreScriptAndStyle(t *testing.T) {
 
 	// Expect SendMessage to Writer
 	mockSQS.On("SendMessage", mock.Anything, "writer", mock.MatchedBy(func(msg domain.WriterMessage) bool {
-		// Verify terms
-		if msg.Type != domain.MsgTypePageData {
-			return true // Ignore other message types if any
-		}
-		// Content from script/style should NOT be present
-		_, hasRed := msg.Terms["red"]
-		_, hasSecret := msg.Terms["sensitive_variable"]
-		_, hasRuntime := msg.Terms["runtime_code"]
-
-		// Visible content SHOULD be present
-		_, hasVisible := msg.Terms["visible"]
-		_, hasContent := msg.Terms["content"]
-
-		return !hasRed && !hasSecret && !hasRuntime && hasVisible && hasContent
+		// Visible content SHOULD be present?
+		// We no longer track terms in the scraper, so we just check if it's page data
+		return msg.Type == domain.MsgTypePageData
 	})).Return(nil)
 
 	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
