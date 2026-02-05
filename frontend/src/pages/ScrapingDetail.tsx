@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import { Loader2, ArrowLeft, ExternalLink, ImageIcon, FileText, RefreshCw, Search, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
@@ -68,7 +68,7 @@ export default function ScrapingDetail() {
         }
     };
 
-    const fetchStatus = async () => {
+    const fetchStatus = useCallback(async () => {
         try {
             const apiKey = localStorage.getItem('api_key');
             // Ensure endpoint matches backend (Conversation 99e54c26 mentioned /scrape?scraping_id=${id})
@@ -92,11 +92,11 @@ export default function ScrapingDetail() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [id]);
 
     useEffect(() => {
         fetchStatus();
-    }, [id]);
+    }, [fetchStatus]);
 
     const handleRerun = async () => {
         if (!scraping) return;

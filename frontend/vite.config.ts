@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
-  // @ts-ignore
+  // @ts-expect-error test is not expected on Vite config
   test: {
     globals: true,
     environment: 'jsdom',

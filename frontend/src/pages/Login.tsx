@@ -26,8 +26,9 @@ export default function Login() {
 
             localStorage.setItem('api_key', response.data.api_key);
             navigate('/');
-        } catch (err: any) {
-            setError(err.response?.data?.error || 'Invalid credentials');
+        } catch (err: unknown) {
+            const errorMessage = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || 'Invalid credentials';
+            setError(errorMessage);
         } finally {
             setLoading(false);
         }
