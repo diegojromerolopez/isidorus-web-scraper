@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 from fastapi.testclient import TestClient
 
@@ -13,7 +13,9 @@ class TestMain(unittest.TestCase):
         self.client = TestClient(app)
         self.mock_scraper_service = AsyncMock()
         self.mock_db_service = AsyncMock()
-        self.mock_api_key = APIKey(name="test-key", is_active=True)
+        self.mock_api_key = MagicMock()
+        self.mock_api_key.user_id = 1
+        self.mock_db_repository = AsyncMock()
 
         # Override dependencies
         app.dependency_overrides[get_scraper_service] = (
@@ -21,6 +23,8 @@ class TestMain(unittest.TestCase):
         )
         app.dependency_overrides[get_db_service] = lambda: self.mock_db_service
         app.dependency_overrides[get_api_key] = lambda: self.mock_api_key
+        from api.dependencies import get_db_repository
+        app.dependency_overrides[get_db_repository] = lambda: self.mock_db_repository
 
     def tearDown(self) -> None:
         app.dependency_overrides = {}
@@ -39,7 +43,7 @@ class TestMain(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"scraping_id": 123})
         self.mock_scraper_service.start_scraping.assert_called_once_with(
-            "http://example.com", 2
+            "http://example.com", 2, 1
         )
 
     def test_scrape_error(self) -> None:
@@ -137,3 +141,32 @@ class TestMain(unittest.TestCase):
         response = self.client.get("/scrape?scraping_id=123")
         self.assertEqual(response.status_code, 500)
         self.assertIn("Unexpected", response.json()["detail"])
+
+    def test_delete_scraping_success(self) -> None:
+        self.mock_db_repository.get_scraping.return_value = {
+            "id": 123,
+            "url": "http://example.com",
+            "user_id": 1,
+        }
+        self.mock_db_repository.delete_scraping.return_value = True
+
+        response = self.client.delete("/scrapings/123")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"message": "Scraping deletion enqueued"})
+        self.mock_scraper_service.enqueue_deletion.assert_called_once_with(123)
+
+    def test_delete_scraping_not_found(self) -> None:
+        self.mock_db_repository.get_scraping.return_value = None
+        response = self.client.delete("/scrapings/999")
+        self.assertEqual(response.status_code, 404)
+
+    def test_delete_scraping_unauthorized(self) -> None:
+        self.mock_db_repository.get_scraping.return_value = {
+            "id": 123,
+            "url": "http://example.com",
+            "user_id": 999,  # Different user
+        }
+        response = self.client.delete("/scrapings/123")
+        self.assertEqual(response.status_code, 403)
+

@@ -1,12 +1,18 @@
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException
 from pydantic import BaseModel
 from tortoise.contrib.fastapi import register_tortoise  # pylint: disable=import-error
 
 from api.config import Configuration
-from api.dependencies import get_api_key, get_db_service, get_scraper_service
+from api.dependencies import (
+    get_api_key,
+    get_db_repository,
+    get_db_service,
+    get_scraper_service,
+)
 from api.models import APIKey
+from api.repositories.db_repository import DbRepository
 from api.services.db_service import DbService
 from api.services.scraper_service import ScraperService
 
@@ -151,3 +157,27 @@ def setup_database(application: FastAPI) -> None:
 
 
 setup_database(app)
+@app.delete("/scrapings/{scraping_id}")
+async def delete_scraping(
+    scraping_id: int,
+    service: ScraperService = Depends(get_scraper_service),
+    db_repository: DbRepository = Depends(get_db_repository),
+    _api_key: APIKey = Depends(get_api_key),
+) -> dict[str, str]:
+    """
+    Deletes a scraping job.
+    Sends a message to the Deletion worker to handle clean up asynchronously.
+    """
+    scraping = await db_repository.get_scraping(scraping_id)
+    if not scraping:
+        raise HTTPException(status_code=404, detail="Scraping not found")
+
+    if scraping["user_id"] != _api_key.user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this scraping")
+
+    # Orchestrate deletion via Deletion worker
+    success = await service.enqueue_deletion(scraping_id)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to enqueue deletion")
+
+    return {"message": "Scraping deletion enqueued"}

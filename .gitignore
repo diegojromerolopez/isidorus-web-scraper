@@ -1,3 +1,6 @@
+# TODO
+docs/todo/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -14,6 +17,8 @@ htmlcov/
 /workers/scraper/go.sum
 /workers/writer/go.sum
 
+# IDE
+.idea/
 
 # OS
 .DS_Store

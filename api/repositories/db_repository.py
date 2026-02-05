@@ -91,3 +91,21 @@ class DbRepository:
             )
 
         return results
+    async def get_scraping_s3_paths(self, scraping_id: int) -> list[str]:
+        """
+        Retrieves all S3 paths for images associated with a scraping.
+        """
+        images = await models.PageImage.filter(scraping_id=scraping_id).values_list(
+            "s3_path", flat=True
+        )
+        return [path for path in images if path]
+
+    async def delete_scraping(self, scraping_id: int) -> bool:
+        """
+        Deletes a scraping and all its related data (cascaded).
+        """
+        scraping = await models.Scraping.get_or_none(id=scraping_id)
+        if scraping:
+            await scraping.delete()
+            return True
+        return False

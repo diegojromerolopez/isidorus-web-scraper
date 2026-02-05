@@ -24,9 +24,18 @@ class TestDependencies(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(repo, DbRepository)
 
     def test_get_scraper_service(self) -> None:
+        from api.clients.dynamodb_client import DynamoDBClient
+        from api.clients.redis_client import RedisClient
+        from shared.clients.s3_client import S3Client
+
         mock_sqs = MagicMock(spec=SQSClient)
-        service = get_scraper_service(mock_sqs)
+        mock_redis = MagicMock(spec=RedisClient)
+        mock_dynamo = MagicMock(spec=DynamoDBClient)
+        mock_repo = MagicMock(spec=DbRepository)
+
+        service = get_scraper_service(mock_sqs, mock_redis, mock_dynamo, mock_repo)
         self.assertEqual(service.sqs_client, mock_sqs)
+        self.assertEqual(service.db_repository, mock_repo)
 
     def test_get_db_service(self) -> None:
         mock_repo = MagicMock(spec=DbRepository)
@@ -72,6 +81,7 @@ class TestDependencies(unittest.IsolatedAsyncioTestCase):
         hashed = hashlib.sha256(key.encode()).hexdigest()
         mock_api_key = MagicMock(spec=APIKey)
         mock_api_key.name = "Test Key"
+        mock_api_key.user_id = 1
         mock_api_key.expires_at = None
 
         mock_filter.return_value.first = AsyncMock(return_value=mock_api_key)
@@ -86,10 +96,11 @@ class TestDependencies(unittest.IsolatedAsyncioTestCase):
         from api.dependencies import get_api_key
 
         mock_redis = AsyncMock()
-        mock_redis.get.return_value = "Cached Name"
+        mock_redis.get.return_value = "Cached Name:1"
 
         result = await get_api_key(api_key_header="some-key", redis_client=mock_redis)
         self.assertEqual(result.name, "Cached Name")
+        self.assertEqual(result.user_id, 1)
         self.assertTrue(result.is_active)
 
     @patch("api.models.APIKey.filter")
@@ -121,6 +132,7 @@ class TestDependencies(unittest.IsolatedAsyncioTestCase):
 
         mock_api_key = MagicMock(spec=APIKey)
         mock_api_key.expires_at = datetime.now(timezone.utc) - timedelta(days=1)
+        mock_api_key.user_id = 1
 
         mock_filter.return_value.first = AsyncMock(return_value=mock_api_key)
 
@@ -157,9 +169,11 @@ class TestDependencies(unittest.IsolatedAsyncioTestCase):
 
         mock_api_key = MagicMock(spec=APIKey)
         mock_api_key.name = "Future Key"
+        mock_api_key.user_id = 1
         mock_api_key.expires_at = datetime.now(timezone.utc) + timedelta(days=1)
 
         mock_filter.return_value.first = AsyncMock(return_value=mock_api_key)
 
         result = await get_api_key(api_key_header="future", redis_client=mock_redis)
         self.assertEqual(result, mock_api_key)
+        self.assertEqual(result.user_id, 1)

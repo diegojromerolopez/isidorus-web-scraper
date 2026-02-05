@@ -13,11 +13,13 @@ class ScraperService:
         redis_client: RedisClient,
         db_repository: DbRepository,
         dynamodb_client: DynamoDBClient | None = None,
+        deletion_queue_url: str | None = None,
     ):
         self.sqs_client = sqs_client
         self.redis_client = redis_client
         self.db_repository = db_repository
         self.dynamodb_client = dynamodb_client
+        self.deletion_queue_url = deletion_queue_url
 
     async def start_scraping(
         self, url: str, depth: int, user_id: int | None = None
@@ -91,3 +93,14 @@ class ScraperService:
         Retrieves the results of a scraping session.
         """
         return await self.db_repository.get_scrape_results(scraping_id)
+
+    async def enqueue_deletion(self, scraping_id: int) -> bool:
+        """
+        Sends a message to the deletion queue to handle full deletion asynchronously.
+        """
+        if not self.deletion_queue_url:
+            return False
+
+        message = {"scraping_id": scraping_id}
+        await self.sqs_client.send_message(message, queue_url=self.deletion_queue_url)
+        return True

@@ -1,3 +1,4 @@
+# Using Python 3.11 because langchain dependencies (numpy/pandas) do not support 3.14 yet
 FROM python:3.11-slim
 
 WORKDIR /app

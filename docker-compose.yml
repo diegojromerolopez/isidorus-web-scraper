@@ -56,6 +56,7 @@ services:
       - AWS_SECRET_ACCESS_KEY=test
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/isidorus
       - SQS_QUEUE_URL=http://localstack:4566/000000000000/scraper-queue
+      - DELETION_QUEUE_URL=http://localstack:4566/000000000000/deletion-queue
       - REDIS_HOST=redis
       - REDIS_PORT=6379
     depends_on:
@@ -169,6 +170,25 @@ services:
         condition: service_healthy
       writer-worker:
         condition: service_started
+
+  deletion-worker:
+    build:
+      context: .
+      dockerfile: workers/deletion/Dockerfile
+    environment:
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - INPUT_QUEUE_URL=http://localstack:4566/000000000000/deletion-queue
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/isidorus
+      - DYNAMODB_TABLE=scraping_jobs
+      - IMAGES_BUCKET=isidorus-images
+    depends_on:
+      localstack:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
 
 volumes:
   postgres_data:

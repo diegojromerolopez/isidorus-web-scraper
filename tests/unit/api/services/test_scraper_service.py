@@ -12,7 +12,12 @@ class TestScraperService(unittest.IsolatedAsyncioTestCase):
 
         mock_db_repository.create_scraping.return_value = 123
 
-        service = ScraperService(mock_sqs_client, mock_redis_client, mock_db_repository)
+        service = ScraperService(
+            mock_sqs_client,
+            mock_redis_client,
+            mock_db_repository,
+            deletion_queue_url="http://deletion-q",
+        )
 
         url = "http://example.com"
         depth = 2
@@ -22,7 +27,7 @@ class TestScraperService(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(scraping_id, 123)
 
         # Verify DB Global ID Creation
-        mock_db_repository.create_scraping.assert_called_once_with(url)
+        mock_db_repository.create_scraping.assert_called_once_with(url, None)
 
         # Verify Redis Initialization
         mock_redis_client.set.assert_called_once_with("scrape:123:pending", 1)
@@ -44,7 +49,11 @@ class TestScraperService(unittest.IsolatedAsyncioTestCase):
         mock_db_repository.create_scraping.return_value = 123
 
         service = ScraperService(
-            mock_sqs_client, mock_redis_client, mock_db_repository, mock_dynamodb_client
+            mock_sqs_client,
+            mock_redis_client,
+            mock_db_repository,
+            mock_dynamodb_client,
+            AsyncMock(),
         )
 
         url = "http://example.com"
@@ -80,12 +89,16 @@ class TestScraperService(unittest.IsolatedAsyncioTestCase):
         mock_dynamodb_client.get_item.return_value = expected_dynamo
 
         service = ScraperService(
-            mock_sqs_client, mock_redis_client, mock_db_repository, mock_dynamodb_client
+            mock_sqs_client,
+            mock_redis_client,
+            mock_db_repository,
+            mock_dynamodb_client,
+            AsyncMock(),
         )
 
         result = await service.get_scraping_status(123)
 
-        expected_merged = {**expected_pg, **expected_dynamo}
+        expected_merged = {**expected_pg, **expected_dynamo, "depth": 1}
         self.assertEqual(result, expected_merged)
         mock_db_repository.get_scraping.assert_called_once_with(123)
         mock_dynamodb_client.get_item.assert_called_once_with({"scraping_id": "123"})
@@ -101,7 +114,9 @@ class TestScraperService(unittest.IsolatedAsyncioTestCase):
         ]
         mock_db_repository.get_scrape_results.return_value = expected_results
 
-        service = ScraperService(mock_sqs_client, mock_redis_client, mock_db_repository)
+        service = ScraperService(
+            mock_sqs_client, mock_redis_client, mock_db_repository, deletion_queue_url="http://deletion-q"
+        )
 
         result = await service.get_scraping_results(123)
 
@@ -124,7 +139,11 @@ class TestScraperService(unittest.IsolatedAsyncioTestCase):
         }
 
         service = ScraperService(
-            AsyncMock(), AsyncMock(), mock_db_repository, dynamodb_client=None
+            AsyncMock(),
+            AsyncMock(),
+            mock_db_repository,
+            dynamodb_client=None,
+            deletion_queue_url="http://deletion-q",
         )
         result = await service.get_scraping_status(123)
         self.assertIsNotNone(result)
@@ -142,12 +161,31 @@ class TestScraperService(unittest.IsolatedAsyncioTestCase):
         mock_dynamodb_client.get_item.return_value = None
 
         service = ScraperService(
-            AsyncMock(), AsyncMock(), mock_db_repository, mock_dynamodb_client
+            AsyncMock(),
+            AsyncMock(),
+            mock_db_repository,
+            mock_dynamodb_client,
+            deletion_queue_url="http://deletion-q",
         )
         result = await service.get_scraping_status(123)
         self.assertIsNotNone(result)
         assert result is not None
         self.assertEqual(result["status"], "UNKNOWN")
+
+    async def test_enqueue_deletion(self) -> None:
+        mock_sqs_client = AsyncMock()
+        service = ScraperService(
+            mock_sqs_client,
+            AsyncMock(),
+            AsyncMock(),
+            deletion_queue_url="http://deletion-q",
+        )
+
+        await service.enqueue_deletion(123)
+
+        mock_sqs_client.send_message.assert_called_once_with(
+            {"scraping_id": 123}, queue_url="http://deletion-q"
+        )
 
 
 if __name__ == "__main__":

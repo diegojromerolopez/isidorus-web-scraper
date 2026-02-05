@@ -1,18 +1,22 @@
 import os
 from dataclasses import dataclass
+
 from shared.config import Configuration as BaseConfiguration
+
 
 @dataclass
 class Configuration(BaseConfiguration):
     """
-    API-specific configuration.
+    Deletion worker-specific configuration.
     """
-    deletion_queue_url: str
+
+    input_queue_url: str
+    images_bucket: str
 
     @classmethod
     def from_env(cls) -> "Configuration":
         """
-        Loads API configuration from environment variables.
+        Loads worker configuration from environment variables.
         """
         return cls(
             # Base fields
@@ -31,11 +35,10 @@ class Configuration(BaseConfiguration):
             ),
             redis_host=os.getenv("REDIS_HOST", "redis"),
             redis_port=int(os.getenv("REDIS_PORT", "6379")),
-            # API fields
-            deletion_queue_url=os.getenv(
-                "DELETION_QUEUE_URL",
+            # Worker fields
+            input_queue_url=os.getenv(
+                "INPUT_QUEUE_URL",
                 "http://localstack:4566/000000000000/deletion-queue",
             ),
+            images_bucket=os.getenv("IMAGES_BUCKET", "isidorus-images"),
         )
-
-__all__ = ["Configuration"]

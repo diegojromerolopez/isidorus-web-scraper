@@ -57,7 +57,13 @@ def get_scraper_service(
     Dependency provider for ScraperService.
     Requires SQSClient, RedisClient, DynamoDBClient, DbRepository.
     """
-    return ScraperService(sqs_client, redis_client, db_repository, dynamodb_client)
+    return ScraperService(
+        sqs_client,
+        redis_client,
+        db_repository,
+        dynamodb_client,
+        config.deletion_queue_url,
+    )
 
 
 def get_db_service(

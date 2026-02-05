@@ -1,6 +1,6 @@
 services:
   trigger:
-    image: python:3.10-slim
+    image: python:3.14-slim
     volumes:
       - ./trigger:/app/trigger
     command: /bin/bash -c "pip install requests && python /app/trigger/trigger_scraper.py"

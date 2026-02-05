@@ -336,6 +336,54 @@ class TestScrapingE2E(unittest.TestCase):
         )
         print("DynamoDB Job History Test passed!")
 
+    def test_scraping_deletion(self) -> None:
+        print("Starting Scraping Deletion Test...")
+        # 1. Trigger Scraping to report some data
+        scraping_id = self._trigger_scraping(
+            "http://mock-website:8000/index.html", depth=1
+        )
+        print(f"Deletion Test: Scraping started with ID: {scraping_id}")
+
+        # 2. Wait for completion
+        self._poll_scraping_completion(scraping_id)
+
+        # 3. Trigger Deletion
+        response = self.session.delete(f"{API_URL}/scrapings/{scraping_id}", timeout=5)
+        self.assertEqual(response.status_code, 200, f"Failed to delete scraping: {response.text}")
+        print(f"Deletion triggered for ID: {scraping_id}")
+
+        # 4. Verify Deletion (Poll API until 404)
+        for _ in range(300):
+            response = self.session.get(f"{API_URL}/scrape", params={"scraping_id": scraping_id}, timeout=5)
+            if response.status_code == 404:
+                print("API returned 404. Scraping deleted from relational DB.")
+                break
+            time.sleep(1)
+        else:
+            self.fail("Scraping was not deleted from API within timeout")
+
+        # 5. Verify DynamoDB Deletion
+        dynamodb = boto3.resource(
+            "dynamodb",
+            endpoint_url=AWS_ENDPOINT_URL,
+            region_name=AWS_REGION,
+            aws_access_key_id=AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+        )
+        table = dynamodb.Table("scraping_jobs")
+        
+        # Poll DynamoDB to ensure item is gone
+        for _ in range(30):
+             resp = table.get_item(Key={"scraping_id": str(scraping_id)})
+             if "Item" not in resp:
+                 print("DynamoDB item deleted.")
+                 break
+             time.sleep(1)
+        else:
+             self.fail("DynamoDB item was not deleted")
+
+        print("Scraping Deletion Test passed!")
+
 
 if __name__ == "__main__":
     unittest.main()
