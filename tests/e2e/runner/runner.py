@@ -50,6 +50,7 @@ class TestScrapingE2E(unittest.TestCase):
         required_queues = [
             "scraper-queue",
             "image-extractor-queue",
+            "image-explainer-queue",
             "writer-queue",
             "page-summarizer-queue",
         ]

@@ -28,7 +28,6 @@ class SummarizerService:
             body = json.loads(message_body)
             scraping_id = body.get("scraping_id")
             user_id = body.get("user_id")
-            page_id = body.get("page_id")  # Optional, might not be known by scraper
             url = body.get("url")
             content = body.get("content")
 
@@ -39,7 +38,7 @@ class SummarizerService:
             logger.info("Summarizing page: %s for scraping %s", url, scraping_id)
 
             # Generate Summary
-            summary = SummarizerFactory.summarize_text(self.__llm, content)
+            summary = await SummarizerFactory.summarize_text(self.__llm, content)
             logger.info("Generated summary for %s", url)
 
             # Send to Writer
@@ -49,9 +48,6 @@ class SummarizerService:
                 "url": url,
                 "summary": summary,
             }
-
-            if page_id:
-                writer_msg["page_id"] = page_id
 
             await self.__sqs_client.send_message(writer_msg, self.__writer_queue_url)
             logger.info("Sent summary for %s to writer queue", url)

@@ -13,6 +13,7 @@ type Config struct {
 	IndexerQueueURL       string
 	RedisHost             string
 	RedisPort             string
+	ImageExtractorEnabled bool
 	ImageExplainerEnabled bool
 	PageSummarizerEnabled bool
 }
@@ -26,6 +27,7 @@ func Load() (*Config, error) {
 		RedisHost:             os.Getenv("REDIS_HOST"),
 		RedisPort:             os.Getenv("REDIS_PORT"),
 		IndexerQueueURL:       os.Getenv("INDEXER_QUEUE_URL"),
+		ImageExtractorEnabled: os.Getenv("IMAGE_EXTRACTOR_ENABLED") == "true",
 		ImageExplainerEnabled: os.Getenv("IMAGE_EXPLAINER_ENABLED") == "true",
 		PageSummarizerEnabled: os.Getenv("PAGE_SUMMARIZER_ENABLED") == "true",
 	}

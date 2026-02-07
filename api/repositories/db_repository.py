@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import TypedDict
 
 from api import models
@@ -7,6 +8,8 @@ class ScrapingRecord(TypedDict):
     id: int
     url: str
     user_id: int | None
+    summary: str | None
+    scraped_at: datetime | None
 
 
 class PageImageResult(TypedDict):
@@ -34,10 +37,15 @@ class DbRepository:
         """
         scraping = await models.Scraping.get_or_none(id=scraping_id)
         if scraping:
+            seed_page = await models.ScrapedPage.filter(
+                scraping_id=scraping.id, url=scraping.url
+            ).first()
             return {
                 "id": scraping.id,
                 "url": scraping.url,
                 "user_id": scraping.user_id,
+                "summary": seed_page.summary if seed_page else None,
+                "scraped_at": seed_page.scraped_at if seed_page else None,
             }
         return None
 
@@ -52,9 +60,22 @@ class DbRepository:
         total = await query.count()
         scrapings = await query.offset(offset).limit(limit).order_by("-id")
 
-        return [
-            {"id": s.id, "url": s.url, "user_id": s.user_id} for s in scrapings
-        ], total
+        results: list[ScrapingRecord] = []
+        for s in scrapings:
+            seed_page = await models.ScrapedPage.filter(
+                scraping_id=s.id, url=s.url
+            ).first()
+            results.append(
+                {
+                    "id": s.id,
+                    "url": s.url,
+                    "user_id": s.user_id,
+                    "summary": seed_page.summary if seed_page else None,
+                    "scraped_at": seed_page.scraped_at if seed_page else None,
+                }
+            )
+
+        return results, total
 
     async def get_scraping_results(self, scraping_id: int) -> list[ScrapedPageRecord]:
         """

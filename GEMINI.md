@@ -24,6 +24,7 @@ This application is designed for scenarios where deep content analysis of a web 
 │   ├── scraper/        # Recursive Web Scraper (Go)
 │   ├── writer/         # Batch DB Writer (Go)
 │   ├── image_extractor/# Image Metadata Extractor (Python)
+│   ├── image_explainer/# AI Image Explainer (Python)
 │   └── page_summarizer/# AI Page Summarizer (Python)
 ├── tests/
 │   ├── unit/           # Python, Go, and Frontend Unit Tests
@@ -84,12 +85,18 @@ Workers are decoupled and highly testable through repository mocking.
     -   **Job Tracking**: Uses Redis for distributed reference counting to track pending tasks and signals job completion.
     -   **Feature Flags**: Conditionally enables `IMAGE_EXPLAINER_ENABLED` and `PAGE_SUMMARIZER_ENABLED`.
 
-2.  **Image Extractor** (Python):
+2.  **Image Extractor** (Golang):
     -   Consumes image URLs found by the scraper (queue: `image-extractor-queue`).
-    -   Extracts image metadata and links them to the source page and job.
-    -   *Renamed from Image Explainer (AI removed for efficiency).*
+    -   **Persistence**: Downloads and uploads images to an AWS S3 bucket.
+    -   Sends metadata to the Writer and enqueues tasks for the Explainer.
 
-3.  **Indexer Worker** (Golang):
+3.  **Image Explainer** (Python):
+    -   Consumes tasks from `image-explainer-queue`.
+    -   **S3 Retrieval**: Downloads images from AWS S3 for processing.
+    -   **AI Description**: Generates image descriptions (alt-text) using LLM providers.
+    -   Sends results to the Writer.
+
+4.  **Indexer Worker** (Golang):
     -   Consumes text content and summaries (queue: `indexer-queue`).
     -   Indexes documents into **OpenSearch** for full-text search and relevance scoring.
     -   Replaces the legacy `page_terms` SQL storage with high-performance search capabilities.
@@ -113,10 +120,15 @@ Workers are decoupled and highly testable through repository mocking.
 | `WRITER_QUEUE_URL`| Queue for results to be written | `http://localstack:4566/000000000000/writer-queue` |
 | `INDEXER_QUEUE_URL`| Queue for OpenSearch indexing | `http://localstack:4566/000000000000/indexer-queue` |
 | `IMAGE_QUEUE_URL` | Queue for image processing | `http://localstack:4566/000000000000/image-extractor-queue` |
+| `IMAGE_EXPL_QUEUE_URL`| Queue for image explanation | `http://localstack:4566/000000000000/image-explainer-queue` |
 | `SUMMARIZER_QUEUE_URL`| Queue for page summarizer | `http://localstack:4566/000000000000/page-summarizer-queue` |
 | `DYNAMODB_TABLE` | DynamoDB Table Name | `scraping_jobs` |
 | `IMAGE_EXPLAINER_ENABLED` | Enable AI image explanation | `true` |
 | `PAGE_SUMMARIZER_ENABLED` | Enable page summarization | `true` |
+| `LLM_PROVIDER` | LLM backend (mock, openai, ollama) | `ollama` |
+
+### Local LLM Support (Ollama)
+The system supports running LLM workloads locally via **Ollama**. This is the default configuration in `docker-compose.yml`, using the `phi3` model for efficiency. Local inference ensures data privacy and eliminates external API costs.
 
 ## Data Schema (PostgreSQL & DynamoDB)
 

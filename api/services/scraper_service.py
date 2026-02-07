@@ -108,14 +108,30 @@ class ScraperService:
                 {"scraping_id": str(scraping_id)}
             )
             if item:
-                scraping_metadata = {
-                    "status": item.get("status", "UNKNOWN"),
-                    "created_at": item.get("created_at"),
-                    "completed_at": item.get("completed_at"),
-                    "depth": int(item.get("depth", 1)),
-                    "links_count": int(item.get("links_count", 0)),
-                    "pages": None,
-                }
+                scraping_metadata.update(
+                    {
+                        "status": item.get("status", "UNKNOWN"),
+                        "created_at": item.get("created_at"),
+                        "completed_at": item.get("completed_at"),
+                        "depth": int(item.get("depth", 1)),
+                        "links_count": int(item.get("links_count", 0)),
+                    }
+                )
+
+        # Ensure default fields exist even if DynamoDB call fails or is empty
+        # This prevents Pydantic validation errors in the API layer
+        if scraping_metadata["status"] == "UNKNOWN":
+            # If we don't have DynamoDB data, we provide safe defaults
+            # that satisfy the FullScrapingRecord TypedDict/Model
+            scraping_metadata.setdefault("status", "PENDING")
+
+            scraped_at = id_record["scraped_at"]
+            created_at_str = scraped_at.isoformat() if scraped_at else None
+            scraping_metadata.setdefault("created_at", created_at_str)
+
+            scraping_metadata.setdefault("completed_at", None)
+            scraping_metadata.setdefault("depth", 1)
+            scraping_metadata.setdefault("links_count", 0)
 
         # 3. Merge
         full_scraping_record = {**id_record, **scraping_metadata}
@@ -133,31 +149,35 @@ class ScraperService:
 
         merged_scrapings: list[FullScrapingRecord] = []
         for scraping in scrapings:
-            merged_scraping: FullScrapingRecord = cast(FullScrapingRecord, scraping)
             sid = str(scraping["id"])
-            links_count = 0
-            status = "UNKNOWN"
+
+            scraped_at = scraping["scraped_at"]
+            created_at_str = scraped_at.isoformat() if scraped_at else None
+
+            # Default metadata
+            metadata: ScrapingMetadata = {
+                "status": "PENDING",
+                "created_at": created_at_str,
+                "completed_at": None,
+                "depth": 1,
+                "links_count": 0,
+                "pages": None,
+            }
 
             if self.dynamodb_client:
                 item = await self.dynamodb_client.get_item({"scraping_id": sid})
                 if item:
-                    links_count = int(item.get("links_count", 0))
-                    status = item.get("status", "UNKNOWN")
-                    merged_scraping = cast(
-                        FullScrapingRecord,
+                    metadata.update(
                         {
-                            **scraping,
-                            **{
-                                "status": status,
-                                "created_at": item.get("created_at"),
-                                "completed_at": item.get("completed_at"),
-                                "depth": int(item.get("depth", 1)),
-                                "links_count": links_count,
-                                "pages": None,
-                            },
-                        },
+                            "status": item.get("status", "PENDING"),
+                            "created_at": item.get("created_at") or created_at_str,
+                            "completed_at": item.get("completed_at"),
+                            "depth": int(item.get("depth", 1)),
+                            "links_count": int(item.get("links_count", 0)),
+                        }
                     )
 
+            merged_scraping = cast(FullScrapingRecord, {**scraping, **metadata})
             merged_scrapings.append(merged_scraping)
 
         return merged_scrapings, total

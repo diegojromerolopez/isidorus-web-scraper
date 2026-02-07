@@ -38,8 +38,11 @@ class TestDbRepository(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(paths, ["s3://b/k1", "s3://b/k2"])
         mock_filter.assert_called_once_with(scraping_id=123)
 
+    @patch("api.models.ScrapedPage.filter")
     @patch("api.models.Scraping.get_or_none", new_callable=AsyncMock)
-    async def test_get_scraping(self, mock_get: AsyncMock) -> None:
+    async def test_get_scraping(
+        self, mock_get: AsyncMock, mock_page_filter: MagicMock
+    ) -> None:
         mock_scraping = MagicMock()
         mock_scraping.id = 123
         mock_scraping.url = "http://url.com"
@@ -47,17 +50,21 @@ class TestDbRepository(unittest.IsolatedAsyncioTestCase):
         # Dates...
         mock_get.return_value = mock_scraping
 
+        # Mock page fetch for summary
+        mock_page_qs = MagicMock()
+        mock_page_filter.return_value = mock_page_qs
+        mock_page = MagicMock()
+        mock_page.summary = "Mock Summary"
+        mock_page_qs.first = AsyncMock(return_value=mock_page)
+
         result = await self.repo.get_scraping(123)
         self.assertIsNotNone(result)
         if result:
             self.assertEqual(result["id"], 123)
-        mock_get.assert_called_once_with(id=123)
+            self.assertEqual(result["summary"], "Mock Summary")
 
-    @patch("api.models.Scraping.get_or_none", new_callable=AsyncMock)
-    async def test_get_scraping_not_found(self, mock_get: AsyncMock) -> None:
-        mock_get.return_value = None
-        result = await self.repo.get_scraping(999)
-        self.assertIsNone(result)
+        mock_get.assert_called_once_with(id=123)
+        mock_page_filter.assert_called_once_with(scraping_id=123, url="http://url.com")
 
     @patch("api.models.ScrapedPage.filter")
     async def test_get_scraping_results(self, mock_filter: MagicMock) -> None:

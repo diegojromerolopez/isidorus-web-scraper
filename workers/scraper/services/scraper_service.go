@@ -37,6 +37,7 @@ type ScraperService struct {
 	imageQueueURL         string
 	summarizerQueueURL    string
 	indexerQueueURL       string
+	imageExtractorEnabled bool
 	imageExplainerEnabled bool
 	pageSummarizerEnabled bool
 }
@@ -66,8 +67,9 @@ func WithQueues(input, writer, image, summarizer, indexer string) ScraperOption 
 	}
 }
 
-func WithFeatureFlags(imageExplainer, pageSummarizer bool) ScraperOption {
+func WithFeatureFlags(imageExtractor, imageExplainer, pageSummarizer bool) ScraperOption {
 	return func(s *ScraperService) {
+		s.imageExtractorEnabled = imageExtractor
 		s.imageExplainerEnabled = imageExplainer
 		s.pageSummarizerEnabled = pageSummarizer
 	}
@@ -240,7 +242,7 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 	}
 
 	// Send Images to Image Queue (if enabled)
-	if s.imageExplainerEnabled {
+	if s.imageExtractorEnabled {
 		for _, imgURL := range images {
 			imgMsg := domain.ImageMessage{
 				URL:         imgURL,

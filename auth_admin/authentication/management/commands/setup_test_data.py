@@ -13,7 +13,7 @@ class Command(BaseCommand):
     def handle(self, *args: Any, **options: Any) -> None:
         # Create a test user if it doesn't exist
         user, created = User.objects.get_or_create(
-            username="test-runner", defaults={"email": "test@example.com"}
+            username="test-user", defaults={"email": "test@example.com"}
         )
         if created:
             user.set_password("test-password")

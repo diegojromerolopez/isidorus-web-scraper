@@ -32,7 +32,7 @@ class TestSummarizerService(unittest.IsolatedAsyncioTestCase):
             }
         )
 
-        mock_factory.summarize_text.return_value = "Summary"
+        mock_factory.summarize_text = AsyncMock(return_value="Summary")
 
         # Test both queues
         indexer_queue = "indexer-queue"
@@ -52,32 +52,6 @@ class TestSummarizerService(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(writer_args[0]["type"], "page_summary")
         self.assertEqual(writer_args[0]["summary"], "Summary")
         self.assertEqual(writer_args[1], self.writer_queue)
-
-        # Check Indexer Message
-        indexer_args = self.mock_sqs.send_message.call_args_list[1][0]
-        self.assertEqual(indexer_args[0]["url"], "http://example.com")
-        self.assertEqual(indexer_args[0]["content"], "some text content")
-        self.assertEqual(indexer_args[0]["summary"], "Summary")
-        self.assertEqual(indexer_args[1], indexer_queue)
-
-    async def test_process_message_with_page_id(self, mock_factory: MagicMock) -> None:
-        # Setup message
-        msg_body = json.dumps(
-            {
-                "scraping_id": 123,
-                "page_id": 456,
-                "url": "http://example.com",
-                "content": "some text content",
-            }
-        )
-
-        mock_factory.summarize_text.return_value = "Summary"
-        service = SummarizerService(self.mock_sqs, self.writer_queue)
-        await service.process_message(msg_body)
-
-        args = self.mock_sqs.send_message.call_args[0]
-        payload = args[0]
-        self.assertEqual(payload["page_id"], 456)
 
     async def test_process_message_missing_fields(
         self, _mock_factory: MagicMock
@@ -103,7 +77,7 @@ class TestSummarizerService(unittest.IsolatedAsyncioTestCase):
         msg_body = json.dumps(
             {"scraping_id": 123, "url": "http://example.com", "content": "text"}
         )
-        mock_factory.summarize_text.side_effect = Exception("Boom")
+        mock_factory.summarize_text = AsyncMock(side_effect=Exception("Boom"))
 
         service = SummarizerService(self.mock_sqs, self.writer_queue)
         await service.process_message(msg_body)
