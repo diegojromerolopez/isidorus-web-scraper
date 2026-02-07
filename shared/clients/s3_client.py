@@ -1,4 +1,5 @@
 import logging
+from typing import cast
 
 import aioboto3  # type: ignore
 from botocore.exceptions import ClientError  # type: ignore
@@ -93,3 +94,19 @@ class S3Client:
         except ClientError as e:
             logger.error("Failed to batch delete from S3: %s", e)
             raise e
+
+    async def download_bytes(self, bucket: str, key: str) -> bytes | None:
+        try:
+            async with self.__session.client(
+                "s3",
+                endpoint_url=self.__endpoint_url,
+                region_name=self.__region_name,
+                aws_access_key_id=self.__access_key,
+                aws_secret_access_key=self.__secret_key,
+            ) as client:
+                response = await client.get_object(Bucket=bucket, Key=key)
+                async with response["Body"] as stream:
+                    return cast(bytes, await stream.read())
+        except ClientError as e:
+            logger.error("Failed to download from S3: %s", e)
+            return None

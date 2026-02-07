@@ -5,12 +5,10 @@ from typing import Any
 from langchain_anthropic import ChatAnthropic  # pylint: disable=import-error
 
 # pylint: disable=import-error
-from langchain_classic.chains import load_summarize_chain  # type: ignore
-from langchain_ollama import ChatOllama  # type: ignore
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_huggingface import HuggingFaceEndpoint
+from langchain_ollama import ChatOllama  # type: ignore
 from langchain_openai import ChatOpenAI  # type: ignore
-from langchain_text_splitters import RecursiveCharacterTextSplitter  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -66,22 +64,36 @@ class SummarizerFactory:
         return MockLLM()
 
     @staticmethod
-    def summarize_text(llm: Any, text: str) -> str:
+    async def summarize_text(llm: Any, text: str) -> str:
         try:
             if isinstance(llm, MockLLM):
                 return "Mocked summary for testing"
 
-            text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=4000, chunk_overlap=200
+            # 1. Truncate text to avoid huge prompts and long processing
+            # tinyllama and other small models have 2048-4096 context window
+            # We truncate to ~1500 words to be safe
+            words = text.split()
+            if len(words) > 1500:
+                text = " ".join(words[:1500]) + "..."
+
+            # 2. Simple prompt for speed instead of complex map_reduce
+            prompt = (
+                "Write a concise summary of the following web page content. "
+                "Do not repeat these instructions. Do not start with "
+                "'Summarize the...'. "
+                "Provide only the summary itself.\n\n"
+                f"Content: {text}\n\n"
+                "Summary:"
             )
-            docs = text_splitter.create_documents([text])
 
-            # For very short texts, map_reduce might be overkill, "stuff" is better
-            chain_type = "stuff" if len(docs) == 1 else "map_reduce"
-
-            chain = load_summarize_chain(llm, chain_type=chain_type)
-            result = chain.run(docs)
-            return str(result)
+            # 3. Use ainvoke for non-blocking I/O
+            logger.info("Sending prompt to LLM (Length: %d)", len(prompt))
+            response = await llm.ainvoke(prompt)
+            content = (
+                response.content if hasattr(response, "content") else str(response)
+            )
+            logger.info("Received response from LLM (Length: %d)", len(content))
+            return content
 
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("LLM summarization failed: %s", e)

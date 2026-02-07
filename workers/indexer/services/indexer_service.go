@@ -20,12 +20,14 @@ type OpenSearchRepository interface {
 type IndexerService struct {
 	sqsRepo        SQSRepository
 	openSearchRepo OpenSearchRepository
+	retryDelay     time.Duration
 }
 
 func NewIndexerService(sqsRepo SQSRepository, openSearchRepo OpenSearchRepository) *IndexerService {
 	return &IndexerService{
 		sqsRepo:        sqsRepo,
 		openSearchRepo: openSearchRepo,
+		retryDelay:     5 * time.Second,
 	}
 }
 
@@ -40,7 +42,7 @@ func (s *IndexerService) Start(ctx context.Context) {
 			messages, handles, err := s.sqsRepo.ReceiveMessages(ctx)
 			if err != nil {
 				log.Printf("Error receiving messages: %v", err)
-				time.Sleep(5 * time.Second)
+				time.Sleep(s.retryDelay)
 				continue
 			}
 

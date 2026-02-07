@@ -1,6 +1,6 @@
 import os
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from workers.page_summarizer.services.summarizer_factory import (
     MockLLM,
@@ -8,7 +8,7 @@ from workers.page_summarizer.services.summarizer_factory import (
 )
 
 
-class TestSummarizerFactory(unittest.TestCase):
+class TestSummarizerFactory(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         # Clear specific env vars before each test
         self.env_vars_to_clear = [
@@ -59,7 +59,7 @@ class TestSummarizerFactory(unittest.TestCase):
         llm = MockLLM()
         res = llm.invoke("prompt")
         self.assertEqual(res.content, "Mocked summary for testing")
-    
+
     @patch("workers.page_summarizer.services.summarizer_factory.ChatOllama")
     def test_get_llm_ollama(self, mock_ollama: MagicMock) -> None:
         """Test factory returns ChatOllama for 'ollama' provider"""
@@ -73,74 +73,70 @@ class TestSummarizerFactory(unittest.TestCase):
         )
         self.assertEqual(llm, mock_instance)
 
+    @patch("workers.page_summarizer.services.summarizer_factory.HuggingFaceEndpoint")
+    def test_get_llm_huggingface(self, mock_hf: MagicMock) -> None:
+        """Test factory returns HuggingFaceEndpoint for 'huggingface' provider"""
+        mock_instance = MagicMock()
+        mock_hf.return_value = mock_instance
+
+        llm = SummarizerFactory.get_llm("huggingface")
+
+        mock_hf.assert_called_once_with(repo_id="mistralai/Mistral-7B-Instruct-v0.2")
+        self.assertEqual(llm, mock_instance)
+
     def test_mock_llm_get_num_tokens(self) -> None:
         llm = MockLLM()
         count = llm.get_num_tokens("hello world")
         self.assertEqual(count, 2)
 
-    def test_summarize_text_mock(self) -> None:
+    async def test_summarize_text_mock(self) -> None:
         llm = MockLLM()
-        summary = SummarizerFactory.summarize_text(llm, "some text")
+        summary = await SummarizerFactory.summarize_text(llm, "some text")
         self.assertEqual(summary, "Mocked summary for testing")
 
-    @patch("workers.page_summarizer.services.summarizer_factory.load_summarize_chain")
-    @patch(
-        "workers.page_summarizer.services.summarizer_factory."
-        "RecursiveCharacterTextSplitter"
-    )
-    def test_summarize_text_real_stuff(
-        self, mock_splitter_cls: MagicMock, mock_load: MagicMock
-    ) -> None:
+    async def test_summarize_text_real_llm(self) -> None:
         # Mock LLM (any non-MockLLM object)
         llm = MagicMock()
+        llm.ainvoke = AsyncMock()
 
-        # Mock Text Splitter
-        mock_splitter = MagicMock()
-        mock_splitter_cls.return_value = mock_splitter
-        mock_doc = MagicMock()
-        # Return 1 doc -> stuff chain
-        mock_splitter.create_documents.return_value = [mock_doc]
+        mock_response = MagicMock()
+        mock_response.content = "Generated Summary"
+        llm.ainvoke.return_value = mock_response
 
-        # Mock Chain
-        mock_chain = MagicMock()
-        mock_load.return_value = mock_chain
-        mock_chain.run.return_value = "Generated Summary"
-
-        summary = SummarizerFactory.summarize_text(llm, "content")
+        summary = await SummarizerFactory.summarize_text(llm, "content")
 
         self.assertEqual(summary, "Generated Summary")
-        mock_load.assert_called_with(llm, chain_type="stuff")
+        llm.ainvoke.assert_called_once()
+        # Verify content was truncated or passed as is if short
+        call_args = llm.ainvoke.call_args[0][0]
+        self.assertIn("Write a concise summary", call_args)
+        self.assertIn("Do not repeat these instructions", call_args)
+        self.assertIn("Content: content", call_args)
+        self.assertIn("Summary:", call_args)
 
-    @patch("workers.page_summarizer.services.summarizer_factory.load_summarize_chain")
-    @patch(
-        "workers.page_summarizer.services.summarizer_factory."
-        "RecursiveCharacterTextSplitter"
-    )
-    def test_summarize_text_real_map_reduce(
-        self, mock_splitter_cls: MagicMock, mock_load: MagicMock
-    ) -> None:
+    async def test_summarize_text_truncation(self) -> None:
         llm = MagicMock()
-        mock_splitter = MagicMock()
-        mock_splitter_cls.return_value = mock_splitter
-        # Return 2 docs -> map_reduce
-        mock_splitter.create_documents.return_value = [MagicMock(), MagicMock()]
+        llm.ainvoke = AsyncMock()
 
-        mock_chain = MagicMock()
-        mock_load.return_value = mock_chain
-        mock_chain.run.return_value = "Map Reduced Summary"
+        mock_response = MagicMock()
+        mock_response.content = "Short Summary"
+        llm.ainvoke.return_value = mock_response
 
-        summary = SummarizerFactory.summarize_text(llm, "content")
+        # Long text (1600 words)
+        long_content = "word " * 1600
+        summary = await SummarizerFactory.summarize_text(llm, long_content)
 
-        self.assertEqual(summary, "Map Reduced Summary")
-        mock_load.assert_called_with(llm, chain_type="map_reduce")
+        self.assertEqual(summary, "Short Summary")
+        call_args = llm.ainvoke.call_args[0][0]
+        # Verify truncation (ends with ...)
+        self.assertIn("word...", call_args)
+        # Check that it roughly has 1500 words of content
+        content_part = call_args.split("Content: ")[1].split("\n\n")[0]
+        self.assertLess(len(content_part.split()), 1510)
 
-    def test_summarize_text_exception(self) -> None:
+    async def test_summarize_text_exception(self) -> None:
         llm = MagicMock()
-        # Pass an object that causes error in splitter or something
-        with patch(
-            "workers.page_summarizer.services.summarizer_factory."
-            "RecursiveCharacterTextSplitter",
-            side_effect=Exception("Error"),
-        ):
-            summary = SummarizerFactory.summarize_text(llm, "content")
-            self.assertEqual(summary, "Summary unavailable")
+        llm.ainvoke = AsyncMock(side_effect=Exception("Error"))
+
+        summary = await SummarizerFactory.summarize_text(llm, "content")
+        self.assertEqual(summary, "Summary unavailable")

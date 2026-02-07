@@ -109,9 +109,14 @@ func TestInsertImageExplanation_Success(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id", "url", "scraping_id", "scraped_at"}).
 			AddRow(1, msg.PageURL, 123, time.Now()))
 
-	// Insert Image
+	// Check if image exists (return not found to trigger insert)
+	mock.ExpectQuery(`SELECT \* FROM "page_images"`).
+		WithArgs(1, "path", 1).
+		WillReturnError(gorm.ErrRecordNotFound)
+
+	// Insert Image (Upsert)
 	mock.ExpectBegin()
-	mock.ExpectQuery(`INSERT INTO "page_images"`).
+	mock.ExpectQuery(`INSERT INTO "page_images".*`).
 		WithArgs(123, 1, "http://img.com", "desc", "path").
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
 	mock.ExpectCommit()
@@ -245,6 +250,7 @@ func TestInsertImageExplanation_InsertError(t *testing.T) {
 		ScrapingID:  123,
 		URL:         "http://img.com",
 		Explanation: "desc",
+		S3Path:      "path",
 	}
 
 	// Find page Success
@@ -253,15 +259,20 @@ func TestInsertImageExplanation_InsertError(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id", "url", "scraping_id", "scraped_at"}).
 			AddRow(1, msg.PageURL, 123, time.Now()))
 
+	// Check if image exists
+	mock.ExpectQuery(`SELECT \* FROM "page_images"`).
+		WithArgs(1, "path", 1).
+		WillReturnError(gorm.ErrRecordNotFound)
+
 	// Insert Image Failure
 	mock.ExpectBegin()
-	mock.ExpectQuery(`INSERT INTO "page_images"`).
+	mock.ExpectQuery(`INSERT INTO "page_images".*`).
 		WillReturnError(errors.New("image db error"))
 	mock.ExpectRollback()
 
 	err := repo.InsertImageExplanation(msg)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to insert image explanation")
+	assert.Contains(t, err.Error(), "failed to insert image for S3Path")
 }
 
 func TestInsertPageSummary_Error_DB(t *testing.T) {

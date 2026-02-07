@@ -66,18 +66,35 @@ func (repo *PostgresDBRepository) InsertImageExplanation(msg domain.WriterMessag
 		return fmt.Errorf("failed to find page for URL %s and id %d: %w", msg.PageURL, msg.ScrapingID, err)
 	}
 
-	// Insert the image
-	image := models.PageImage{
-		ScrapingID:  msg.ScrapingID,
-		PageID:      page.ID,
-		ImageURL:    msg.URL,
-		Explanation: msg.Explanation,
-		S3Path:      msg.S3Path,
+	// Upsert Logic: Check if image exists by S3Path and PageID
+	var existingImage models.PageImage
+	err = repo.db.Where("page_id = ? AND s3_path = ?", page.ID, msg.S3Path).First(&existingImage).Error
+
+	if err == nil {
+		// Image exists, update it (e.g. adding explanation)
+		if msg.Explanation != "" {
+			existingImage.Explanation = msg.Explanation
+		}
+		if msg.URL != "" {
+			existingImage.ImageURL = msg.URL // Update URL if provided (e.g. signed URL)
+		}
+		if err := repo.db.Save(&existingImage).Error; err != nil {
+			return fmt.Errorf("failed to update image explanation for S3Path %s: %w", msg.S3Path, err)
+		}
+	} else {
+		// Image does not exist, create it
+		image := models.PageImage{
+			ScrapingID:  msg.ScrapingID,
+			PageID:      page.ID,
+			ImageURL:    msg.URL,
+			Explanation: msg.Explanation,
+			S3Path:      msg.S3Path,
+		}
+		if err := repo.db.Create(&image).Error; err != nil {
+			return fmt.Errorf("failed to insert image for S3Path %s: %w", msg.S3Path, err)
+		}
 	}
 
-	if err := repo.db.Create(&image).Error; err != nil {
-		return fmt.Errorf("failed to insert image explanation for URL %s: %w", msg.URL, err)
-	}
 	return nil
 }
 
@@ -96,6 +113,7 @@ func (repo *PostgresDBRepository) InsertPageSummary(msg domain.WriterMessage) er
 		return fmt.Errorf("no page found to update summary for URL %s (ScrapingID %d) - will retry", msg.URL, msg.ScrapingID)
 	}
 
+	log.Printf("Successfully updated summary for URL %s (ScrapingID %d)", msg.URL, msg.ScrapingID)
 	return nil
 }
 

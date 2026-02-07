@@ -56,11 +56,6 @@ ignore_missing_imports = true
 module = "api.models"
 disallow_untyped_defs = false
 
-# Disable strict type checking for langchain services
-[[tool.mypy.overrides]]
-module = "workers.image_extractor.services.explainer_factory"
-disallow_untyped_defs = false
-
 # Disable strict type checking for db_repository due to Tortoise ORM dynamic attributes
 [[tool.mypy.overrides]]
 module = "api.repositories.db_repository"

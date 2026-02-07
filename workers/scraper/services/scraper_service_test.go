@@ -3,6 +3,7 @@ package services
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"scraped-worker/domain"
@@ -90,7 +91,7 @@ func TestProcessMessage_FullFlow(t *testing.T) {
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
 		WithQueues("input", "writer", "image", "summarizer", "indexer"),
-		WithFeatureFlags(true, true),
+		WithFeatureFlags(true, true, true), // ImageExtractorEnabled = true
 	)
 
 	html := `
@@ -516,7 +517,7 @@ func TestProcessMessage_SQSSendError_Summary(t *testing.T) {
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
 		WithQueues("input", "writer", "image", "summarizer", "indexer"),
-		WithFeatureFlags(false, true), // Summarizer enabled
+		WithFeatureFlags(false, true, true), // Summarizer enabled, ImageExtractor enabled
 	)
 
 	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.Anything).Return(nil)
@@ -544,7 +545,7 @@ func TestProcessMessage_SQSSendError_Image(t *testing.T) {
 		WithRedisClient(mockRedis),
 		WithPageFetcher(mockFetcher),
 		WithQueues("input", "writer", "image", "summarizer", "indexer"),
-		WithFeatureFlags(true, false), // Image enabled
+		WithFeatureFlags(true, false, true), // Image enabled (via explainer flag logic check), ImageExtractor enabled
 	)
 
 	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.Anything).Return(nil)
@@ -696,4 +697,119 @@ func TestProcessMessage_Non200_SignalsCompletion(t *testing.T) {
 
 	mockSQS.AssertExpectations(t)
 	mockRedis.AssertExpectations(t)
+}
+
+func TestProcessMessage_LargeText(t *testing.T) {
+	mockSQS := new(MockSQSClient)
+	mockRedis := new(MockRedisClient)
+	mockFetcher := new(MockPageFetcher)
+	s := NewScraperService(
+		WithSQSClient(mockSQS),
+		WithRedisClient(mockRedis),
+		WithPageFetcher(mockFetcher),
+		WithQueues("input", "writer", "image", "summarizer", "indexer"),
+	)
+
+	// Create a large text body > 100,000 bytes
+	largeText := bytes.Repeat([]byte("a"), 100005)
+	html := fmt.Sprintf("<html><body><p>%s</p></body></html>", largeText)
+	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(html))}
+	mockFetcher.On("Fetch", "http://site1.com").Return(resp, nil)
+
+	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.Anything).Return(1, nil)
+	mockRedis.On("Decr", mock.Anything, mock.Anything).Return(1, nil)
+
+	mockSQS.On("SendMessage", mock.Anything, "writer", mock.Anything).Return(nil)
+	// Indexer should receive truncated content (approx 100000 + spaces)
+	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.MatchedBy(func(msg domain.IndexMessage) bool {
+		return len(msg.Content) >= 100000 && len(msg.Content) < 100020 // slightly more due to buffer logic
+	})).Return(nil)
+
+	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", ScrapingID: 123})
+
+	mockSQS.AssertExpectations(t)
+}
+
+func TestProcessMessage_SelfClosingTags(t *testing.T) {
+	mockSQS := new(MockSQSClient)
+	mockRedis := new(MockRedisClient)
+	mockFetcher := new(MockPageFetcher)
+	s := NewScraperService(
+		WithSQSClient(mockSQS),
+		WithRedisClient(mockRedis),
+		WithPageFetcher(mockFetcher),
+		WithQueues("input", "writer", "image", "summarizer", "indexer"),
+		WithFeatureFlags(true, false, false), // ImageExtractor enabled
+	)
+
+	// HTML with self-closing tags
+	html := `<html><body>
+		<img src="http://img.com/1.jpg" />
+		<a href="http://site2.com" />
+		<script src="test.js" />
+	</body></html>`
+	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(html))}
+	mockFetcher.On("Fetch", "http://site1.com").Return(resp, nil)
+
+	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.Anything).Return(1, nil)
+	mockRedis.On("Decr", mock.Anything, mock.Anything).Return(1, nil)
+
+	// Writer gets page data (including link from self-closing a)
+	mockSQS.On("SendMessage", mock.Anything, "writer", mock.MatchedBy(func(msg domain.WriterMessage) bool {
+		// Validating we extracted the link
+		foundLink := false
+		for _, l := range msg.Links {
+			if l == "http://site2.com" {
+				foundLink = true
+				break
+			}
+		}
+		return foundLink
+	})).Return(nil)
+
+	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.Anything).Return(nil)
+
+	// Image queue gets image
+	mockSQS.On("SendMessage", mock.Anything, "image", mock.MatchedBy(func(msg domain.ImageMessage) bool {
+		return msg.URL == "http://img.com/1.jpg"
+	})).Return(nil)
+
+	// Redis Incr for the link
+	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.Anything).Return(1, nil)
+	mockRedis.On("IncrBy", mock.Anything, mock.Anything, int64(1)).Return(nil)
+
+	// Input queue gets the link
+	mockSQS.On("SendMessage", mock.Anything, "input", mock.Anything).Return(nil)
+
+	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
+
+	mockSQS.AssertExpectations(t)
+}
+
+func TestProcessMessage_EmptyQueues(t *testing.T) {
+	mockSQS := new(MockSQSClient)
+	mockRedis := new(MockRedisClient)
+	mockFetcher := new(MockPageFetcher)
+	// Don't set optional queues
+	s := NewScraperService(
+		WithSQSClient(mockSQS),
+		WithRedisClient(mockRedis),
+		WithPageFetcher(mockFetcher),
+		WithQueues("input", "writer", "", "", ""), // image, summarizer, indexer empty
+		WithFeatureFlags(true, true, true),        // Flags enabled but queues empty
+	)
+
+	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString("<html></html>"))}
+	mockFetcher.On("Fetch", mock.Anything).Return(resp, nil)
+	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.Anything).Return(1, nil)
+	mockRedis.On("Decr", mock.Anything, mock.Anything).Return(1, nil)
+
+	mockSQS.On("SendMessage", mock.Anything, "writer", mock.Anything).Return(nil)
+
+	// Should NOT send to indexer, summarizer, or image because queues are empty strings
+	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", ScrapingID: 123})
+
+	mockSQS.AssertNotCalled(t, "SendMessage", mock.Anything, "indexer", mock.Anything)
+	mockSQS.AssertNotCalled(t, "SendMessage", mock.Anything, "summarizer", mock.Anything)
+	mockSQS.AssertNotCalled(t, "SendMessage", mock.Anything, "image", mock.Anything)
 }

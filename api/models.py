@@ -22,6 +22,7 @@ class ScrapedPage(models.Model):
 
     class Meta:
         table = "scraped_pages"
+        indexes = [("scraping", "url")]
 
 
 class PageLink(models.Model):

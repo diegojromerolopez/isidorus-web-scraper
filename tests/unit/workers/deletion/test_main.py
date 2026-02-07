@@ -1,5 +1,6 @@
 import json
 import unittest
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from workers.deletion.main import main
@@ -148,3 +149,65 @@ class TestDeletionMain(unittest.IsolatedAsyncioTestCase):
         mock_logger.error.assert_any_call(
             "Error processing message: Expecting value: line 1 column 1 (char 0)"
         )
+
+    @patch("workers.deletion.main.Configuration")
+    @patch("workers.deletion.main.SQSClient")
+    @patch("workers.deletion.main.DynamoDBClient")
+    @patch("workers.deletion.main.S3Client")
+    @patch("workers.deletion.main.DeletionService")
+    @patch("workers.deletion.main.Tortoise")
+    @patch("workers.deletion.main.asyncio")
+    @patch("workers.deletion.main.signal")
+    async def test_main_signal_handling(
+        self,
+        mock_signal: MagicMock,
+        mock_asyncio: MagicMock,
+        mock_tortoise: MagicMock,
+        mock_service_cls: MagicMock,
+        mock_s3_cls: MagicMock,
+        mock_dynamo_cls: MagicMock,
+        mock_sqs_cls: MagicMock,
+        mock_config_cls: MagicMock,
+    ) -> None:
+        # pylint: disable=too-many-arguments,too-many-positional-arguments,unused-argument  # noqa: E501
+        # Mock config
+        mock_config = MagicMock()
+        mock_config.input_queue_url = "http://test-queue"
+        mock_config_cls.from_env.return_value = mock_config
+
+        mock_tortoise.init = AsyncMock()
+        mock_tortoise.close_connections = AsyncMock()
+
+        # Mock loop
+        mock_loop = MagicMock()
+        mock_asyncio.get_running_loop.return_value = mock_loop
+
+        # Mock SQS to return nothing then stop
+        mock_sqs = AsyncMock()
+        mock_sqs_cls.return_value = mock_sqs
+        mock_sqs.receive_messages.return_value = []
+
+        # We need to capture the signal handler
+        captured_handler = None
+
+        def add_signal_handler(sig: Any, handler: Any) -> None:
+            nonlocal captured_handler
+            captured_handler = handler
+
+        mock_loop.add_signal_handler.side_effect = add_signal_handler
+
+        # Mock stop event to control loop
+        mock_stop_event = MagicMock()
+        # Initial check returns False (loop runs), then we trigger signal,
+        # then next check returns True (loop stops)
+        mock_stop_event.is_set.side_effect = [False, True]
+
+        await main(stop_event=mock_stop_event)
+
+        # Verify signal handler was added
+        self.assertTrue(mock_loop.add_signal_handler.called)
+
+        # Verify signal handler logic
+        if captured_handler:
+            captured_handler()
+            mock_stop_event.set.assert_called_once()

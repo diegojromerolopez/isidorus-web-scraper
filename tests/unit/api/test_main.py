@@ -101,6 +101,8 @@ class TestMain(unittest.TestCase):
             "completed_at": None,
             "depth": 1,
             "links_count": 0,
+            "summary": None,  # Added summary
+            "scraped_at": None,
         }
         response = self.client.get("/scraping/123")
 
@@ -121,6 +123,8 @@ class TestMain(unittest.TestCase):
             "completed_at": None,
             "depth": 1,
             "links_count": 5,
+            "summary": "Mock summary",  # Added summary
+            "scraped_at": None,
         }
         self.mock_scraper_service.get_scraping_results.return_value = [
             {"url": "http://foo.com", "images": [], "summary": None}
@@ -162,6 +166,8 @@ class TestMain(unittest.TestCase):
                     "depth": 1,
                     "links_count": 5,
                     "pages": None,
+                    "summary": "Mock summary",
+                    "scraped_at": None,
                 }
             ],
             1,

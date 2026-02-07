@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Isidorus Web Scraper API
   description: API for Isidorus Web Scraper, a web scraping and content analysis application. Named after Isidore of Seville (c. 560-636 AD), who compiled the first encyclopedia.
-  version: 1.0.0
+  version: 1.0.1
 servers:
   - url: http://localhost:8000
     description: Local development server
@@ -64,32 +64,7 @@ paths:
               type: object
               properties:
                 scraping:
-                  type: object
-                  properties:
-                    id:
-                      type: integer
-                    uuid:
-                      type: string
-                    url:
-                      type: string
-                    depth:
-                      type: integer
-                    search_term:
-                      type: string
-                    status:
-                      type: string
-                    created_at:
-                      type: string
-                      format: date-time
-                    completed_at:
-                      type: string
-                      format: date-time
-                      nullable: true
-                    pages:
-                      type: array
-                      items:
-                        type: object
-                      description: List of scraped pages (present when status is COMPLETED)
+                  $ref: '#/components/schemas/FullScrapingRecord'
         '404':
           description: Scraping session not found
         '500':
@@ -146,7 +121,7 @@ paths:
                 scrapings:
                   type: array
                   items:
-                    type: object
+                    $ref: '#/components/schemas/FullScrapingRecord'
                 meta:
                   type: object
                   properties:
@@ -164,61 +139,28 @@ paths:
   /search:
     get:
       summary: Search websites by term
-      description: Returns a list of websites where a specific term has been found.
+      description: Returns a list of websites where a specific term has been found across full-text and summaries.
       parameters:
         - name: t
           in: query
           required: true
-          description: The search term (case-insensitive)
+          description: The search term
           schema:
             type: string
       responses:
         '200':
-          description: List of websites found
+          description: Search results found
           content:
             application: json
             schema:
               type: object
               properties:
-                websites:
+                results:
                   type: array
                   items:
-                    type: string
+                    $ref: '#/components/schemas/SearchPageResult'
         '400':
           description: Term 't' is required
-        '500':
-          description: Internal server error
-
-  /terms:
-    get:
-      summary: Get unique terms for a website
-      description: Lists all unique terms and their frequencies found for a specific website URL.
-      parameters:
-        - name: w
-          in: query
-          required: true
-          description: The website URL
-          schema:
-            type: string
-      responses:
-        '200':
-          description: List of terms found
-          content:
-            application: json
-            schema:
-              type: object
-              properties:
-                terms:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      term:
-                        type: string
-                      occurrence:
-                        type: integer
-        '400':
-          description: Website 'w' is required
         '500':
           description: Internal server error
 
@@ -235,5 +177,88 @@ components:
           format: uri
         depth:
           type: integer
-          minimum: 1
+          minimum: 0
           maximum: 5
+
+    FullScrapingRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+        url:
+          type: string
+        user_id:
+          type: integer
+          nullable: true
+        status:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        depth:
+          type: integer
+        links_count:
+          type: integer
+        summary:
+          type: string
+          nullable: true
+        scraped_at:
+          type: string
+          format: date-time
+          nullable: true
+        pages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScrapedPageRecord'
+
+    ScrapedPageRecord:
+      type: object
+      properties:
+        url:
+          type: string
+        summary:
+          type: string
+          nullable: true
+        images:
+          type: array
+          items:
+            $ref: '#/components/schemas/PageImageResult'
+
+    PageImageResult:
+      type: object
+      properties:
+        url:
+          type: string
+        explanation:
+          type: string
+          nullable: true
+
+    SearchPageResult:
+      type: object
+      properties:
+        url:
+          type: string
+        scraping_id:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        highlights:
+          type: array
+          items:
+            type: string
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+security:
+  - ApiKeyAuth: []

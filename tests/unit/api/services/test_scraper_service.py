@@ -78,6 +78,8 @@ class TestScraperService(unittest.IsolatedAsyncioTestCase):
         expected_pg = {
             "id": 123,
             "url": "http://example.com",
+            "summary": "Mock summary",
+            "scraped_at": None,
         }
         mock_db_repository.get_scraping.return_value = expected_pg
 
@@ -145,6 +147,8 @@ class TestScraperService(unittest.IsolatedAsyncioTestCase):
         mock_db_repository.get_scraping.return_value = {
             "id": 123,
             "url": "http://x.com",
+            "summary": "Mock summary",
+            "scraped_at": None,
         }
 
         service = ScraperService(
@@ -166,6 +170,8 @@ class TestScraperService(unittest.IsolatedAsyncioTestCase):
         mock_db_repository.get_scraping.return_value = {
             "id": 123,
             "url": "http://x.com",
+            "summary": "Mock summary",
+            "scraped_at": None,
         }
         mock_dynamodb_client.get_item.return_value = None
 
@@ -188,6 +194,8 @@ class TestScraperService(unittest.IsolatedAsyncioTestCase):
             "id": 123,
             "url": "http://x.com",
             "user_id": 1,
+            "summary": None,
+            "scraped_at": None,
         }
 
         service = ScraperService(
@@ -220,6 +228,8 @@ class TestScraperService(unittest.IsolatedAsyncioTestCase):
             "id": 123,
             "url": "http://x.com",
             "user_id": 1,
+            "summary": None,
+            "scraped_at": None,
         }
 
         service = ScraperService(AsyncMock(), AsyncMock(), mock_db_repository)

@@ -39,12 +39,12 @@ func main() {
 		services.WithRedisClient(redisClient),
 		services.WithPageFetcher(pageFetcher),
 		services.WithQueues(cfg.InputQueueURL, cfg.WriterQueueURL, cfg.ImageQueueURL, cfg.SummarizerQueueURL, cfg.IndexerQueueURL),
-		services.WithFeatureFlags(cfg.ImageExplainerEnabled, cfg.PageSummarizerEnabled),
+		services.WithFeatureFlags(cfg.ImageExtractorEnabled, cfg.ImageExplainerEnabled, cfg.PageSummarizerEnabled),
 	)
 
 	log.Println("Scraper worker started (DDD Refactor with community standards)")
-	log.Printf("Raw Env: IMAGE_EXPLAINER_ENABLED='%s', PAGE_SUMMARIZER_ENABLED='%s'", os.Getenv("IMAGE_EXPLAINER_ENABLED"), os.Getenv("PAGE_SUMMARIZER_ENABLED"))
-	log.Printf("Feature Flags: ImageExplainerEnabled=%v, PageSummarizerEnabled=%v", cfg.ImageExplainerEnabled, cfg.PageSummarizerEnabled)
+	log.Printf("Raw Env: IMAGE_EXTRACTOR_ENABLED='%s', IMAGE_EXPLAINER_ENABLED='%s', PAGE_SUMMARIZER_ENABLED='%s'", os.Getenv("IMAGE_EXTRACTOR_ENABLED"), os.Getenv("IMAGE_EXPLAINER_ENABLED"), os.Getenv("PAGE_SUMMARIZER_ENABLED"))
+	log.Printf("Feature Flags: ImageExtractorEnabled=%v, ImageExplainerEnabled=%v, PageSummarizerEnabled=%v", cfg.ImageExtractorEnabled, cfg.ImageExplainerEnabled, cfg.PageSummarizerEnabled)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

@@ -11,6 +11,7 @@ interface Scraping {
     url: string;
     user_id: number;
     links_count?: number;
+    summary?: string;
 }
 
 export default function Dashboard() {
@@ -161,7 +162,7 @@ export default function Dashboard() {
                                 type="number"
                                 placeholder="1"
                                 required
-                                min="1"
+                                min="0"
                                 max="5"
                                 value={depth}
                                 onChange={(e) => setDepth(parseInt(e.target.value))}
@@ -205,12 +206,19 @@ export default function Dashboard() {
                                                         <div className="h-10 w-10 bg-sky-500/10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
                                                             <Search className="h-5 w-5 text-sky-400" />
                                                         </div>
-                                                        <Link
-                                                            to={`/scraping/${scraping.id}`}
-                                                            className="font-medium text-slate-200 break-all hover:text-sky-400 transition-colors"
-                                                        >
-                                                            {scraping.url}
-                                                        </Link>
+                                                        <div className="flex flex-col">
+                                                            <Link
+                                                                to={`/scraping/${scraping.id}`}
+                                                                className="font-medium text-slate-200 break-all hover:text-sky-400 transition-colors"
+                                                            >
+                                                                {scraping.url}
+                                                            </Link>
+                                                            {scraping.summary && (
+                                                                <p className="text-xs text-slate-500 mt-1 line-clamp-2 max-w-md">
+                                                                    {scraping.summary}
+                                                                </p>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-5 text-center">
@@ -260,7 +268,7 @@ export default function Dashboard() {
                         </div>
                     )}
                 </div>
-            </main>
-        </div>
+            </main >
+        </div >
     );
 }

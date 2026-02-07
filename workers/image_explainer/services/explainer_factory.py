@@ -60,12 +60,24 @@ class ExplainerFactory:
         return MockLLM()
 
     @staticmethod
-    def explain_image(llm: Any, image_url: str) -> str:
+    async def explain_image(llm: Any, image_url: str) -> str:
         # Simplified LangChain call for image explanation
-        # Note: Vision models usually take base64 or URL depending on provider
         try:
-            # We use a simple prompt for now
-            response = llm.invoke(f"Describe this image: {image_url}")
+            if isinstance(llm, MockLLM):
+                return "Mocked explanation for testing"
+
+            # Check if using tinyllama (current default in ollama config)
+            # tinyllama is NOT a vision model, so it can't describe images.
+            # We return a specific message to inform the user.
+            if hasattr(llm, "model") and llm.model == "tinyllama":
+                return (
+                    "TinyLlama does not support vision. "
+                    "Use a vision-capable model (e.g. llava) for image explanations."
+                )
+
+            # Use ainvoke for non-blocking I/O
+            # For vision models, the image_url (data URL) is passed in the prompt
+            response = await llm.ainvoke(f"Describe this image: {image_url}")
             return response.content if hasattr(response, "content") else str(response)
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("LLM explanation failed: %s", e)
