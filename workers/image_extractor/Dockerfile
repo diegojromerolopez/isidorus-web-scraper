@@ -7,11 +7,11 @@ WORKDIR /app
 RUN apk add --no-cache git
 
 # Copy go.mod and go.sum
-COPY workers/image_extractor/go.mod workers/image_extractor/go.sum ./
+COPY go.mod go.sum ./
 RUN go mod download
 
 # Copy source code
-COPY workers/image_extractor/ ./
+COPY . .
 
 # Build the binary
 RUN CGO_ENABLED=0 GOOS=linux go build -o image-extractor main.go
