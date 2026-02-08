@@ -116,7 +116,7 @@ lint-check:
 		docker run --rm -v "$$(pwd):/app" -w /app/workers/image_extractor golang:1.25-alpine gofmt -l .; \
 		exit 1; \
 	fi
-	@echo "All linting checks passed!"
+
 
 # Run all linters and show errors (alias for lint-check)
 lint: lint-check
