@@ -3,13 +3,14 @@ package services
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strings"
 
+	md "github.com/JohannesKaufmann/html-to-markdown"
+	"github.com/PuerkitoBio/goquery"
 	"scraped-worker/domain"
-
-	"golang.org/x/net/html"
 )
 
 // Consumer-side interfaces
@@ -126,80 +127,46 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 		return
 	}
 
-	tokenizer := html.NewTokenizer(resp.Body)
-	links := []string{}
-	images := []string{}
-
-	// Text accumulation for summarization
-	var fullTextBuilder strings.Builder
-
-	inScript := false
-	inStyle := false
-
-	for {
-		tt := tokenizer.Next()
-		if tt == html.ErrorToken {
-			break
-		}
-
-		if tt == html.TextToken {
-			if !inScript && !inStyle {
-				text := string(tokenizer.Text())
-
-				// Accumulate text for summarizer (simple append for now)
-				// Limit size to avoid memory issues (e.g. 100KB)
-				if fullTextBuilder.Len() < 100000 {
-					fullTextBuilder.WriteString(text)
-					fullTextBuilder.WriteString(" ")
-				}
-			}
-		} else if tt == html.StartTagToken {
-			token := tokenizer.Token()
-			if token.Data == "script" {
-				inScript = true
-			} else if token.Data == "style" {
-				inStyle = true
-			} else if token.Data == "a" {
-				for _, attr := range token.Attr {
-					if attr.Key == "href" {
-						links = append(links, attr.Val)
-					}
-				}
-			} else if token.Data == "img" {
-				for _, attr := range token.Attr {
-					if attr.Key == "src" {
-						images = append(images, attr.Val)
-					}
-				}
-			}
-		} else if tt == html.EndTagToken {
-			token := tokenizer.Token()
-			if token.Data == "script" {
-				inScript = false
-			} else if token.Data == "style" {
-				inStyle = false
-			}
-		} else if tt == html.SelfClosingTagToken {
-			token := tokenizer.Token()
-			if token.Data == "script" {
-				// Self-closing script tag (rare but possible in XHTML)
-				// effectively enters and leaves, or just stays false if we handle it like this
-				// But strictly if it's self-closing it has no content.
-			} else if token.Data == "a" {
-				for _, attr := range token.Attr {
-					if attr.Key == "href" {
-						links = append(links, attr.Val)
-					}
-				}
-			} else if token.Data == "img" {
-				for _, attr := range token.Attr {
-					if attr.Key == "src" {
-						images = append(images, attr.Val)
-					}
-				}
-			}
-		}
+	// 1. Read body into memory (needed for multiple passes: markdown & goquery)
+	// Limit body size to avoid OOM (e.g. 10MB limit)
+	const maxBodySize = 10 * 1024 * 1024
+	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, maxBodySize))
+	if err != nil {
+		log.Printf("failed to read body for URL %s: %v", msg.URL, err)
+		return
 	}
+	htmlContent := string(bodyBytes)
+
+	// 2. Convert to Markdown (for Indexer & Summarizer)
+	converter := md.NewConverter("", true, nil)
+	markdown, err := converter.ConvertString(htmlContent)
+	if err != nil {
+		log.Printf("failed to convert HTML to markdown for URL %s: %v", msg.URL, err)
+		// Fallback to empty string or partial content if needed, but for now just log
+		markdown = ""
+	}
+
+	// 3. Extract Links and Images using GoQuery
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
+	if err != nil {
+		log.Printf("failed to parse HTML with goquery for URL %s: %v", msg.URL, err)
+		return
+	}
+
+	var links []string
+	var images []string
+
+	doc.Find("a[href]").Each(func(i int, s *goquery.Selection) {
+		if href, exists := s.Attr("href"); exists {
+			links = append(links, href)
+		}
+	})
+
+	doc.Find("img[src]").Each(func(i int, s *goquery.Selection) {
+		if src, exists := s.Attr("src"); exists {
+			images = append(images, src)
+		}
+	})
 
 	// Send to Writer (Page Data)
 	// Priority 1: Ensure page exists in DB before sending tasks that reference it (Images, Summaries)
@@ -217,7 +184,7 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 	if s.indexerQueueURL != "" {
 		indexerMsg := domain.IndexMessage{
 			URL:        msg.URL,
-			Content:    fullTextBuilder.String(),
+			Content:    markdown,
 			Summary:    "", // Scraper doesn't have summary yet
 			ScrapingID: msg.ScrapingID,
 			UserID:     msg.UserID,
@@ -228,11 +195,11 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 	}
 
 	// Send to Summarizer Queue (if configured, enabled, and populated)
-	log.Printf("Checking summarizer: enabled=%v, queue=%s, textLen=%d", s.pageSummarizerEnabled, s.summarizerQueueURL, fullTextBuilder.Len())
-	if s.pageSummarizerEnabled && s.summarizerQueueURL != "" && fullTextBuilder.Len() > 0 {
+	log.Printf("Checking summarizer: enabled=%v, queue=%s, textLen=%d", s.pageSummarizerEnabled, s.summarizerQueueURL, len(markdown))
+	if s.pageSummarizerEnabled && s.summarizerQueueURL != "" && len(markdown) > 0 {
 		summaryMsg := domain.PageSummaryMessage{
 			URL:        msg.URL,
-			Content:    fullTextBuilder.String(),
+			Content:    markdown,
 			ScrapingID: msg.ScrapingID,
 			UserID:     msg.UserID,
 		}
