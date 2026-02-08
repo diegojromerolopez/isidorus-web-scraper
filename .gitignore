@@ -18,8 +18,6 @@ htmlcov/
 /workers/scraper/main
 /workers/writer/main
 *.test
-/workers/scraper/go.sum
-/workers/writer/go.sum
 
 # IDE
 .idea/

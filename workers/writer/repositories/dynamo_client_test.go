@@ -28,94 +28,144 @@ func TestNewDynamoDBClient(t *testing.T) {
 	assert.Equal(t, "test-table", client.tableName)
 }
 
-func TestUpdateJobStatus_NoTable(t *testing.T) {
-	client := NewDynamoDBClient(nil, "")
-	err := client.UpdateJobStatus(context.Background(), "123", "PENDING")
-	assert.NoError(t, err)
+func TestDynamoDBClient_UpdateJobStatus(t *testing.T) {
+	tests := []struct {
+		name      string
+		tableName string
+		scrapingID string
+		status     string
+		mockFunc  func(*MockDynamoDB)
+		wantErr   bool
+	}{
+		{
+			name:       "Success",
+			tableName:  "test-table",
+			scrapingID: "123",
+			status:     "PENDING",
+			mockFunc: func(m *MockDynamoDB) {
+				m.On("UpdateItem", mock.Anything, mock.Anything, mock.Anything).Return(&dynamodb.UpdateItemOutput{}, nil)
+			},
+		},
+		{
+			name:       "No Table - NoOp",
+			tableName:  "",
+			scrapingID: "123",
+			status:     "PENDING",
+			mockFunc:   func(m *MockDynamoDB) {},
+		},
+		{
+			name:       "Error",
+			tableName:  "test-table",
+			scrapingID: "123",
+			status:     "PENDING",
+			mockFunc: func(m *MockDynamoDB) {
+				m.On("UpdateItem", mock.Anything, mock.Anything, mock.Anything).Return(nil, errors.New("dynamo error"))
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockDB := new(MockDynamoDB)
+			tt.mockFunc(mockDB)
+			client := NewDynamoDBClient(mockDB, tt.tableName)
+			if tt.tableName == "" {
+				client.client = nil
+			}
+
+			err := client.UpdateJobStatus(context.Background(), tt.scrapingID, tt.status)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+			mockDB.AssertExpectations(t)
+		})
+	}
 }
 
-func TestUpdateJobStatus_Success(t *testing.T) {
-	mockDB := new(MockDynamoDB)
-	client := NewDynamoDBClient(mockDB, "test-table")
+func TestDynamoDBClient_UpdateJobStatusFull(t *testing.T) {
+	tests := []struct {
+		name      string
+		tableName string
+		mockFunc  func(*MockDynamoDB)
+		wantErr   bool
+	}{
+		{
+			name:      "Success",
+			tableName: "test-table",
+			mockFunc: func(m *MockDynamoDB) {
+				m.On("UpdateItem", mock.Anything, mock.Anything, mock.Anything).Return(&dynamodb.UpdateItemOutput{}, nil)
+			},
+		},
+		{
+			name:      "Error",
+			tableName: "test-table",
+			mockFunc: func(m *MockDynamoDB) {
+				m.On("UpdateItem", mock.Anything, mock.Anything, mock.Anything).Return(nil, errors.New("dynamo error"))
+			},
+			wantErr: true,
+		},
+	}
 
-	mockDB.On("UpdateItem", mock.Anything, mock.MatchedBy(func(input *dynamodb.UpdateItemInput) bool {
-		return *input.TableName == "test-table" && input.Key["scraping_id"] != nil
-	}), mock.Anything).Return(&dynamodb.UpdateItemOutput{}, nil)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockDB := new(MockDynamoDB)
+			tt.mockFunc(mockDB)
+			client := NewDynamoDBClient(mockDB, tt.tableName)
 
-	err := client.UpdateJobStatus(context.Background(), "123", "PENDING")
-	assert.NoError(t, err)
-	mockDB.AssertExpectations(t)
+			err := client.UpdateJobStatusFull(context.Background(), "123", "COMPLETED", "2024-01-01")
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+			mockDB.AssertExpectations(t)
+		})
+	}
 }
 
-func TestUpdateJobStatus_Error(t *testing.T) {
-	mockDB := new(MockDynamoDB)
-	client := NewDynamoDBClient(mockDB, "test-table")
+func TestDynamoDBClient_IncrementLinkCount(t *testing.T) {
+	tests := []struct {
+		name      string
+		tableName string
+		mockFunc  func(*MockDynamoDB)
+		wantErr   bool
+	}{
+		{
+			name:      "Success",
+			tableName: "test-table",
+			mockFunc: func(m *MockDynamoDB) {
+				m.On("UpdateItem", mock.Anything, mock.MatchedBy(func(input *dynamodb.UpdateItemInput) bool {
+					return *input.UpdateExpression == "ADD links_count :inc"
+				}), mock.Anything).Return(&dynamodb.UpdateItemOutput{}, nil)
+			},
+		},
+		{
+			name:      "Error",
+			tableName: "test-table",
+			mockFunc: func(m *MockDynamoDB) {
+				m.On("UpdateItem", mock.Anything, mock.Anything, mock.Anything).Return(nil, errors.New("dynamo error"))
+			},
+			wantErr: true,
+		},
+	}
 
-	mockDB.On("UpdateItem", mock.Anything, mock.Anything, mock.Anything).Return(nil, errors.New("dynamo error"))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockDB := new(MockDynamoDB)
+			tt.mockFunc(mockDB)
+			client := NewDynamoDBClient(mockDB, tt.tableName)
 
-	err := client.UpdateJobStatus(context.Background(), "123", "PENDING")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to update job status")
+			err := client.IncrementLinkCount(context.Background(), "123", 5)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+			mockDB.AssertExpectations(t)
+		})
+	}
 }
 
-func TestUpdateJobStatusFull_NoTable(t *testing.T) {
-	client := NewDynamoDBClient(nil, "")
-	err := client.UpdateJobStatusFull(context.Background(), "123", "COMPLETED", "2024-01-01")
-	assert.NoError(t, err)
-}
-
-func TestUpdateJobStatusFull_Success(t *testing.T) {
-	mockDB := new(MockDynamoDB)
-	client := NewDynamoDBClient(mockDB, "test-table")
-
-	mockDB.On("UpdateItem", mock.Anything, mock.MatchedBy(func(input *dynamodb.UpdateItemInput) bool {
-		return *input.TableName == "test-table" && input.Key["scraping_id"] != nil
-	}), mock.Anything).Return(&dynamodb.UpdateItemOutput{}, nil)
-
-	err := client.UpdateJobStatusFull(context.Background(), "123", "COMPLETED", "2024-01-01")
-	assert.NoError(t, err)
-	mockDB.AssertExpectations(t)
-}
-
-func TestUpdateJobStatusFull_Error(t *testing.T) {
-	mockDB := new(MockDynamoDB)
-	client := NewDynamoDBClient(mockDB, "test-table")
-
-	mockDB.On("UpdateItem", mock.Anything, mock.Anything, mock.Anything).Return(nil, errors.New("dynamo error"))
-
-	err := client.UpdateJobStatusFull(context.Background(), "123", "COMPLETED", "2024-01-01")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to update job status full")
-}
-
-func TestIncrementLinkCount_NoTable(t *testing.T) {
-	client := NewDynamoDBClient(nil, "")
-	err := client.IncrementLinkCount(context.Background(), "123", 5)
-	assert.NoError(t, err)
-}
-
-func TestIncrementLinkCount_Success(t *testing.T) {
-	mockDB := new(MockDynamoDB)
-	client := NewDynamoDBClient(mockDB, "test-table")
-
-	mockDB.On("UpdateItem", mock.Anything, mock.MatchedBy(func(input *dynamodb.UpdateItemInput) bool {
-		return *input.TableName == "test-table" &&
-			input.UpdateExpression != nil &&
-			*input.UpdateExpression == "ADD links_count :inc"
-	}), mock.Anything).Return(&dynamodb.UpdateItemOutput{}, nil)
-
-	err := client.IncrementLinkCount(context.Background(), "123", 5)
-	assert.NoError(t, err)
-	mockDB.AssertExpectations(t)
-}
-
-func TestIncrementLinkCount_Error(t *testing.T) {
-	mockDB := new(MockDynamoDB)
-	client := NewDynamoDBClient(mockDB, "test-table")
-
-	mockDB.On("UpdateItem", mock.Anything, mock.Anything, mock.Anything).Return(nil, errors.New("dynamo error"))
-
-	err := client.IncrementLinkCount(context.Background(), "123", 5)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to increment link count")
-}

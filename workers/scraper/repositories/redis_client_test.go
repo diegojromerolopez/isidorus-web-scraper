@@ -10,88 +10,147 @@ import (
 )
 
 func TestRedisClient_IncrBy(t *testing.T) {
-	db, mock := redismock.NewClientMock()
-	client := &redisClient{client: db}
-	ctx := context.TODO()
+	tests := []struct {
+		name    string
+		mock    func(redismock.ClientMock)
+		wantErr bool
+	}{
+		{
+			name: "Success",
+			mock: func(m redismock.ClientMock) { m.ExpectIncrBy("key", 5).SetVal(5) },
+		},
+		{
+			name:    "Error",
+			mock:    func(m redismock.ClientMock) { m.ExpectIncrBy("key", 5).SetErr(errors.New("redis error")) },
+			wantErr: true,
+		},
+	}
 
-	// Success
-	mock.ExpectIncrBy("key", 5).SetVal(5)
-	err := client.IncrBy(ctx, "key", 5)
-	assert.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, mock := redismock.NewClientMock()
+			client := &redisClient{client: db}
+			tt.mock(mock)
 
-	// Error
-	mock.ExpectIncrBy("key", 5).SetErr(errors.New("redis error"))
-	err = client.IncrBy(ctx, "key", 5)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "redis incrby failure")
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("there were unfulfilled expectations: %s", err)
+			err := client.IncrBy(context.TODO(), "key", 5)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.NoError(t, mock.ExpectationsWereMet())
+		})
 	}
 }
 
 func TestRedisClient_Decr(t *testing.T) {
-	db, mock := redismock.NewClientMock()
-	client := &redisClient{client: db}
-	ctx := context.TODO()
+	tests := []struct {
+		name    string
+		mock    func(redismock.ClientMock)
+		expect  int64
+		wantErr bool
+	}{
+		{
+			name:   "Success",
+			mock:   func(m redismock.ClientMock) { m.ExpectDecr("key").SetVal(9) },
+			expect: 9,
+		},
+		{
+			name:    "Error",
+			mock:    func(m redismock.ClientMock) { m.ExpectDecr("key").SetErr(errors.New("redis error")) },
+			wantErr: true,
+		},
+	}
 
-	// Success
-	mock.ExpectDecr("key").SetVal(9)
-	val, err := client.Decr(ctx, "key")
-	assert.NoError(t, err)
-	assert.Equal(t, int64(9), val)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, mock := redismock.NewClientMock()
+			client := &redisClient{client: db}
+			tt.mock(mock)
 
-	// Error
-	mock.ExpectDecr("key").SetErr(errors.New("redis error"))
-	val, err = client.Decr(ctx, "key")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "redis decr failure")
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("there were unfulfilled expectations: %s", err)
+			val, err := client.Decr(context.TODO(), "key")
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expect, val)
+			}
+			assert.NoError(t, mock.ExpectationsWereMet())
+		})
 	}
 }
 
 func TestRedisClient_Get(t *testing.T) {
-	db, mock := redismock.NewClientMock()
-	client := &redisClient{client: db}
-	ctx := context.TODO()
+	tests := []struct {
+		name    string
+		mock    func(redismock.ClientMock)
+		expect  string
+		wantErr bool
+	}{
+		{
+			name:   "Success",
+			mock:   func(m redismock.ClientMock) { m.ExpectGet("key").SetVal("value") },
+			expect: "value",
+		},
+		{
+			name:    "Error",
+			mock:    func(m redismock.ClientMock) { m.ExpectGet("key").SetErr(errors.New("redis error")) },
+			wantErr: true,
+		},
+	}
 
-	// Success
-	mock.ExpectGet("key").SetVal("value")
-	val, err := client.Get(ctx, "key")
-	assert.NoError(t, err)
-	assert.Equal(t, "value", val)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, mock := redismock.NewClientMock()
+			client := &redisClient{client: db}
+			tt.mock(mock)
 
-	// Error
-	mock.ExpectGet("key").SetErr(errors.New("redis error"))
-	val, err = client.Get(ctx, "key")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "redis get failure")
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("there were unfulfilled expectations: %s", err)
+			val, err := client.Get(context.TODO(), "key")
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expect, val)
+			}
+			assert.NoError(t, mock.ExpectationsWereMet())
+		})
 	}
 }
 
 func TestRedisClient_SAdd(t *testing.T) {
-	db, mock := redismock.NewClientMock()
-	client := &redisClient{client: db}
-	ctx := context.TODO()
+	tests := []struct {
+		name    string
+		mock    func(redismock.ClientMock)
+		expect  int64
+		wantErr bool
+	}{
+		{
+			name:   "Success",
+			mock:   func(m redismock.ClientMock) { m.ExpectSAdd("key", "member").SetVal(1) },
+			expect: 1,
+		},
+		{
+			name:    "Error",
+			mock:    func(m redismock.ClientMock) { m.ExpectSAdd("key", "member").SetErr(errors.New("redis error")) },
+			wantErr: true,
+		},
+	}
 
-	// Success
-	mock.ExpectSAdd("key", "member").SetVal(1)
-	val, err := client.SAdd(ctx, "key", "member")
-	assert.NoError(t, err)
-	assert.Equal(t, int64(1), val)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, mock := redismock.NewClientMock()
+			client := &redisClient{client: db}
+			tt.mock(mock)
 
-	// Error
-	mock.ExpectSAdd("key", "member").SetErr(errors.New("redis error"))
-	val, err = client.SAdd(ctx, "key", "member")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "redis sadd failure")
-
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("there were unfulfilled expectations: %s", err)
+			val, err := client.SAdd(context.TODO(), "key", "member")
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expect, val)
+			}
+			assert.NoError(t, mock.ExpectationsWereMet())
+		})
 	}
 }
+

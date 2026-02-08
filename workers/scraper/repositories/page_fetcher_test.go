@@ -1,6 +1,7 @@
 package repositories
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,20 +12,37 @@ import (
 func TestPageFetcher_Fetch(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("<html><body>Hello</body></html>"))
+		_, _ = w.Write([]byte("<html><body>Hello</body></html>"))
 	}))
 	defer server.Close()
 
-	fetcher := NewPageFetcher()
-	resp, err := fetcher.Fetch(server.URL)
+	tests := []struct {
+		name    string
+		url     string
+		wantErr bool
+	}{
+		{
+			name: "Success",
+			url:  server.URL,
+		},
+		{
+			name:    "Invalid URL",
+			url:     "http://invalid-url-that-should-fail",
+			wantErr: true,
+		},
+	}
 
-	assert.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fetcher := NewPageFetcher()
+			resp, err := fetcher.Fetch(context.Background(), tt.url)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, http.StatusOK, resp.StatusCode)
+			}
+		})
+	}
 }
 
-func TestPageFetcher_Fetch_Error(t *testing.T) {
-	fetcher := NewPageFetcher()
-	_, err := fetcher.Fetch("http://invalid-url-that-should-fail")
-
-	assert.Error(t, err)
-}

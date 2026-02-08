@@ -9,7 +9,7 @@ import (
 
 	"github.com/opensearch-project/opensearch-go/v2"
 	"github.com/opensearch-project/opensearch-go/v2/opensearchapi"
-	"indexer-worker/domain"
+	"workers/indexer/domain"
 )
 
 type OpenSearchRepository struct {

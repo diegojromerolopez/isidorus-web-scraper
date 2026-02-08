@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"indexer-worker/domain"
+	"workers/indexer/domain"
 )
 
 type SQSRepository interface {

@@ -3,7 +3,7 @@ package services
 import (
 	"context"
 	"testing"
-	"writer-worker/domain"
+	"workers/writer/domain"
 
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/stretchr/testify/assert"
@@ -15,23 +15,23 @@ type MockDBRepository struct {
 	mock.Mock
 }
 
-func (m *MockDBRepository) InsertPageData(data domain.WriterMessage) error {
-	args := m.Called(data)
+func (m *MockDBRepository) InsertPageData(ctx context.Context, data domain.WriterMessage) error {
+	args := m.Called(ctx, data)
 	return args.Error(0)
 }
 
-func (m *MockDBRepository) InsertImageExplanation(data domain.WriterMessage) error {
-	args := m.Called(data)
+func (m *MockDBRepository) InsertImageExplanation(ctx context.Context, data domain.WriterMessage) error {
+	args := m.Called(ctx, data)
 	return args.Error(0)
 }
 
-func (m *MockDBRepository) InsertPageSummary(data domain.WriterMessage) error {
-	args := m.Called(data)
+func (m *MockDBRepository) InsertPageSummary(ctx context.Context, data domain.WriterMessage) error {
+	args := m.Called(ctx, data)
 	return args.Error(0)
 }
 
-func (m *MockDBRepository) CompleteScraping(scrapingID int) error {
-	args := m.Called(scrapingID)
+func (m *MockDBRepository) CompleteScraping(ctx context.Context, scrapingID int) error {
+	args := m.Called(ctx, scrapingID)
 	return args.Error(0)
 }
 
@@ -68,157 +68,96 @@ func (m *MockSQSClient) DeleteMessage(ctx context.Context, queueURL string, rece
 	return args.Error(0)
 }
 
-func TestProcessMessage_PageData(t *testing.T) {
-	mockRepo := new(MockDBRepository)
-	s := NewWriterService(WithDBRepository(mockRepo))
-
-	msg := domain.WriterMessage{
-		Type: "page_data",
-		URL:  "http://example.com",
+func TestWriterService_ProcessMessage(t *testing.T) {
+	tests := []struct {
+		name           string
+		msg            domain.WriterMessage
+		setupMocks     func(*MockDBRepository, *MockJobStatusRepository)
+		expectedError  error
+		expectNoCalls  bool
+	}{
+		{
+			name: "Page Data Success",
+			msg:  domain.WriterMessage{Type: "page_data", URL: "http://example.com", ScrapingID: 123, Links: []string{"l1", "l2"}},
+			setupMocks: func(db *MockDBRepository, status *MockJobStatusRepository) {
+				db.On("InsertPageData", mock.Anything, mock.MatchedBy(func(m domain.WriterMessage) bool { return m.URL == "http://example.com" })).Return(nil)
+				status.On("IncrementLinkCount", mock.Anything, "123", 2).Return(nil)
+			},
+		},
+		{
+			name: "Image Explanation Success",
+			msg:  domain.WriterMessage{Type: "image_explanation", URL: "http://img.com/1.jpg", Explanation: "A nice picture"},
+			setupMocks: func(db *MockDBRepository, status *MockJobStatusRepository) {
+				db.On("InsertImageExplanation", mock.Anything, mock.MatchedBy(func(m domain.WriterMessage) bool { return m.Explanation == "A nice picture" })).Return(nil)
+			},
+		},
+		{
+			name: "Page Summary Success",
+			msg:  domain.WriterMessage{Type: "page_summary", URL: "http://example.com/page", Summary: "This is a summary", ScrapingID: 123},
+			setupMocks: func(db *MockDBRepository, status *MockJobStatusRepository) {
+				db.On("InsertPageSummary", mock.Anything, mock.MatchedBy(func(m domain.WriterMessage) bool { return m.Summary == "This is a summary" })).Return(nil)
+			},
+		},
+		{
+			name: "Scraping Complete Success",
+			msg:  domain.WriterMessage{Type: "scraping_complete", ScrapingID: 123},
+			setupMocks: func(db *MockDBRepository, status *MockJobStatusRepository) {
+				db.On("CompleteScraping", mock.Anything, 123).Return(nil)
+				status.On("UpdateJobStatusFull", mock.Anything, "123", domain.StatusCompleted, mock.Anything).Return(nil)
+			},
+		},
+		{
+			name: "Scraping Complete - Status Update Error (Logged, not returned)",
+			msg:  domain.WriterMessage{Type: "scraping_complete", ScrapingID: 123},
+			setupMocks: func(db *MockDBRepository, status *MockJobStatusRepository) {
+				db.On("CompleteScraping", mock.Anything, 123).Return(nil)
+				status.On("UpdateJobStatusFull", mock.Anything, "123", domain.StatusCompleted, mock.Anything).Return(assert.AnError)
+			},
+		},
+		{
+			name: "Unknown Type - No Action",
+			msg:  domain.WriterMessage{Type: "unknown"},
+			expectNoCalls: true,
+		},
+		{
+			name: "Repo Error - Propagated",
+			msg:  domain.WriterMessage{Type: "page_data"},
+			setupMocks: func(db *MockDBRepository, status *MockJobStatusRepository) {
+				db.On("InsertPageData", mock.Anything, mock.Anything).Return(assert.AnError)
+			},
+			expectedError: assert.AnError,
+		},
 	}
 
-	mockRepo.On("InsertPageData", msg).Return(nil)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockDb := new(MockDBRepository)
+			mockStatus := new(MockJobStatusRepository)
+			s := NewWriterService(
+				WithDBRepository(mockDb),
+				WithJobStatusRepository(mockStatus),
+			)
 
-	err := s.ProcessMessage(msg)
+			if tt.setupMocks != nil {
+				tt.setupMocks(mockDb, mockStatus)
+			}
 
-	assert.NoError(t, err)
-	mockRepo.AssertExpectations(t)
-}
+			err := s.ProcessMessage(context.Background(), tt.msg)
 
-func TestProcessMessage_ImageExplanation(t *testing.T) {
-	mockRepo := new(MockDBRepository)
-	s := NewWriterService(WithDBRepository(mockRepo))
+			if tt.expectedError != nil {
+				assert.ErrorIs(t, err, tt.expectedError)
+			} else {
+				assert.NoError(t, err)
+			}
 
-	msg := domain.WriterMessage{
-		Type:        "image_explanation",
-		URL:         "http://img.com/1.jpg",
-		Explanation: "A nice picture",
+			if tt.expectNoCalls {
+				mockDb.AssertNotCalled(t, "InsertPageData", mock.Anything, mock.Anything)
+				mockDb.AssertNotCalled(t, "InsertImageExplanation", mock.Anything, mock.Anything)
+			} else {
+				mockDb.AssertExpectations(t)
+				mockStatus.AssertExpectations(t)
+			}
+		})
 	}
-
-	mockRepo.On("InsertImageExplanation", msg).Return(nil)
-
-	err := s.ProcessMessage(msg)
-
-	assert.NoError(t, err)
-	mockRepo.AssertExpectations(t)
 }
 
-func TestProcessMessage_UnknownType(t *testing.T) {
-	mockRepo := new(MockDBRepository)
-	s := NewWriterService(WithDBRepository(mockRepo))
-
-	msg := domain.WriterMessage{
-		Type: "unknown",
-	}
-
-	err := s.ProcessMessage(msg)
-
-	assert.NoError(t, err) // Returns nil for unknown
-	mockRepo.AssertNotCalled(t, "InsertPageData", mock.Anything)
-	mockRepo.AssertNotCalled(t, "InsertImageExplanation", mock.Anything)
-}
-
-func TestProcessMessage_RepoError(t *testing.T) {
-	mockRepo := new(MockDBRepository)
-	s := NewWriterService(WithDBRepository(mockRepo))
-
-	msg := domain.WriterMessage{
-		Type: "page_data",
-	}
-
-	mockRepo.On("InsertPageData", msg).Return(assert.AnError)
-
-	err := s.ProcessMessage(msg)
-
-	assert.Error(t, err)
-	assert.ErrorIs(t, err, assert.AnError)
-}
-
-func TestProcessMessage_ScrapingComplete(t *testing.T) {
-	mockDbRepo := new(MockDBRepository)
-	mockStatusRepo := new(MockJobStatusRepository)
-	s := NewWriterService(
-		WithDBRepository(mockDbRepo),
-		WithJobStatusRepository(mockStatusRepo),
-	)
-
-	msg := domain.WriterMessage{
-		Type:       "scraping_complete",
-		ScrapingID: 123,
-	}
-
-	mockDbRepo.On("CompleteScraping", 123).Return(nil)
-	mockStatusRepo.On("UpdateJobStatusFull", mock.Anything, "123", domain.StatusCompleted, mock.Anything).Return(nil)
-
-	err := s.ProcessMessage(msg)
-
-	assert.NoError(t, err)
-	mockDbRepo.AssertExpectations(t)
-	mockStatusRepo.AssertExpectations(t)
-}
-
-func TestProcessMessage_PageSummary(t *testing.T) {
-	mockRepo := new(MockDBRepository)
-	s := NewWriterService(WithDBRepository(mockRepo))
-
-	msg := domain.WriterMessage{
-		Type:       "page_summary",
-		URL:        "http://example.com/page",
-		Summary:    "This is a summary",
-		ScrapingID: 123,
-	}
-
-	mockRepo.On("InsertPageSummary", msg).Return(nil)
-
-	err := s.ProcessMessage(msg)
-
-	assert.NoError(t, err)
-	mockRepo.AssertExpectations(t)
-}
-
-func TestProcessMessage_DynamoFullError(t *testing.T) {
-	mockDbRepo := new(MockDBRepository)
-	mockStatusRepo := new(MockJobStatusRepository)
-	s := NewWriterService(
-		WithDBRepository(mockDbRepo),
-		WithJobStatusRepository(mockStatusRepo),
-	)
-
-	msg := domain.WriterMessage{
-		Type:       "scraping_complete",
-		ScrapingID: 123,
-	}
-
-	mockDbRepo.On("CompleteScraping", 123).Return(nil)
-	mockStatusRepo.On("UpdateJobStatusFull", mock.Anything, "123", domain.StatusCompleted, mock.Anything).Return(assert.AnError)
-
-	err := s.ProcessMessage(msg)
-
-	assert.NoError(t, err) // We log the error but don't fail the message processing
-	mockStatusRepo.AssertExpectations(t)
-}
-
-func TestProcessMessage_PageData_IncrementsLinks(t *testing.T) {
-	mockDbRepo := new(MockDBRepository)
-	mockStatusRepo := new(MockJobStatusRepository)
-	s := NewWriterService(
-		WithDBRepository(mockDbRepo),
-		WithJobStatusRepository(mockStatusRepo),
-	)
-
-	msg := domain.WriterMessage{
-		Type:       "page_data",
-		URL:        "http://example.com",
-		ScrapingID: 123,
-		Links:      []string{"http://link1.com", "http://link2.com"},
-	}
-
-	mockDbRepo.On("InsertPageData", msg).Return(nil)
-	mockStatusRepo.On("IncrementLinkCount", mock.Anything, "123", 2).Return(nil)
-
-	err := s.ProcessMessage(msg)
-
-	assert.NoError(t, err)
-	mockDbRepo.AssertExpectations(t)
-	mockStatusRepo.AssertExpectations(t)
-}

@@ -1,12 +1,13 @@
 package repositories
 
 import (
+	"context"
 	"fmt"
 	"log"
 
 	"gorm.io/gorm"
-	"writer-worker/domain"
-	"writer-worker/models"
+	"workers/writer/domain"
+	"workers/writer/models"
 )
 
 type PostgresDBRepository struct {
@@ -24,14 +25,14 @@ func NewDBRepository(db *gorm.DB, batchSize int) *PostgresDBRepository {
 	}
 }
 
-func (repo *PostgresDBRepository) InsertPageData(msg domain.WriterMessage) error {
+func (repo *PostgresDBRepository) InsertPageData(ctx context.Context, msg domain.WriterMessage) error {
 	// Insert Scraped Page
 	page := models.ScrapedPage{
 		URL:        msg.URL,
 		ScrapingID: msg.ScrapingID,
 	}
 
-	if err := repo.db.Create(&page).Error; err != nil {
+	if err := repo.db.WithContext(ctx).Create(&page).Error; err != nil {
 		return fmt.Errorf("failed to insert scraped page for URL %s: %w", msg.URL, err)
 	}
 
@@ -46,7 +47,7 @@ func (repo *PostgresDBRepository) InsertPageData(msg domain.WriterMessage) error
 			})
 		}
 
-		if err := repo.db.CreateInBatches(links, repo.batchSize).Error; err != nil {
+		if err := repo.db.WithContext(ctx).CreateInBatches(links, repo.batchSize).Error; err != nil {
 			log.Printf("Error batch inserting links for page %d: %v", page.ID, err)
 		}
 	}
@@ -54,10 +55,10 @@ func (repo *PostgresDBRepository) InsertPageData(msg domain.WriterMessage) error
 	return nil
 }
 
-func (repo *PostgresDBRepository) InsertImageExplanation(msg domain.WriterMessage) error {
+func (repo *PostgresDBRepository) InsertImageExplanation(ctx context.Context, msg domain.WriterMessage) error {
 	// Find the page_id first based on PageURL AND ScrapingID
 	var page models.ScrapedPage
-	err := repo.db.
+	err := repo.db.WithContext(ctx).
 		Where("url = ? AND scraping_id = ?", msg.PageURL, msg.ScrapingID).
 		Order("scraped_at DESC").
 		First(&page).Error
@@ -68,7 +69,7 @@ func (repo *PostgresDBRepository) InsertImageExplanation(msg domain.WriterMessag
 
 	// Upsert Logic: Check if image exists by S3Path and PageID
 	var existingImage models.PageImage
-	err = repo.db.Where("page_id = ? AND s3_path = ?", page.ID, msg.S3Path).First(&existingImage).Error
+	err = repo.db.WithContext(ctx).Where("page_id = ? AND s3_path = ?", page.ID, msg.S3Path).First(&existingImage).Error
 
 	if err == nil {
 		// Image exists, update it (e.g. adding explanation)
@@ -78,7 +79,7 @@ func (repo *PostgresDBRepository) InsertImageExplanation(msg domain.WriterMessag
 		if msg.URL != "" {
 			existingImage.ImageURL = msg.URL // Update URL if provided (e.g. signed URL)
 		}
-		if err := repo.db.Save(&existingImage).Error; err != nil {
+		if err := repo.db.WithContext(ctx).Save(&existingImage).Error; err != nil {
 			return fmt.Errorf("failed to update image explanation for S3Path %s: %w", msg.S3Path, err)
 		}
 	} else {
@@ -90,7 +91,7 @@ func (repo *PostgresDBRepository) InsertImageExplanation(msg domain.WriterMessag
 			Explanation: msg.Explanation,
 			S3Path:      msg.S3Path,
 		}
-		if err := repo.db.Create(&image).Error; err != nil {
+		if err := repo.db.WithContext(ctx).Create(&image).Error; err != nil {
 			return fmt.Errorf("failed to insert image for S3Path %s: %w", msg.S3Path, err)
 		}
 	}
@@ -98,9 +99,9 @@ func (repo *PostgresDBRepository) InsertImageExplanation(msg domain.WriterMessag
 	return nil
 }
 
-func (repo *PostgresDBRepository) InsertPageSummary(msg domain.WriterMessage) error {
+func (repo *PostgresDBRepository) InsertPageSummary(ctx context.Context, msg domain.WriterMessage) error {
 	// Update the page summary using URL and ScrapingID
-	result := repo.db.
+	result := repo.db.WithContext(ctx).
 		Model(&models.ScrapedPage{}).
 		Where("url = ? AND scraping_id = ?", msg.URL, msg.ScrapingID).
 		Update("summary", msg.Summary)
@@ -117,7 +118,7 @@ func (repo *PostgresDBRepository) InsertPageSummary(msg domain.WriterMessage) er
 	return nil
 }
 
-func (repo *PostgresDBRepository) CompleteScraping(scrapingID int) error {
+func (repo *PostgresDBRepository) CompleteScraping(ctx context.Context, scrapingID int) error {
 	// Job completion is now handled entirely in DynamoDB.
 	// We keep this hook for now to satisfy the interface,
 	// but it no longer modifies PostgreSQL.

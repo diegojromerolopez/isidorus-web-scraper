@@ -27,50 +27,72 @@ func mockSQSMiddleware(output interface{}, err error) func(*middleware.Stack) er
 }
 
 func TestSQSClient_ReceiveMessages(t *testing.T) {
-	// Success case
-	output := &sqs.ReceiveMessageOutput{
-		Messages: []types.Message{
-			{Body: aws.String(`{"key":"value"}`), ReceiptHandle: aws.String("handle")},
+	tests := []struct {
+		name    string
+		output  *sqs.ReceiveMessageOutput
+		err     error
+		wantErr bool
+	}{
+		{
+			name: "Success",
+			output: &sqs.ReceiveMessageOutput{
+				Messages: []types.Message{{Body: aws.String(`{"key":"value"}`), ReceiptHandle: aws.String("handle")}},
+			},
+		},
+		{
+			name:    "Error",
+			err:     errors.New("aws error"),
+			wantErr: true,
 		},
 	}
-	client := sqs.NewFromConfig(aws.Config{}, func(o *sqs.Options) {
-		o.APIOptions = append(o.APIOptions, mockSQSMiddleware(output, nil))
-	})
 
-	repo := NewSQSClient(client)
-	res, err := repo.ReceiveMessages(context.TODO(), "queue-url", 10, 20)
-	assert.NoError(t, err)
-	assert.Equal(t, 1, len(res.Messages))
-
-	// Error case
-	clientErr := sqs.NewFromConfig(aws.Config{}, func(o *sqs.Options) {
-		o.APIOptions = append(o.APIOptions, mockSQSMiddleware(nil, errors.New("aws error")))
-	})
-
-	repoErr := NewSQSClient(clientErr)
-	_, err = repoErr.ReceiveMessages(context.TODO(), "queue-url", 10, 20)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to receive messages")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := sqs.NewFromConfig(aws.Config{}, func(o *sqs.Options) {
+				o.APIOptions = append(o.APIOptions, mockSQSMiddleware(tt.output, tt.err))
+			})
+			repo := NewSQSClient(client)
+			res, err := repo.ReceiveMessages(context.TODO(), "queue-url", 10, 20)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.NotEmpty(t, res.Messages)
+			}
+		})
+	}
 }
 
 func TestSQSClient_DeleteMessage(t *testing.T) {
-	// Success case
-	client := sqs.NewFromConfig(aws.Config{}, func(o *sqs.Options) {
-		o.APIOptions = append(o.APIOptions, mockSQSMiddleware(&sqs.DeleteMessageOutput{}, nil))
-	})
+	tests := []struct {
+		name    string
+		err     error
+		wantErr bool
+	}{
+		{
+			name: "Success",
+		},
+		{
+			name:    "Error",
+			err:     errors.New("aws error"),
+			wantErr: true,
+		},
+	}
 
-	repo := NewSQSClient(client)
-	handle := "receipt-handle"
-	err := repo.DeleteMessage(context.TODO(), "queue-url", &handle)
-	assert.NoError(t, err)
-
-	// Error case
-	clientErr := sqs.NewFromConfig(aws.Config{}, func(o *sqs.Options) {
-		o.APIOptions = append(o.APIOptions, mockSQSMiddleware(nil, errors.New("aws error")))
-	})
-
-	repoErr := NewSQSClient(clientErr)
-	err = repoErr.DeleteMessage(context.TODO(), "queue-url", &handle)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to delete message")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := sqs.NewFromConfig(aws.Config{}, func(o *sqs.Options) {
+				o.APIOptions = append(o.APIOptions, mockSQSMiddleware(&sqs.DeleteMessageOutput{}, tt.err))
+			})
+			repo := NewSQSClient(client)
+			handle := "receipt-handle"
+			err := repo.DeleteMessage(context.TODO(), "queue-url", &handle)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
+

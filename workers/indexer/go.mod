@@ -1,4 +1,4 @@
-module indexer-worker
+module workers/indexer
 
 go 1.25
 

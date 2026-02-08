@@ -419,6 +419,7 @@ This project is a functional showcase, but there are several areas planned for "
 
 - **📊 Observability**:
     - Integration with **OpenTelemetry**.
+    - **Structured Logging** using `slog` for better observability and correlation.
     - Centralized logging with **Prometheus/Grafana** dashboards for worker health and queue depths.
 - **🛡️ Resilience**:
     - Implementation of **Dead Letter Queues (DLQ)** for handling failed scrapes or AI processing errors.

@@ -8,33 +8,27 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/opensearch-project/opensearch-go/v2"
 
-	indexerConfig "indexer-worker/config"
-	"indexer-worker/repositories"
-	"indexer-worker/services"
+	indexerConfig "workers/indexer/config"
+	"workers/indexer/repositories"
+	"workers/indexer/services"
 )
 
 func main() {
 	cfg := indexerConfig.LoadConfig()
 
 	// AWS/SQS Client
-	customResolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
-		return aws.Endpoint{
-			URL:           cfg.AWSEndpointURL,
-			SigningRegion: cfg.AWSRegion,
-		}, nil
-	})
-
 	awsCfg, err := config.LoadDefaultConfig(context.Background(),
 		config.WithRegion(cfg.AWSRegion),
-		config.WithEndpointResolverWithOptions(customResolver),
+		config.WithBaseEndpoint(cfg.AWSEndpointURL),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(cfg.AWSAccessKeyID, cfg.AWSSecretKey, "")),
+		config.WithHTTPClient(&http.Client{Timeout: 30 * time.Second}),
 	)
 	if err != nil {
 		log.Fatalf("unable to load SDK config, %v", err)
@@ -45,7 +39,8 @@ func main() {
 	// OpenSearch Client
 	osClient, err := opensearch.NewClient(opensearch.Config{
 		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
+			ResponseHeaderTimeout: 30 * time.Second,
 		},
 		Addresses: []string{cfg.OpenSearchURL},
 	})

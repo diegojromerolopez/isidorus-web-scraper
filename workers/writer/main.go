@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -15,10 +16,10 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	"writer-worker/config"
-	"writer-worker/domain"
-	"writer-worker/repositories"
-	"writer-worker/services"
+	"workers/writer/config"
+	"workers/writer/domain"
+	"workers/writer/repositories"
+	"workers/writer/services"
 )
 
 // Consumer-side interface for SQS
@@ -40,7 +41,9 @@ func main() {
 	}
 
 	// Connect AWS
-	awsCfg, err := config_aws.LoadDefaultConfig(context.TODO())
+	awsCfg, err := config_aws.LoadDefaultConfig(context.Background(),
+		config_aws.WithHTTPClient(&http.Client{Timeout: 30 * time.Second}),
+	)
 	if err != nil {
 		log.Fatalf("unable to load SDK config, %v", err)
 	}
@@ -97,7 +100,7 @@ func main() {
 					continue
 				}
 
-				if err := writerService.ProcessMessage(body); err != nil {
+				if err := writerService.ProcessMessage(ctx, body); err != nil {
 					log.Printf("Failed to process message: %v", err)
 				} else {
 					// Delete on success

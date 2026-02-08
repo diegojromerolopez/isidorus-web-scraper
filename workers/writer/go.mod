@@ -1,4 +1,4 @@
-module writer-worker
+module workers/writer
 
 go 1.25
 

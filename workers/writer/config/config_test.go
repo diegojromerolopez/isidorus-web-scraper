@@ -8,15 +8,31 @@ import (
 )
 
 func TestLoad(t *testing.T) {
-	os.Setenv("INPUT_QUEUE_URL", "http://input")
-	os.Setenv("WRITER_QUEUE_URL", "http://writer")
-	os.Setenv("DATABASE_URL", "postgres://test")
-	defer os.Unsetenv("INPUT_QUEUE_URL")
-	defer os.Unsetenv("WRITER_QUEUE_URL")
-	defer os.Unsetenv("DATABASE_URL")
+	tests := []struct {
+		name string
+		envs map[string]string
+	}{
+		{
+			name: "Basic Config",
+			envs: map[string]string{
+				"INPUT_QUEUE_URL":  "http://input",
+				"WRITER_QUEUE_URL": "http://writer",
+				"DATABASE_URL":     "postgres://test",
+			},
+		},
+	}
 
-	cfg, err := Load()
-	assert.NoError(t, err)
-	assert.Equal(t, "http://input", cfg.InputQueueURL)
-	assert.Equal(t, "postgres://test", cfg.DatabaseURL)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for k, v := range tt.envs {
+				os.Setenv(k, v)
+				defer os.Unsetenv(k)
+			}
+			cfg, err := Load()
+			assert.NoError(t, err)
+			assert.Equal(t, tt.envs["INPUT_QUEUE_URL"], cfg.InputQueueURL)
+			assert.Equal(t, tt.envs["DATABASE_URL"], cfg.DatabaseURL)
+		})
+	}
 }
+

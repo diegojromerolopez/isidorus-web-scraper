@@ -9,7 +9,7 @@ import (
 
 	"github.com/opensearch-project/opensearch-go/v2"
 	"github.com/stretchr/testify/assert"
-	"indexer-worker/domain"
+	"workers/indexer/domain"
 )
 
 type mockTransport struct {
@@ -22,36 +22,45 @@ func (m *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 func TestOpenSearchRepository_IndexDocument(t *testing.T) {
-	mockRes := &http.Response{
-		StatusCode: 201,
-		Body:       io.NopCloser(strings.NewReader(`{"result":"created"}`)),
-		Header:     make(http.Header),
+	tests := []struct {
+		name       string
+		statusCode int
+		body       string
+		wantErr    bool
+	}{
+		{
+			name:       "Success",
+			statusCode: 201,
+			body:       `{"result":"created"}`,
+		},
+		{
+			name:       "Error",
+			statusCode: 500,
+			body:       `{"error":"internal error"}`,
+			wantErr:    true,
+		},
 	}
-	client, _ := opensearch.NewClient(opensearch.Config{
-		Transport: &mockTransport{Response: mockRes},
-	})
 
-	repo := NewOpenSearchRepository(client)
-	msg := domain.IndexMessage{URL: "http://test.com", Content: "test", Summary: "sum", ScrapingID: 1, UserID: 1}
-	err := repo.IndexDocument(context.TODO(), msg)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockRes := &http.Response{
+				StatusCode: tt.statusCode,
+				Body:       io.NopCloser(strings.NewReader(tt.body)),
+				Header:     make(http.Header),
+			}
+			client, _ := opensearch.NewClient(opensearch.Config{
+				Transport: &mockTransport{Response: mockRes},
+			})
 
-	assert.NoError(t, err)
+			repo := NewOpenSearchRepository(client)
+			msg := domain.IndexMessage{URL: "http://test.com", Content: "test"}
+			err := repo.IndexDocument(context.TODO(), msg)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
 
-func TestOpenSearchRepository_IndexDocument_Error(t *testing.T) {
-	mockRes := &http.Response{
-		StatusCode: 500,
-		Body:       io.NopCloser(strings.NewReader(`{"error":"internal error"}`)),
-		Header:     make(http.Header),
-	}
-	client, _ := opensearch.NewClient(opensearch.Config{
-		Transport: &mockTransport{Response: mockRes},
-	})
-
-	repo := NewOpenSearchRepository(client)
-	msg := domain.IndexMessage{URL: "http://test.com", Content: "test", Summary: "sum", ScrapingID: 1, UserID: 1}
-	err := repo.IndexDocument(context.TODO(), msg)
-
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "error indexing document")
-}

@@ -7,7 +7,23 @@ import (
 )
 
 func TestNewRedisClient(t *testing.T) {
-	// This just tests the constructor since the methods are already tested
-	client := NewRedisClient("localhost", "6379")
-	assert.NotNil(t, client)
+	tests := []struct {
+		name string
+		host string
+		port string
+	}{
+		{
+			name: "Localhost",
+			host: "localhost",
+			port: "6379",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := NewRedisClient(tt.host, tt.port)
+			assert.NotNil(t, client)
+		})
+	}
 }
+

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,10 +13,10 @@ import (
 	config_aws "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 
-	"scraped-worker/config"
-	"scraped-worker/domain"
-	"scraped-worker/repositories"
-	"scraped-worker/services"
+	"workers/scraper/config"
+	"workers/scraper/domain"
+	"workers/scraper/repositories"
+	"workers/scraper/services"
 )
 
 func main() {
@@ -24,7 +25,9 @@ func main() {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
-	awsCfg, err := config_aws.LoadDefaultConfig(context.TODO())
+	awsCfg, err := config_aws.LoadDefaultConfig(context.Background(),
+		config_aws.WithHTTPClient(&http.Client{Timeout: 30 * time.Second}),
+	)
 	if err != nil {
 		log.Fatalf("unable to load SDK config, %v", err)
 	}
@@ -84,7 +87,7 @@ func main() {
 					continue
 				}
 
-				scraperService.ProcessMessage(body)
+				scraperService.ProcessMessage(ctx, body)
 
 				err := sqsClient.DeleteMessage(ctx, cfg.InputQueueURL, msg.ReceiptHandle)
 				if err != nil {
