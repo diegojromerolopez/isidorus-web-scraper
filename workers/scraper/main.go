@@ -12,10 +12,10 @@ import (
 	config_aws "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 
-	"scraped-worker/config"
-	"scraped-worker/domain"
-	"scraped-worker/repositories"
-	"scraped-worker/services"
+	"workers/scraper/config"
+	"workers/scraper/domain"
+	"workers/scraper/repositories"
+	"workers/scraper/services"
 )
 
 func main() {

@@ -6,8 +6,8 @@ import (
 	"log"
 
 	"gorm.io/gorm"
-	"writer-worker/domain"
-	"writer-worker/models"
+	"workers/writer/domain"
+	"workers/writer/models"
 )
 
 type PostgresDBRepository struct {

@@ -45,6 +45,7 @@ func TestRedisClient_Decr(t *testing.T) {
 	mock.ExpectDecr("key").SetErr(errors.New("redis error"))
 	val, err = client.Decr(ctx, "key")
 	assert.Error(t, err)
+	assert.Equal(t, int64(0), val)
 	assert.Contains(t, err.Error(), "redis decr failure")
 
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -67,6 +68,7 @@ func TestRedisClient_Get(t *testing.T) {
 	mock.ExpectGet("key").SetErr(errors.New("redis error"))
 	val, err = client.Get(ctx, "key")
 	assert.Error(t, err)
+	assert.Empty(t, val)
 	assert.Contains(t, err.Error(), "redis get failure")
 
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -89,6 +91,7 @@ func TestRedisClient_SAdd(t *testing.T) {
 	mock.ExpectSAdd("key", "member").SetErr(errors.New("redis error"))
 	val, err = client.SAdd(ctx, "key", "member")
 	assert.Error(t, err)
+	assert.Equal(t, int64(0), val)
 	assert.Contains(t, err.Error(), "redis sadd failure")
 
 	if err := mock.ExpectationsWereMet(); err != nil {

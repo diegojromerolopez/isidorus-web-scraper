@@ -10,7 +10,7 @@ import (
 
 	md "github.com/JohannesKaufmann/html-to-markdown"
 	"github.com/PuerkitoBio/goquery"
-	"scraped-worker/domain"
+	"workers/scraper/domain"
 )
 
 // Consumer-side interfaces

@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"image-extractor-worker/domain"
+	"workers/image_extractor/domain"
 
 	"github.com/google/uuid"
 )

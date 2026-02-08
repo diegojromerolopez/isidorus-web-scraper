@@ -1,4 +1,4 @@
-module scraped-worker
+module workers/scraper
 
 go 1.25
 

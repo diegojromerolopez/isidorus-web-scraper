@@ -9,10 +9,10 @@ import (
 	"syscall"
 	"time"
 
-	"image-extractor-worker/config"
-	"image-extractor-worker/domain"
-	"image-extractor-worker/repositories"
-	"image-extractor-worker/services"
+	"workers/image_extractor/config"
+	"workers/image_extractor/domain"
+	"workers/image_extractor/repositories"
+	"workers/image_extractor/services"
 
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 )

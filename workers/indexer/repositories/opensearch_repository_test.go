@@ -9,7 +9,7 @@ import (
 
 	"github.com/opensearch-project/opensearch-go/v2"
 	"github.com/stretchr/testify/assert"
-	"indexer-worker/domain"
+	"workers/indexer/domain"
 )
 
 type mockTransport struct {

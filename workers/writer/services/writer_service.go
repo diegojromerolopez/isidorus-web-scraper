@@ -6,7 +6,7 @@ import (
 	"log"
 	"strconv"
 	"time"
-	"writer-worker/domain"
+	"workers/writer/domain"
 )
 
 // Consumer-side interface

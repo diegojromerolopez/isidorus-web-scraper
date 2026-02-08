@@ -15,10 +15,10 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	"writer-worker/config"
-	"writer-worker/domain"
-	"writer-worker/repositories"
-	"writer-worker/services"
+	"workers/writer/config"
+	"workers/writer/domain"
+	"workers/writer/repositories"
+	"workers/writer/services"
 )
 
 // Consumer-side interface for SQS

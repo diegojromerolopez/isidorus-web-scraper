@@ -3,7 +3,7 @@ package services
 import (
 	"context"
 	"testing"
-	"writer-worker/domain"
+	"workers/writer/domain"
 
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/stretchr/testify/assert"

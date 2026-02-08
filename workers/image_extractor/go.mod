@@ -1,4 +1,4 @@
-module image-extractor-worker
+module workers/image_extractor
 
 go 1.25
 
