@@ -1,6 +1,7 @@
 package repositories
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -62,7 +63,7 @@ func TestInsertPageData_Success(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
 	mock.ExpectCommit()
 
-	err := repo.InsertPageData(msg)
+	err := repo.InsertPageData(context.Background(), msg)
 	assert.NoError(t, err)
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("there were unfulfilled expectations: %s", err)
@@ -83,7 +84,7 @@ func TestInsertPageData_Error(t *testing.T) {
 		WillReturnError(errors.New("db error"))
 	mock.ExpectRollback()
 
-	err := repo.InsertPageData(msg)
+	err := repo.InsertPageData(context.Background(), msg)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to insert scraped page")
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -121,7 +122,7 @@ func TestInsertImageExplanation_Success(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(1))
 	mock.ExpectCommit()
 
-	err := repo.InsertImageExplanation(msg)
+	err := repo.InsertImageExplanation(context.Background(), msg)
 	assert.NoError(t, err)
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("there were unfulfilled expectations: %s", err)
@@ -133,7 +134,7 @@ func TestCompleteScraping_Success(t *testing.T) {
 	repo := NewDBRepository(db, 100)
 
 	// CompleteScraping is now a no-op hook that doesn't execute SQL
-	err := repo.CompleteScraping(123)
+	err := repo.CompleteScraping(context.Background(), 123)
 	assert.NoError(t, err)
 
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -156,7 +157,7 @@ func TestInsertPageSummary_Success(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 
-	err := repo.InsertPageSummary(msg)
+	err := repo.InsertPageSummary(context.Background(), msg)
 	assert.NoError(t, err)
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("there were unfulfilled expectations: %s", err)
@@ -179,7 +180,7 @@ func TestInsertPageSummary_Error_NoRows(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 0)) // 0 rows affected
 	mock.ExpectCommit()
 
-	err := repo.InsertPageSummary(msg)
+	err := repo.InsertPageSummary(context.Background(), msg)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no page found to update summary")
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -203,7 +204,7 @@ func TestInsertImageExplanation_Error_NoPage(t *testing.T) {
 		WithArgs(msg.PageURL, msg.ScrapingID, 1).
 		WillReturnError(gorm.ErrRecordNotFound)
 
-	err := repo.InsertImageExplanation(msg)
+	err := repo.InsertImageExplanation(context.Background(), msg)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to find page")
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -237,7 +238,7 @@ func TestInsertPageData_Error_Links(t *testing.T) {
 		WillReturnError(errors.New("links db error"))
 	mock.ExpectRollback()
 
-	err := repo.InsertPageData(msg)
+	err := repo.InsertPageData(context.Background(), msg)
 	assert.NoError(t, err)
 }
 
@@ -270,7 +271,7 @@ func TestInsertImageExplanation_InsertError(t *testing.T) {
 		WillReturnError(errors.New("image db error"))
 	mock.ExpectRollback()
 
-	err := repo.InsertImageExplanation(msg)
+	err := repo.InsertImageExplanation(context.Background(), msg)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to insert image for S3Path")
 }
@@ -291,7 +292,7 @@ func TestInsertPageSummary_Error_DB(t *testing.T) {
 		WillReturnError(errors.New("db error"))
 	mock.ExpectRollback()
 
-	err := repo.InsertPageSummary(msg)
+	err := repo.InsertPageSummary(context.Background(), msg)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to update page summary")
 }

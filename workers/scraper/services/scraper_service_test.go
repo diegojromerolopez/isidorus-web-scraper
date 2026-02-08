@@ -62,8 +62,8 @@ type MockPageFetcher struct {
 	mock.Mock
 }
 
-func (m *MockPageFetcher) Fetch(url string) (*http.Response, error) {
-	args := m.Called(url)
+func (m *MockPageFetcher) Fetch(ctx context.Context, url string) (*http.Response, error) {
+	args := m.Called(ctx, url)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -108,7 +108,7 @@ func TestProcessMessage_FullFlow(t *testing.T) {
 		Body:       io.NopCloser(bytes.NewBufferString(html)),
 	}
 
-	mockFetcher.On("Fetch", "http://site1.com").Return(resp, nil)
+	mockFetcher.On("Fetch", mock.Anything, "http://site1.com").Return(resp, nil)
 
 	// Expect SendMessage to Writer
 	mockSQS.On("SendMessage", mock.Anything, "writer", mock.MatchedBy(func(msg domain.WriterMessage) bool {
@@ -138,7 +138,7 @@ func TestProcessMessage_FullFlow(t *testing.T) {
 		return msg.URL == "http://site2.com" && msg.Depth == 1
 	})).Return(nil)
 
-	s.ProcessMessage(domain.ScrapeMessage{
+	s.ProcessMessage(context.Background(), domain.ScrapeMessage{
 		URL:        "http://site1.com",
 		Depth:      2,
 		ScrapingID: 123,
@@ -160,13 +160,13 @@ func TestProcessMessage_FetchError(t *testing.T) {
 		WithQueues("input", "writer", "image", "summarizer", "indexer"),
 	)
 
-	mockFetcher.On("Fetch", "http://err.com").Return(nil, assert.AnError)
+	mockFetcher.On("Fetch", mock.Anything, "http://err.com").Return(nil, assert.AnError)
 	// SAdd for seed URL
 	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.Anything).Return(1, nil)
 	// Even on error, Decr is called
 	mockRedis.On("Decr", mock.Anything, mock.Anything).Return(1, nil)
 
-	s.ProcessMessage(domain.ScrapeMessage{URL: "http://err.com"})
+	s.ProcessMessage(context.Background(), domain.ScrapeMessage{URL: "http://err.com"})
 
 	// Verify no data sent, but Decr was called
 	mockSQS.AssertNotCalled(t, "SendMessage", mock.Anything, "writer", mock.MatchedBy(func(m domain.WriterMessage) bool {
@@ -190,13 +190,13 @@ func TestProcessMessage_Non200(t *testing.T) {
 		StatusCode: http.StatusNotFound,
 		Body:       io.NopCloser(bytes.NewBufferString("not found")),
 	}
-	mockFetcher.On("Fetch", "http://404.com").Return(resp, nil)
+	mockFetcher.On("Fetch", mock.Anything, "http://404.com").Return(resp, nil)
 	// SAdd for seed URL
 	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.Anything).Return(1, nil)
 	// Even on non-200, Decr is called
 	mockRedis.On("Decr", mock.Anything, mock.Anything).Return(1, nil)
 
-	s.ProcessMessage(domain.ScrapeMessage{URL: "http://404.com"})
+	s.ProcessMessage(context.Background(), domain.ScrapeMessage{URL: "http://404.com"})
 
 	// Verify no data sent, but Decr was called
 	mockSQS.AssertNotCalled(t, "SendMessage", mock.Anything, "writer", mock.MatchedBy(func(m domain.WriterMessage) bool {
@@ -221,7 +221,7 @@ func TestProcessMessage_RedisIncrError(t *testing.T) {
 		StatusCode: http.StatusOK,
 		Body:       io.NopCloser(bytes.NewBufferString(html)),
 	}
-	mockFetcher.On("Fetch", "http://site1.com").Return(resp, nil)
+	mockFetcher.On("Fetch", mock.Anything, "http://site1.com").Return(resp, nil)
 	// SAdd for seed URL
 	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.MatchedBy(func(m []interface{}) bool { return m[0] == "http://site1.com" })).Return(1, nil)
 	// SAdd for the link found
@@ -233,7 +233,7 @@ func TestProcessMessage_RedisIncrError(t *testing.T) {
 	// Decr is still called at the end
 	mockRedis.On("Decr", mock.Anything, "scrape:123:pending").Return(1, nil)
 
-	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
+	s.ProcessMessage(context.Background(), domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
 
 	mockSQS.AssertNotCalled(t, "SendMessage", mock.Anything, "input", mock.Anything)
 }
@@ -251,7 +251,7 @@ func TestProcessMessage_SQSSendError_WithCompensation(t *testing.T) {
 
 	html := `<html><body><a href="http://site2.com">Link</a></body></html>`
 	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(html))}
-	mockFetcher.On("Fetch", "http://site1.com").Return(resp, nil)
+	mockFetcher.On("Fetch", mock.Anything, "http://site1.com").Return(resp, nil)
 	// SAdd for seed URL
 	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.MatchedBy(func(m []interface{}) bool { return m[0] == "http://site1.com" })).Return(1, nil)
 	// SAdd for the link found
@@ -267,7 +267,7 @@ func TestProcessMessage_SQSSendError_WithCompensation(t *testing.T) {
 		return msg.Type == "scraping_complete"
 	})).Return(nil)
 
-	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
+	s.ProcessMessage(context.Background(), domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
 
 	mockRedis.AssertExpectations(t)
 	mockSQS.AssertExpectations(t)
@@ -286,7 +286,7 @@ func TestProcessMessage_CompensationError(t *testing.T) {
 
 	html := `<html><body><a href="http://site2.com">Link</a></body></html>`
 	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(html))}
-	mockFetcher.On("Fetch", "http://site1.com").Return(resp, nil)
+	mockFetcher.On("Fetch", mock.Anything, "http://site1.com").Return(resp, nil)
 	// SAdd for seed URL
 	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.MatchedBy(func(m []interface{}) bool { return m[0] == "http://site1.com" })).Return(1, nil)
 	// SAdd for the link found
@@ -301,7 +301,7 @@ func TestProcessMessage_CompensationError(t *testing.T) {
 	mockSQS.On("SendMessage", mock.Anything, "writer", mock.Anything).Return(nil)
 	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.Anything).Return(nil)
 
-	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
+	s.ProcessMessage(context.Background(), domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
 
 	mockRedis.AssertExpectations(t)
 }
@@ -319,7 +319,7 @@ func TestProcessMessage_RedisDecrError(t *testing.T) {
 
 	html := `<html><body><p>No links</p></body></html>`
 	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(html))}
-	mockFetcher.On("Fetch", "http://site1.com").Return(resp, nil)
+	mockFetcher.On("Fetch", mock.Anything, "http://site1.com").Return(resp, nil)
 	// SAdd for seed URL
 	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.MatchedBy(func(m []interface{}) bool { return m[0] == "http://site1.com" })).Return(1, nil)
 
@@ -327,7 +327,7 @@ func TestProcessMessage_RedisDecrError(t *testing.T) {
 	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.Anything).Return(nil)
 	mockRedis.On("Decr", mock.Anything, "scrape:123:pending").Return(0, assert.AnError)
 
-	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
+	s.ProcessMessage(context.Background(), domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
 
 	mockRedis.AssertExpectations(t)
 	mockSQS.AssertNotCalled(t, "SendMessage", mock.Anything, "writer", mock.MatchedBy(func(msg domain.WriterMessage) bool {
@@ -348,7 +348,7 @@ func TestProcessMessage_DepthZero(t *testing.T) {
 
 	html := `<html><body><a href="http://site2.com">Link</a></body></html>`
 	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(html))}
-	mockFetcher.On("Fetch", "http://site1.com").Return(resp, nil)
+	mockFetcher.On("Fetch", mock.Anything, "http://site1.com").Return(resp, nil)
 
 	// SAdd for seed URL
 	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.MatchedBy(func(m []interface{}) bool {
@@ -362,7 +362,7 @@ func TestProcessMessage_DepthZero(t *testing.T) {
 	// Expect Decr to be called (no links to send, so no IncrBy)
 	mockRedis.On("Decr", mock.Anything, "scrape:123:pending").Return(1, nil)
 
-	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", Depth: 0, ScrapingID: 123})
+	s.ProcessMessage(context.Background(), domain.ScrapeMessage{URL: "http://site1.com", Depth: 0, ScrapingID: 123})
 
 	// Should NOT send any messages to input queue (depth is 0)
 	mockSQS.AssertNotCalled(t, "SendMessage", mock.Anything, "input", mock.Anything)
@@ -383,7 +383,7 @@ func TestProcessMessage_AlreadyVisitedURL(t *testing.T) {
 
 	html := `<html><body><a href="http://site2.com">Link</a></body></html>`
 	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(html))}
-	mockFetcher.On("Fetch", "http://site1.com").Return(resp, nil)
+	mockFetcher.On("Fetch", mock.Anything, "http://site1.com").Return(resp, nil)
 
 	// SAdd for seed URL
 	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.MatchedBy(func(m []interface{}) bool {
@@ -399,7 +399,7 @@ func TestProcessMessage_AlreadyVisitedURL(t *testing.T) {
 	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.Anything).Return(nil)
 	mockRedis.On("Decr", mock.Anything, "scrape:123:pending").Return(1, nil)
 
-	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
+	s.ProcessMessage(context.Background(), domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
 
 	// Should NOT send message to input queue (URL already visited)
 	mockSQS.AssertNotCalled(t, "SendMessage", mock.Anything, "input", mock.Anything)
@@ -426,7 +426,7 @@ func TestProcessMessage_NonHTTPLinks(t *testing.T) {
 		<a href="javascript:void(0)">JS</a>
 	</body></html>`
 	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(html))}
-	mockFetcher.On("Fetch", "http://site1.com").Return(resp, nil)
+	mockFetcher.On("Fetch", mock.Anything, "http://site1.com").Return(resp, nil)
 
 	// SAdd for seed URL
 	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.MatchedBy(func(m []interface{}) bool {
@@ -437,7 +437,7 @@ func TestProcessMessage_NonHTTPLinks(t *testing.T) {
 	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.Anything).Return(nil)
 	mockRedis.On("Decr", mock.Anything, "scrape:123:pending").Return(1, nil)
 
-	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
+	s.ProcessMessage(context.Background(), domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
 
 	// Should NOT send any messages to input queue (no HTTP links)
 	mockSQS.AssertNotCalled(t, "SendMessage", mock.Anything, "input", mock.Anything)
@@ -458,7 +458,7 @@ func TestProcessMessage_SAddErrorDuringCycleDetection(t *testing.T) {
 
 	html := `<html><body><a href="http://site2.com">Link</a></body></html>`
 	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(html))}
-	mockFetcher.On("Fetch", "http://site1.com").Return(resp, nil)
+	mockFetcher.On("Fetch", mock.Anything, "http://site1.com").Return(resp, nil)
 
 	// SAdd for seed URL
 	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.MatchedBy(func(m []interface{}) bool {
@@ -474,7 +474,7 @@ func TestProcessMessage_SAddErrorDuringCycleDetection(t *testing.T) {
 	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.Anything).Return(nil)
 	mockRedis.On("Decr", mock.Anything, "scrape:123:pending").Return(1, nil)
 
-	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
+	s.ProcessMessage(context.Background(), domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
 
 	// Should NOT send message to input queue (SAdd error, link skipped)
 	mockSQS.AssertNotCalled(t, "SendMessage", mock.Anything, "input", mock.Anything)
@@ -494,7 +494,7 @@ func TestProcessMessage_SQSSendError_PageData(t *testing.T) {
 	)
 
 	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString("html"))}
-	mockFetcher.On("Fetch", mock.Anything).Return(resp, nil)
+	mockFetcher.On("Fetch", mock.Anything, mock.Anything).Return(resp, nil)
 	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.Anything).Return(1, nil)
 	mockRedis.On("Decr", mock.Anything, mock.Anything).Return(1, nil)
 
@@ -504,7 +504,7 @@ func TestProcessMessage_SQSSendError_PageData(t *testing.T) {
 	})).Return(assert.AnError)
 	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.Anything).Return(nil)
 
-	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", ScrapingID: 123})
+	s.ProcessMessage(context.Background(), domain.ScrapeMessage{URL: "http://site1.com", ScrapingID: 123})
 	mockSQS.AssertExpectations(t)
 }
 
@@ -523,7 +523,7 @@ func TestProcessMessage_SQSSendError_Summary(t *testing.T) {
 	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.Anything).Return(nil)
 
 	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString("html"))}
-	mockFetcher.On("Fetch", mock.Anything).Return(resp, nil)
+	mockFetcher.On("Fetch", mock.Anything, mock.Anything).Return(resp, nil)
 	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.Anything).Return(1, nil)
 	mockRedis.On("Decr", mock.Anything, mock.Anything).Return(1, nil)
 
@@ -532,7 +532,7 @@ func TestProcessMessage_SQSSendError_Summary(t *testing.T) {
 	// Error sending summary
 	mockSQS.On("SendMessage", mock.Anything, "summarizer", mock.Anything).Return(assert.AnError)
 
-	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", ScrapingID: 123})
+	s.ProcessMessage(context.Background(), domain.ScrapeMessage{URL: "http://site1.com", ScrapingID: 123})
 	mockSQS.AssertExpectations(t)
 }
 
@@ -554,7 +554,7 @@ func TestProcessMessage_SQSSendError_Image(t *testing.T) {
 
 	html := `<html><body><img src="http://img.com/a.jpg"></body></html>`
 	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(html))}
-	mockFetcher.On("Fetch", mock.Anything).Return(resp, nil)
+	mockFetcher.On("Fetch", mock.Anything, mock.Anything).Return(resp, nil)
 
 	mockSQS.On("SendMessage", mock.Anything, "writer", mock.Anything).Return(nil)
 	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.Anything).Return(nil)
@@ -562,7 +562,7 @@ func TestProcessMessage_SQSSendError_Image(t *testing.T) {
 	// Error sending image
 	mockSQS.On("SendMessage", mock.Anything, "image", mock.Anything).Return(assert.AnError)
 
-	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", ScrapingID: 123})
+	s.ProcessMessage(context.Background(), domain.ScrapeMessage{URL: "http://site1.com", ScrapingID: 123})
 	mockSQS.AssertExpectations(t)
 }
 
@@ -578,7 +578,7 @@ func TestProcessMessage_SQSSendError_Completion(t *testing.T) {
 	)
 
 	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString("html"))}
-	mockFetcher.On("Fetch", mock.Anything).Return(resp, nil)
+	mockFetcher.On("Fetch", mock.Anything, mock.Anything).Return(resp, nil)
 	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.Anything).Return(1, nil)
 	mockRedis.On("Decr", mock.Anything, mock.Anything).Return(0, nil)
 
@@ -591,7 +591,7 @@ func TestProcessMessage_SQSSendError_Completion(t *testing.T) {
 		return m.Type == domain.MsgTypeScrapingComplete
 	})).Return(assert.AnError)
 
-	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", ScrapingID: 123})
+	s.ProcessMessage(context.Background(), domain.ScrapeMessage{URL: "http://site1.com", ScrapingID: 123})
 	mockSQS.AssertExpectations(t)
 }
 func TestProcessMessage_IgnoreScriptAndStyle(t *testing.T) {
@@ -623,7 +623,7 @@ func TestProcessMessage_IgnoreScriptAndStyle(t *testing.T) {
 		</body>
 	</html>`
 	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(html))}
-	mockFetcher.On("Fetch", "http://site1.com").Return(resp, nil)
+	mockFetcher.On("Fetch", mock.Anything, "http://site1.com").Return(resp, nil)
 
 	// SAdd for seed URL
 	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.Anything).Return(1, nil)
@@ -636,7 +636,7 @@ func TestProcessMessage_IgnoreScriptAndStyle(t *testing.T) {
 	})).Return(nil)
 	mockSQS.On("SendMessage", mock.Anything, "indexer", mock.Anything).Return(nil)
 
-	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
+	s.ProcessMessage(context.Background(), domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
 
 	mockSQS.AssertExpectations(t)
 }
@@ -652,7 +652,7 @@ func TestProcessMessage_FetchError_SignalsCompletion(t *testing.T) {
 		WithQueues("input", "writer", "image", "summarizer", "indexer"),
 	)
 
-	mockFetcher.On("Fetch", "http://err.com").Return(nil, assert.AnError)
+	mockFetcher.On("Fetch", mock.Anything, "http://err.com").Return(nil, assert.AnError)
 	// SAdd for seed URL
 	mockRedis.On("SAdd", mock.Anything, "scrape:123:visited", mock.Anything).Return(1, nil)
 	// Decr returns 0, meaning this was the last pending task
@@ -663,7 +663,7 @@ func TestProcessMessage_FetchError_SignalsCompletion(t *testing.T) {
 		return msg.Type == domain.MsgTypeScrapingComplete && msg.ScrapingID == 123
 	})).Return(nil)
 
-	s.ProcessMessage(domain.ScrapeMessage{URL: "http://err.com", ScrapingID: 123})
+	s.ProcessMessage(context.Background(), domain.ScrapeMessage{URL: "http://err.com", ScrapingID: 123})
 
 	mockSQS.AssertExpectations(t)
 	mockRedis.AssertExpectations(t)
@@ -684,7 +684,7 @@ func TestProcessMessage_Non200_SignalsCompletion(t *testing.T) {
 		StatusCode: http.StatusNotFound,
 		Body:       io.NopCloser(bytes.NewBufferString("not found")),
 	}
-	mockFetcher.On("Fetch", "http://404.com").Return(resp, nil)
+	mockFetcher.On("Fetch", mock.Anything, "http://404.com").Return(resp, nil)
 	// SAdd for seed URL
 	mockRedis.On("SAdd", mock.Anything, "scrape:123:visited", mock.Anything).Return(1, nil)
 	// Decr returns 0, meaning this was the last pending task
@@ -695,7 +695,7 @@ func TestProcessMessage_Non200_SignalsCompletion(t *testing.T) {
 		return msg.Type == domain.MsgTypeScrapingComplete && msg.ScrapingID == 123
 	})).Return(nil)
 
-	s.ProcessMessage(domain.ScrapeMessage{URL: "http://404.com", ScrapingID: 123})
+	s.ProcessMessage(context.Background(), domain.ScrapeMessage{URL: "http://404.com", ScrapingID: 123})
 
 	mockSQS.AssertExpectations(t)
 	mockRedis.AssertExpectations(t)
@@ -716,7 +716,7 @@ func TestProcessMessage_LargeText(t *testing.T) {
 	largeText := bytes.Repeat([]byte("a"), 100005)
 	html := fmt.Sprintf("<html><body><p>%s</p></body></html>", largeText)
 	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(html))}
-	mockFetcher.On("Fetch", "http://site1.com").Return(resp, nil)
+	mockFetcher.On("Fetch", mock.Anything, "http://site1.com").Return(resp, nil)
 
 	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.Anything).Return(1, nil)
 	mockRedis.On("Decr", mock.Anything, mock.Anything).Return(1, nil)
@@ -729,7 +729,7 @@ func TestProcessMessage_LargeText(t *testing.T) {
 		return len(msg.Content) >= 100000
 	})).Return(nil)
 
-	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", ScrapingID: 123})
+	s.ProcessMessage(context.Background(), domain.ScrapeMessage{URL: "http://site1.com", ScrapingID: 123})
 
 	mockSQS.AssertExpectations(t)
 }
@@ -755,7 +755,7 @@ func TestProcessMessage_SelfClosingTags(t *testing.T) {
 		<br/>
 	</body></html>`
 	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString(html))}
-	mockFetcher.On("Fetch", "http://site1.com").Return(resp, nil)
+	mockFetcher.On("Fetch", mock.Anything, "http://site1.com").Return(resp, nil)
 
 	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.Anything).Return(1, nil)
 	mockRedis.On("Decr", mock.Anything, mock.Anything).Return(1, nil)
@@ -787,7 +787,7 @@ func TestProcessMessage_SelfClosingTags(t *testing.T) {
 	// Input queue gets the link
 	mockSQS.On("SendMessage", mock.Anything, "input", mock.Anything).Return(nil)
 
-	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
+	s.ProcessMessage(context.Background(), domain.ScrapeMessage{URL: "http://site1.com", Depth: 1, ScrapingID: 123})
 
 	mockSQS.AssertExpectations(t)
 }
@@ -806,14 +806,14 @@ func TestProcessMessage_EmptyQueues(t *testing.T) {
 	)
 
 	resp := &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewBufferString("<html></html>"))}
-	mockFetcher.On("Fetch", mock.Anything).Return(resp, nil)
+	mockFetcher.On("Fetch", mock.Anything, mock.Anything).Return(resp, nil)
 	mockRedis.On("SAdd", mock.Anything, mock.Anything, mock.Anything).Return(1, nil)
 	mockRedis.On("Decr", mock.Anything, mock.Anything).Return(1, nil)
 
 	mockSQS.On("SendMessage", mock.Anything, "writer", mock.Anything).Return(nil)
 
 	// Should NOT send to indexer, summarizer, or image because queues are empty strings
-	s.ProcessMessage(domain.ScrapeMessage{URL: "http://site1.com", ScrapingID: 123})
+	s.ProcessMessage(context.Background(), domain.ScrapeMessage{URL: "http://site1.com", ScrapingID: 123})
 
 	mockSQS.AssertNotCalled(t, "SendMessage", mock.Anything, "indexer", mock.Anything)
 	mockSQS.AssertNotCalled(t, "SendMessage", mock.Anything, "summarizer", mock.Anything)

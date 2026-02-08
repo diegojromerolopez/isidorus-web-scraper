@@ -26,7 +26,7 @@ type RedisClient interface {
 }
 
 type PageFetcher interface {
-	Fetch(url string) (*http.Response, error)
+	Fetch(ctx context.Context, url string) (*http.Response, error)
 }
 
 type ScraperService struct {
@@ -84,11 +84,11 @@ func NewScraperService(opts ...ScraperOption) *ScraperService {
 	return s
 }
 
-func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
+func (s *ScraperService) ProcessMessage(ctx context.Context, msg domain.ScrapeMessage) {
 	log.Printf("Scraping URL: %s, Depth: %d", msg.URL, msg.Depth)
 
 	// Context for I/O operations
-	ctx := context.TODO()
+	// ctx is now passed in
 
 	// Ensure current URL is marked as visited (handles seed URL case)
 	visitedKey := fmt.Sprintf(domain.RedisKeyVisited, msg.ScrapingID)
@@ -115,7 +115,7 @@ func (s *ScraperService) ProcessMessage(msg domain.ScrapeMessage) {
 		}
 	}()
 
-	resp, err := s.pageFetcher.Fetch(msg.URL)
+	resp, err := s.pageFetcher.Fetch(ctx, msg.URL)
 	if err != nil {
 		log.Printf("failed to fetch URL %s: %v", msg.URL, err)
 		return

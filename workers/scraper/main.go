@@ -24,7 +24,7 @@ func main() {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
-	awsCfg, err := config_aws.LoadDefaultConfig(context.TODO())
+	awsCfg, err := config_aws.LoadDefaultConfig(context.Background())
 	if err != nil {
 		log.Fatalf("unable to load SDK config, %v", err)
 	}
@@ -84,7 +84,7 @@ func main() {
 					continue
 				}
 
-				scraperService.ProcessMessage(body)
+				scraperService.ProcessMessage(ctx, body)
 
 				err := sqsClient.DeleteMessage(ctx, cfg.InputQueueURL, msg.ReceiptHandle)
 				if err != nil {

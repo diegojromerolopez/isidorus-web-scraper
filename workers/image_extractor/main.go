@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"image-extractor-worker/config"
@@ -23,8 +26,9 @@ func main() {
 	}
 
 	// 1. AWS Config
-	ctx := context.TODO()
-	awsCfg, err := awsConfig.LoadDefaultConfig(ctx,
+	// Use background context for initial setup
+	setupCtx := context.Background()
+	awsCfg, err := awsConfig.LoadDefaultConfig(setupCtx,
 		awsConfig.WithRegion(cfg.AWSRegion),
 	)
 	if err != nil {
@@ -46,8 +50,29 @@ func main() {
 	)
 
 	// 3. Main Loop
+	// Graceful Shutdown handling
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		sig := <-sigChan
+		log.Printf("Received signal %v, initiating shutdown...", sig)
+		cancel()
+	}()
+
 	log.Printf("Listening for messages on %s...", cfg.InputQueueURL)
 	for {
+		select {
+		case <-ctx.Done():
+			log.Println("Image Extractor shutting down...")
+			return
+		default:
+			// Continue
+		}
+
 		messages, err := sqsRepo.ReceiveMessages(ctx, cfg.InputQueueURL)
 		if err != nil {
 			log.Printf("Error receiving messages: %v", err)

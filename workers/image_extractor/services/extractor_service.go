@@ -22,7 +22,7 @@ type S3Repository interface {
 }
 
 type HTTPRepository interface {
-	DownloadImage(url string) ([]byte, string, error)
+	DownloadImage(ctx context.Context, url string) ([]byte, string, error)
 }
 
 type ExtractorService struct {
@@ -56,7 +56,7 @@ func (s *ExtractorService) ProcessMessage(ctx context.Context, msg domain.ImageM
 	log.Printf("Processing image: %s for scraping %d", msg.URL, msg.ScrapingID)
 
 	// 1. Download image
-	data, contentType, err := s.httpRepo.DownloadImage(msg.URL)
+	data, contentType, err := s.httpRepo.DownloadImage(ctx, msg.URL)
 	var s3Path string
 	if err != nil {
 		log.Printf("Failed to download image %s: %v", msg.URL, err)

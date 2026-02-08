@@ -31,8 +31,11 @@ type MockHTTPRepo struct {
 	mock.Mock
 }
 
-func (m *MockHTTPRepo) DownloadImage(url string) ([]byte, string, error) {
-	args := m.Called(url)
+func (m *MockHTTPRepo) DownloadImage(ctx context.Context, url string) ([]byte, string, error) {
+	args := m.Called(ctx, url)
+	if args.Get(0) == nil {
+		return nil, args.String(1), args.Error(2)
+	}
 	return args.Get(0).([]byte), args.String(1), args.Error(2)
 }
 
@@ -48,7 +51,7 @@ func TestProcessMessage_Success(t *testing.T) {
 		ScrapingID:  123,
 	}
 
-	http.On("DownloadImage", msg.URL).Return([]byte("data"), "image/jpeg", nil)
+	http.On("DownloadImage", mock.Anything, msg.URL).Return([]byte("data"), "image/jpeg", nil)
 	s3.On("UploadBytes", mock.Anything, "bucket", mock.Anything, []byte("data"), "image/jpeg").Return("s3://bucket/key.jpg", nil)
 
 	sqs.On("SendMessage", mock.Anything, "writer-q", mock.MatchedBy(func(m domain.WriterMessage) bool {
@@ -78,7 +81,7 @@ func TestProcessMessage_DownloadError(t *testing.T) {
 		ScrapingID: 123,
 	}
 
-	http.On("DownloadImage", msg.URL).Return([]byte(nil), "", assert.AnError)
+	http.On("DownloadImage", mock.Anything, msg.URL).Return(nil, "", assert.AnError)
 
 	// Should still send metadata to writer (but with empty s3_path)
 	sqs.On("SendMessage", mock.Anything, "writer-q", mock.MatchedBy(func(m domain.WriterMessage) bool {

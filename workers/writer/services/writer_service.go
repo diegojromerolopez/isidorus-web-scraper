@@ -11,10 +11,10 @@ import (
 
 // Consumer-side interface
 type DBRepository interface {
-	InsertPageData(data domain.WriterMessage) error
-	InsertImageExplanation(data domain.WriterMessage) error
-	InsertPageSummary(data domain.WriterMessage) error
-	CompleteScraping(scrapingID int) error
+	InsertPageData(ctx context.Context, data domain.WriterMessage) error
+	InsertImageExplanation(ctx context.Context, data domain.WriterMessage) error
+	InsertPageSummary(ctx context.Context, data domain.WriterMessage) error
+	CompleteScraping(ctx context.Context, scrapingID int) error
 }
 
 type JobStatusRepository interface {
@@ -47,13 +47,12 @@ func NewWriterService(opts ...WriterOption) *WriterService {
 	return s
 }
 
-func (s *WriterService) ProcessMessage(msg domain.WriterMessage) error {
+func (s *WriterService) ProcessMessage(ctx context.Context, msg domain.WriterMessage) error {
 	var err error
-	ctx := context.Background()
 
 	if msg.Type == domain.MsgTypePageData {
 		log.Printf("Writer: Processing PageData for job %d, URL %s", msg.ScrapingID, msg.URL)
-		err = s.dbRepo.InsertPageData(msg)
+		err = s.dbRepo.InsertPageData(ctx, msg)
 		if err == nil && s.statusRepo != nil && len(msg.Links) > 0 {
 			jobID := strconv.Itoa(msg.ScrapingID)
 			log.Printf("Writer: Incrementing links_count for job %s by %d", jobID, len(msg.Links))
@@ -63,13 +62,13 @@ func (s *WriterService) ProcessMessage(msg domain.WriterMessage) error {
 		}
 	} else if msg.Type == domain.MsgTypeImageExplanation {
 		log.Printf("Writer: Processing ImageExplanation for job %d, URL %s", msg.ScrapingID, msg.URL)
-		err = s.dbRepo.InsertImageExplanation(msg)
+		err = s.dbRepo.InsertImageExplanation(ctx, msg)
 	} else if msg.Type == domain.MsgTypePageSummary {
 		log.Printf("Writer: Processing PageSummary for job %d, URL %s", msg.ScrapingID, msg.URL)
-		err = s.dbRepo.InsertPageSummary(msg)
+		err = s.dbRepo.InsertPageSummary(ctx, msg)
 	} else if msg.Type == domain.MsgTypeScrapingComplete {
 		// 1. Optional Postgres hook (currently no-op/logging)
-		_ = s.dbRepo.CompleteScraping(msg.ScrapingID)
+		_ = s.dbRepo.CompleteScraping(ctx, msg.ScrapingID)
 
 		// 2. Sync to DynamoDB if repository is available - THIS IS THE SOURCE OF TRUTH
 		if s.statusRepo != nil {

@@ -15,23 +15,23 @@ type MockDBRepository struct {
 	mock.Mock
 }
 
-func (m *MockDBRepository) InsertPageData(data domain.WriterMessage) error {
-	args := m.Called(data)
+func (m *MockDBRepository) InsertPageData(ctx context.Context, data domain.WriterMessage) error {
+	args := m.Called(ctx, data)
 	return args.Error(0)
 }
 
-func (m *MockDBRepository) InsertImageExplanation(data domain.WriterMessage) error {
-	args := m.Called(data)
+func (m *MockDBRepository) InsertImageExplanation(ctx context.Context, data domain.WriterMessage) error {
+	args := m.Called(ctx, data)
 	return args.Error(0)
 }
 
-func (m *MockDBRepository) InsertPageSummary(data domain.WriterMessage) error {
-	args := m.Called(data)
+func (m *MockDBRepository) InsertPageSummary(ctx context.Context, data domain.WriterMessage) error {
+	args := m.Called(ctx, data)
 	return args.Error(0)
 }
 
-func (m *MockDBRepository) CompleteScraping(scrapingID int) error {
-	args := m.Called(scrapingID)
+func (m *MockDBRepository) CompleteScraping(ctx context.Context, scrapingID int) error {
+	args := m.Called(ctx, scrapingID)
 	return args.Error(0)
 }
 
@@ -77,9 +77,9 @@ func TestProcessMessage_PageData(t *testing.T) {
 		URL:  "http://example.com",
 	}
 
-	mockRepo.On("InsertPageData", msg).Return(nil)
+	mockRepo.On("InsertPageData", mock.Anything, msg).Return(nil)
 
-	err := s.ProcessMessage(msg)
+	err := s.ProcessMessage(context.Background(), msg)
 
 	assert.NoError(t, err)
 	mockRepo.AssertExpectations(t)
@@ -95,9 +95,9 @@ func TestProcessMessage_ImageExplanation(t *testing.T) {
 		Explanation: "A nice picture",
 	}
 
-	mockRepo.On("InsertImageExplanation", msg).Return(nil)
+	mockRepo.On("InsertImageExplanation", mock.Anything, msg).Return(nil)
 
-	err := s.ProcessMessage(msg)
+	err := s.ProcessMessage(context.Background(), msg)
 
 	assert.NoError(t, err)
 	mockRepo.AssertExpectations(t)
@@ -111,11 +111,11 @@ func TestProcessMessage_UnknownType(t *testing.T) {
 		Type: "unknown",
 	}
 
-	err := s.ProcessMessage(msg)
+	err := s.ProcessMessage(context.Background(), msg)
 
 	assert.NoError(t, err) // Returns nil for unknown
-	mockRepo.AssertNotCalled(t, "InsertPageData", mock.Anything)
-	mockRepo.AssertNotCalled(t, "InsertImageExplanation", mock.Anything)
+	mockRepo.AssertNotCalled(t, "InsertPageData", mock.Anything, mock.Anything)
+	mockRepo.AssertNotCalled(t, "InsertImageExplanation", mock.Anything, mock.Anything)
 }
 
 func TestProcessMessage_RepoError(t *testing.T) {
@@ -126,9 +126,9 @@ func TestProcessMessage_RepoError(t *testing.T) {
 		Type: "page_data",
 	}
 
-	mockRepo.On("InsertPageData", msg).Return(assert.AnError)
+	mockRepo.On("InsertPageData", mock.Anything, msg).Return(assert.AnError)
 
-	err := s.ProcessMessage(msg)
+	err := s.ProcessMessage(context.Background(), msg)
 
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, assert.AnError)
@@ -147,10 +147,10 @@ func TestProcessMessage_ScrapingComplete(t *testing.T) {
 		ScrapingID: 123,
 	}
 
-	mockDbRepo.On("CompleteScraping", 123).Return(nil)
+	mockDbRepo.On("CompleteScraping", mock.Anything, 123).Return(nil)
 	mockStatusRepo.On("UpdateJobStatusFull", mock.Anything, "123", domain.StatusCompleted, mock.Anything).Return(nil)
 
-	err := s.ProcessMessage(msg)
+	err := s.ProcessMessage(context.Background(), msg)
 
 	assert.NoError(t, err)
 	mockDbRepo.AssertExpectations(t)
@@ -168,9 +168,9 @@ func TestProcessMessage_PageSummary(t *testing.T) {
 		ScrapingID: 123,
 	}
 
-	mockRepo.On("InsertPageSummary", msg).Return(nil)
+	mockRepo.On("InsertPageSummary", mock.Anything, msg).Return(nil)
 
-	err := s.ProcessMessage(msg)
+	err := s.ProcessMessage(context.Background(), msg)
 
 	assert.NoError(t, err)
 	mockRepo.AssertExpectations(t)
@@ -189,10 +189,10 @@ func TestProcessMessage_DynamoFullError(t *testing.T) {
 		ScrapingID: 123,
 	}
 
-	mockDbRepo.On("CompleteScraping", 123).Return(nil)
+	mockDbRepo.On("CompleteScraping", mock.Anything, 123).Return(nil)
 	mockStatusRepo.On("UpdateJobStatusFull", mock.Anything, "123", domain.StatusCompleted, mock.Anything).Return(assert.AnError)
 
-	err := s.ProcessMessage(msg)
+	err := s.ProcessMessage(context.Background(), msg)
 
 	assert.NoError(t, err) // We log the error but don't fail the message processing
 	mockStatusRepo.AssertExpectations(t)
@@ -213,10 +213,10 @@ func TestProcessMessage_PageData_IncrementsLinks(t *testing.T) {
 		Links:      []string{"http://link1.com", "http://link2.com"},
 	}
 
-	mockDbRepo.On("InsertPageData", msg).Return(nil)
+	mockDbRepo.On("InsertPageData", mock.Anything, msg).Return(nil)
 	mockStatusRepo.On("IncrementLinkCount", mock.Anything, "123", 2).Return(nil)
 
-	err := s.ProcessMessage(msg)
+	err := s.ProcessMessage(context.Background(), msg)
 
 	assert.NoError(t, err)
 	mockDbRepo.AssertExpectations(t)

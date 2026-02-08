@@ -40,7 +40,7 @@ func main() {
 	}
 
 	// Connect AWS
-	awsCfg, err := config_aws.LoadDefaultConfig(context.TODO())
+	awsCfg, err := config_aws.LoadDefaultConfig(context.Background())
 	if err != nil {
 		log.Fatalf("unable to load SDK config, %v", err)
 	}
@@ -97,7 +97,7 @@ func main() {
 					continue
 				}
 
-				if err := writerService.ProcessMessage(body); err != nil {
+				if err := writerService.ProcessMessage(ctx, body); err != nil {
 					log.Printf("Failed to process message: %v", err)
 				} else {
 					// Delete on success
