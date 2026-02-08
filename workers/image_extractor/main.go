@@ -49,6 +49,7 @@ func main() {
 		cfg.WriterQueueURL,
 		cfg.ImageExplainerQueueURL,
 		cfg.ImagesBucket,
+		cfg.ImageExplainerEnabled,
 	)
 
 	// 3. Main Loop

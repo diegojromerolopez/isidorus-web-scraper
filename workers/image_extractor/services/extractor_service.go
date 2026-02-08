@@ -32,6 +32,7 @@ type ExtractorService struct {
 	writerQueueURL         string
 	imageExplainerQueueURL string
 	imagesBucket           string
+	imageExplainerEnabled  bool
 }
 
 func NewExtractorService(
@@ -41,6 +42,7 @@ func NewExtractorService(
 	writerQueueURL string,
 	imageExplainerQueueURL string,
 	imagesBucket string,
+	imageExplainerEnabled bool,
 ) *ExtractorService {
 	return &ExtractorService{
 		sqsRepo:                sqsRepo,
@@ -49,11 +51,12 @@ func NewExtractorService(
 		writerQueueURL:         writerQueueURL,
 		imageExplainerQueueURL: imageExplainerQueueURL,
 		imagesBucket:           imagesBucket,
+		imageExplainerEnabled:  imageExplainerEnabled,
 	}
 }
 
 func (s *ExtractorService) ProcessMessage(ctx context.Context, msg domain.ImageMessage) error {
-	log.Printf("Processing image: %s for scraping %d", msg.URL, msg.ScrapingID)
+	log.Printf("Processing image: %s for scraping %d (AI Enabled: %v)", msg.URL, msg.ScrapingID, s.imageExplainerEnabled)
 
 	// 1. Download image
 	data, contentType, err := s.httpRepo.DownloadImage(ctx, msg.URL)
@@ -88,8 +91,8 @@ func (s *ExtractorService) ProcessMessage(ctx context.Context, msg domain.ImageM
 	}
 	log.Printf("Sent image metadata for %s to writer queue", msg.URL)
 
-	// 4. Send to Explainer (if S3 upload succeeded)
-	if s3Path != "" {
+	// 4. Send to Explainer (if S3 upload succeeded AND explainer is enabled)
+	if s3Path != "" && s.imageExplainerEnabled {
 		explainerMsg := domain.ImageExtractorMessage{
 			ImageURL:    msg.URL,
 			OriginalURL: msg.OriginalURL,
@@ -101,6 +104,8 @@ func (s *ExtractorService) ProcessMessage(ctx context.Context, msg domain.ImageM
 		} else {
 			log.Printf("Sent image to explainer queue: %s", msg.URL)
 		}
+	} else if s3Path != "" {
+		log.Printf("Skipping image explanation for %s (disabled globally)", msg.URL)
 	}
 
 	return nil

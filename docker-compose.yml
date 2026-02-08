@@ -196,6 +196,7 @@ services:
       - AWS_SECRET_ACCESS_KEY=test
       - INPUT_QUEUE_URL=http://localstack:4566/000000000000/image-extractor-queue
       - WRITER_QUEUE_URL=http://localstack:4566/000000000000/writer-queue
+      - IMAGE_EXPLAINER_ENABLED=${IMAGE_EXPLAINER_ENABLED:-false}
       - IMAGE_EXPLAINER_QUEUE_URL=http://localstack:4566/000000000000/image-explainer-queue
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/isidorus
       - IMAGES_BUCKET=isidorus-images

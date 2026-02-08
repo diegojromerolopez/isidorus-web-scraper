@@ -12,6 +12,7 @@ type Config struct {
 	InputQueueURL          string
 	WriterQueueURL         string
 	ImageExplainerQueueURL string
+	ImageExplainerEnabled  bool
 	ImagesBucket           string
 }
 
@@ -23,7 +24,8 @@ func LoadConfig() Config {
 		AWSSecretAccessKey:     getEnv("AWS_SECRET_ACCESS_KEY", "test"),
 		InputQueueURL:          getEnv("INPUT_QUEUE_URL", ""),
 		WriterQueueURL:         getEnv("WRITER_QUEUE_URL", ""),
-		ImageExplainerQueueURL: getEnv("IMAGE_EXPLAINER_QUEUE_URL", ""),
+		ImageExplainerQueueURL: getEnv("IMAGE_EXPL_QUEUE_URL", ""), // Note: using IMAGE_EXPL_QUEUE_URL as in compose
+		ImageExplainerEnabled:  getEnv("IMAGE_EXPLAINER_ENABLED", "true") == "true",
 		ImagesBucket:           getEnv("IMAGES_BUCKET", "isidorus-images"),
 	}
 }
