@@ -15,7 +15,7 @@ type HTTPRepository struct {
 func NewHTTPRepository() *HTTPRepository {
 	return &HTTPRepository{
 		client: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout: 30 * time.Second,
 		},
 	}
 }

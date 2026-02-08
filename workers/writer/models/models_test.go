@@ -7,8 +7,21 @@ import (
 )
 
 func TestTableNames(t *testing.T) {
-	assert.Equal(t, "scraped_pages", (&ScrapedPage{}).TableName())
-	assert.Equal(t, "page_links", (&PageLink{}).TableName())
-	assert.Equal(t, "page_images", (&PageImage{}).TableName())
-	assert.Equal(t, "scrapings", (&Scraping{}).TableName())
+	tests := []struct {
+		name     string
+		model    interface{ TableName() string }
+		expected string
+	}{
+		{"ScrapedPage", &ScrapedPage{}, "scraped_pages"},
+		{"PageLink", &PageLink{}, "page_links"},
+		{"PageImage", &PageImage{}, "page_images"},
+		{"Scraping", &Scraping{}, "scrapings"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, tt.model.TableName())
+		})
+	}
 }
+

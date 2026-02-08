@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 )
 
 type HTTPPageFetcher struct{}
@@ -18,7 +19,10 @@ func (pf *HTTPPageFetcher) Fetch(ctx context.Context, url string) (*http.Respons
 		return nil, fmt.Errorf("failed to create request for URL %s: %w", url, err)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch URL %s: %w", url, err)
 	}

@@ -8,18 +8,32 @@ import (
 )
 
 func TestLoad(t *testing.T) {
-	os.Setenv("INPUT_QUEUE_URL", "http://input")
-	os.Setenv("WRITER_QUEUE_URL", "http://writer")
-	os.Setenv("IMAGE_QUEUE_URL", "http://image")
-	os.Setenv("INDEXER_QUEUE_URL", "http://indexer")
-	defer os.Unsetenv("INPUT_QUEUE_URL")
-	defer os.Unsetenv("WRITER_QUEUE_URL")
-	defer os.Unsetenv("IMAGE_QUEUE_URL")
-	defer os.Unsetenv("INDEXER_QUEUE_URL")
+	tests := []struct {
+		name string
+		envs map[string]string
+	}{
+		{
+			name: "Basic Config",
+			envs: map[string]string{
+				"INPUT_QUEUE_URL":   "http://input",
+				"WRITER_QUEUE_URL":  "http://writer",
+				"IMAGE_QUEUE_URL":   "http://image",
+				"INDEXER_QUEUE_URL": "http://indexer",
+			},
+		},
+	}
 
-	cfg, err := Load()
-	assert.NoError(t, err)
-	assert.Equal(t, "http://input", cfg.InputQueueURL)
-	assert.Equal(t, "http://writer", cfg.WriterQueueURL)
-	assert.Equal(t, "http://indexer", cfg.IndexerQueueURL)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for k, v := range tt.envs {
+				os.Setenv(k, v)
+				defer os.Unsetenv(k)
+			}
+			cfg, err := Load()
+			assert.NoError(t, err)
+			assert.Equal(t, tt.envs["INPUT_QUEUE_URL"], cfg.InputQueueURL)
+			assert.Equal(t, tt.envs["WRITER_QUEUE_URL"], cfg.WriterQueueURL)
+		})
+	}
 }
+

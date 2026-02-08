@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
@@ -27,6 +28,7 @@ func main() {
 		config.WithRegion(cfg.AWSRegion),
 		config.WithBaseEndpoint(cfg.AWSEndpointURL),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(cfg.AWSAccessKeyID, cfg.AWSSecretKey, "")),
+		config.WithHTTPClient(&http.Client{Timeout: 30 * time.Second}),
 	)
 	if err != nil {
 		log.Fatalf("unable to load SDK config, %v", err)
@@ -37,7 +39,8 @@ func main() {
 	// OpenSearch Client
 	osClient, err := opensearch.NewClient(opensearch.Config{
 		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
+			ResponseHeaderTimeout: 30 * time.Second,
 		},
 		Addresses: []string{cfg.OpenSearchURL},
 	})

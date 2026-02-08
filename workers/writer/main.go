@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -40,7 +41,9 @@ func main() {
 	}
 
 	// Connect AWS
-	awsCfg, err := config_aws.LoadDefaultConfig(context.Background())
+	awsCfg, err := config_aws.LoadDefaultConfig(context.Background(),
+		config_aws.WithHTTPClient(&http.Client{Timeout: 30 * time.Second}),
+	)
 	if err != nil {
 		log.Fatalf("unable to load SDK config, %v", err)
 	}

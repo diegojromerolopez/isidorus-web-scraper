@@ -39,58 +39,62 @@ func (m *MockHTTPRepo) DownloadImage(ctx context.Context, url string) ([]byte, s
 	return args.Get(0).([]byte), args.String(1), args.Error(2)
 }
 
-func TestProcessMessage_Success(t *testing.T) {
-	sqs := new(MockSQSRepo)
-	s3 := new(MockS3Repo)
-	http := new(MockHTTPRepo)
-	srv := NewExtractorService(sqs, s3, http, "writer-q", "explainer-q", "bucket")
-
-	msg := domain.ImageMessage{
-		URL:         "http://test.com/img.jpg",
-		OriginalURL: "http://test.com",
-		ScrapingID:  123,
+func TestExtractorService_ProcessMessage(t *testing.T) {
+	tests := []struct {
+		name       string
+		msg        domain.ImageMessage
+		setupMocks func(*MockSQSRepo, *MockS3Repo, *MockHTTPRepo)
+		expectErr  bool
+	}{
+		{
+			name: "Success Path",
+			msg:  domain.ImageMessage{URL: "http://test.com/img.jpg", OriginalURL: "http://test.com", ScrapingID: 123},
+			setupMocks: func(sqs *MockSQSRepo, s3 *MockS3Repo, http *MockHTTPRepo) {
+				http.On("DownloadImage", mock.Anything, "http://test.com/img.jpg").Return([]byte("data"), "image/jpeg", nil)
+				s3.On("UploadBytes", mock.Anything, "bucket", mock.Anything, []byte("data"), "image/jpeg").Return("s3://bucket/key.jpg", nil)
+				sqs.On("SendMessage", mock.Anything, "writer-q", mock.MatchedBy(func(m domain.WriterMessage) bool {
+					return m.S3Path == "s3://bucket/key.jpg" && m.ScrapingID == 123
+				})).Return(nil)
+				sqs.On("SendMessage", mock.Anything, "explainer-q", mock.MatchedBy(func(m domain.ImageExtractorMessage) bool {
+					return m.S3Path == "s3://bucket/key.jpg" && m.ScrapingID == 123
+				})).Return(nil)
+			},
+		},
+		{
+			name: "Download Error - Still Sends Metadata",
+			msg:  domain.ImageMessage{URL: "http://test.com/img.jpg", ScrapingID: 123},
+			setupMocks: func(sqs *MockSQSRepo, s3 *MockS3Repo, http *MockHTTPRepo) {
+				http.On("DownloadImage", mock.Anything, "http://test.com/img.jpg").Return(nil, "", assert.AnError)
+				sqs.On("SendMessage", mock.Anything, "writer-q", mock.MatchedBy(func(m domain.WriterMessage) bool {
+					return m.S3Path == "" && m.ScrapingID == 123
+				})).Return(nil)
+			},
+		},
 	}
 
-	http.On("DownloadImage", mock.Anything, msg.URL).Return([]byte("data"), "image/jpeg", nil)
-	s3.On("UploadBytes", mock.Anything, "bucket", mock.Anything, []byte("data"), "image/jpeg").Return("s3://bucket/key.jpg", nil)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sqs := new(MockSQSRepo)
+			s3 := new(MockS3Repo)
+			http := new(MockHTTPRepo)
+			srv := NewExtractorService(sqs, s3, http, "writer-q", "explainer-q", "bucket")
 
-	sqs.On("SendMessage", mock.Anything, "writer-q", mock.MatchedBy(func(m domain.WriterMessage) bool {
-		return m.S3Path == "s3://bucket/key.jpg" && m.ScrapingID == 123
-	})).Return(nil)
+			tt.setupMocks(sqs, s3, http)
 
-	sqs.On("SendMessage", mock.Anything, "explainer-q", mock.MatchedBy(func(m domain.ImageExtractorMessage) bool {
-		return m.S3Path == "s3://bucket/key.jpg" && m.ScrapingID == 123
-	})).Return(nil)
+			err := srv.ProcessMessage(context.Background(), tt.msg)
+			if tt.expectErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
 
-	err := srv.ProcessMessage(context.Background(), msg)
-	assert.NoError(t, err)
-
-	http.AssertExpectations(t)
-	s3.AssertExpectations(t)
-	sqs.AssertExpectations(t)
-}
-
-func TestProcessMessage_DownloadError(t *testing.T) {
-	sqs := new(MockSQSRepo)
-	s3 := new(MockS3Repo)
-	http := new(MockHTTPRepo)
-	srv := NewExtractorService(sqs, s3, http, "writer-q", "explainer-q", "bucket")
-
-	msg := domain.ImageMessage{
-		URL:        "http://test.com/img.jpg",
-		ScrapingID: 123,
+			http.AssertExpectations(t)
+			s3.AssertExpectations(t)
+			sqs.AssertExpectations(t)
+		})
 	}
-
-	http.On("DownloadImage", mock.Anything, msg.URL).Return(nil, "", assert.AnError)
-
-	// Should still send metadata to writer (but with empty s3_path)
-	sqs.On("SendMessage", mock.Anything, "writer-q", mock.MatchedBy(func(m domain.WriterMessage) bool {
-		return m.S3Path == "" && m.ScrapingID == 123
-	})).Return(nil)
-
-	err := srv.ProcessMessage(context.Background(), msg)
-	assert.NoError(t, err)
 }
+
 
 func TestGetExtension(t *testing.T) {
 	srv := &ExtractorService{}

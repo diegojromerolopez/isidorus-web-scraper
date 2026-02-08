@@ -16,16 +16,33 @@ func TestPageFetcher_Fetch(t *testing.T) {
 	}))
 	defer server.Close()
 
-	fetcher := NewPageFetcher()
-	resp, err := fetcher.Fetch(context.Background(), server.URL)
+	tests := []struct {
+		name    string
+		url     string
+		wantErr bool
+	}{
+		{
+			name: "Success",
+			url:  server.URL,
+		},
+		{
+			name:    "Invalid URL",
+			url:     "http://invalid-url-that-should-fail",
+			wantErr: true,
+		},
+	}
 
-	assert.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fetcher := NewPageFetcher()
+			resp, err := fetcher.Fetch(context.Background(), tt.url)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, http.StatusOK, resp.StatusCode)
+			}
+		})
+	}
 }
 
-func TestPageFetcher_Fetch_Error(t *testing.T) {
-	fetcher := NewPageFetcher()
-	_, err := fetcher.Fetch(context.Background(), "http://invalid-url-that-should-fail")
-
-	assert.Error(t, err)
-}
