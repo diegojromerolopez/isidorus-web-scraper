@@ -188,8 +188,7 @@ services:
 
   image-extractor-worker:
     build:
-      context: .
-      dockerfile: workers/image_extractor/Dockerfile
+      context: ./workers/image_extractor
     environment:
       - AWS_ENDPOINT_URL=http://localstack:4566
       - AWS_REGION=us-east-1
