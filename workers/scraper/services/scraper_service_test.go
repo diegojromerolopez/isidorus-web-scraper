@@ -230,7 +230,6 @@ func TestScraperService_ProcessMessage(t *testing.T) {
 	}
 }
 
-
 func TestProcessMessage_EmptyQueues(t *testing.T) {
 	mockSQS := new(MockSQSClient)
 	mockRedis := new(MockRedisClient)

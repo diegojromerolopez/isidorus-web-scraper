@@ -30,12 +30,12 @@ func TestNewDynamoDBClient(t *testing.T) {
 
 func TestDynamoDBClient_UpdateJobStatus(t *testing.T) {
 	tests := []struct {
-		name      string
-		tableName string
+		name       string
+		tableName  string
 		scrapingID string
 		status     string
-		mockFunc  func(*MockDynamoDB)
-		wantErr   bool
+		mockFunc   func(*MockDynamoDB)
+		wantErr    bool
 	}{
 		{
 			name:       "Success",
@@ -168,4 +168,3 @@ func TestDynamoDBClient_IncrementLinkCount(t *testing.T) {
 		})
 	}
 }
-

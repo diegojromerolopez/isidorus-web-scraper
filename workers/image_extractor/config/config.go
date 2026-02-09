@@ -14,6 +14,8 @@ type Config struct {
 	ImageExplainerQueueURL string
 	ImageExplainerEnabled  bool
 	ImagesBucket           string
+	AWSEndpointURLSQS      string
+	AWSEndpointURLS3       string
 }
 
 func LoadConfig() Config {
@@ -27,6 +29,8 @@ func LoadConfig() Config {
 		ImageExplainerQueueURL: getEnv("IMAGE_EXPL_QUEUE_URL", ""), // Note: using IMAGE_EXPL_QUEUE_URL as in compose
 		ImageExplainerEnabled:  getEnv("IMAGE_EXPLAINER_ENABLED", "true") == "true",
 		ImagesBucket:           getEnv("IMAGES_BUCKET", "isidorus-images"),
+		AWSEndpointURLSQS:      getEnv("AWS_ENDPOINT_URL_SQS", getEnv("AWS_ENDPOINT_URL", "http://localstack:4566")),
+		AWSEndpointURLS3:       getEnv("AWS_ENDPOINT_URL_S3", getEnv("AWS_ENDPOINT_URL", "http://localstack:4566")),
 	}
 }
 

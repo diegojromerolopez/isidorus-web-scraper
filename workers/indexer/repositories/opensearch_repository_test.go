@@ -63,4 +63,3 @@ func TestOpenSearchRepository_IndexDocument(t *testing.T) {
 		})
 	}
 }
-

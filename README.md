@@ -266,6 +266,23 @@ The entire stack runs locally via Docker Compose:
 -   **DynamoDB**: NoSQL store for job history and metadata.
 -   **Redis**: In-memory store for cycle detection and job tracking counters.
 
+### 🐳 Docker Compose Architecture
+
+The project uses a modular Docker Compose setup to support multiple environments without duplication:
+
+-   **`docker-compose.base.yml`**: Defines common services (API, Workers, DBs) and builds.
+-   **`docker-compose.yml`**: **Development** overrides. Adds LocalStack, Ollama, and host ports.
+-   **`docker-compose.prod.yml`**: **Production** overrides. Adds Minio, ScyllaDB, ElasticMQ.
+-   **`docker-compose.e2e.yml`**: **Testing** overrides. Adds Test Runner and Mocks.
+
+**Note**: The `Makefile` handles the complex file chaining for you (e.g., `docker compose -f docker-compose.base.yml -f ...`).
+
+### Production-Ready Infrastructure (Optional)
+You can switch to a more production-aligned stack using `make prod-up`. This replaces LocalStack with:
+-   **Minio**: S3-compatible object storage.
+-   **ElasticMQ**: Standalone SQS-compatible queue system.
+-   **ScyllaDB (Alternator)**: High-performance DynamoDB-compatible NoSQL store.
+
 ## Technologies
 
 -   **Frontend**: React 18, TypeScript, TailwindCSS, Vite

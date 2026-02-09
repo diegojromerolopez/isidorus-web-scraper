@@ -95,4 +95,3 @@ func TestSQSClient_DeleteMessage(t *testing.T) {
 		})
 	}
 }
-

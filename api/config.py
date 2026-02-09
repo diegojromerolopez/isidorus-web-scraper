@@ -18,9 +18,15 @@ class Configuration(BaseConfiguration):
         """
         Loads API configuration from environment variables.
         """
+        base_endpoint = os.getenv("AWS_ENDPOINT_URL", "http://localstack:4566")
         return cls(
             # Base fields
-            aws_endpoint_url=os.getenv("AWS_ENDPOINT_URL", "http://localstack:4566"),
+            aws_endpoint_url=base_endpoint,
+            aws_endpoint_url_s3=os.getenv("AWS_ENDPOINT_URL_S3", base_endpoint),
+            aws_endpoint_url_sqs=os.getenv("AWS_ENDPOINT_URL_SQS", base_endpoint),
+            aws_endpoint_url_dynamodb=os.getenv(
+                "AWS_ENDPOINT_URL_DYNAMODB", base_endpoint
+            ),
             aws_region=os.getenv("AWS_REGION", "us-east-1"),
             aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID", "test"),
             aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY", "test"),

@@ -153,4 +153,3 @@ func TestRedisClient_SAdd(t *testing.T) {
 		})
 	}
 }
-

@@ -95,7 +95,6 @@ func TestExtractorService_ProcessMessage(t *testing.T) {
 	}
 }
 
-
 func TestGetExtension(t *testing.T) {
 	srv := &ExtractorService{}
 

@@ -110,4 +110,3 @@ func TestIndexerService_Start(t *testing.T) {
 		})
 	}
 }
-

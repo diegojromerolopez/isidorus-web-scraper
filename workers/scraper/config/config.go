@@ -6,30 +6,48 @@ import (
 )
 
 type Config struct {
-	InputQueueURL         string
-	WriterQueueURL        string
-	SummarizerQueueURL    string
-	ImageQueueURL         string
-	IndexerQueueURL       string
-	RedisHost             string
-	RedisPort             string
-	ImageExtractorEnabled bool
-	ImageExplainerEnabled bool
-	PageSummarizerEnabled bool
+	InputQueueURL          string
+	WriterQueueURL         string
+	SummarizerQueueURL     string
+	ImageQueueURL          string
+	IndexerQueueURL        string
+	RedisHost              string
+	RedisPort              string
+	ImageExtractorEnabled  bool
+	ImageExplainerEnabled  bool
+	PageSummarizerEnabled  bool
+	AWSEndpointURLSQS      string
+	AWSEndpointURLDynamoDB string
+}
+
+func getEnv(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+	return fallback
 }
 
 func Load() (*Config, error) {
 	cfg := &Config{
-		InputQueueURL:         os.Getenv("INPUT_QUEUE_URL"),
-		WriterQueueURL:        os.Getenv("WRITER_QUEUE_URL"),
-		SummarizerQueueURL:    os.Getenv("SUMMARIZER_QUEUE_URL"),
-		ImageQueueURL:         os.Getenv("IMAGE_QUEUE_URL"),
-		RedisHost:             os.Getenv("REDIS_HOST"),
-		RedisPort:             os.Getenv("REDIS_PORT"),
-		IndexerQueueURL:       os.Getenv("INDEXER_QUEUE_URL"),
-		ImageExtractorEnabled: os.Getenv("IMAGE_EXTRACTOR_ENABLED") == "true",
-		ImageExplainerEnabled: os.Getenv("IMAGE_EXPLAINER_ENABLED") == "true",
-		PageSummarizerEnabled: os.Getenv("PAGE_SUMMARIZER_ENABLED") == "true",
+		InputQueueURL:          os.Getenv("INPUT_QUEUE_URL"),
+		WriterQueueURL:         os.Getenv("WRITER_QUEUE_URL"),
+		SummarizerQueueURL:     os.Getenv("SUMMARIZER_QUEUE_URL"),
+		ImageQueueURL:          os.Getenv("IMAGE_QUEUE_URL"),
+		RedisHost:              os.Getenv("REDIS_HOST"),
+		RedisPort:              os.Getenv("REDIS_PORT"),
+		IndexerQueueURL:        os.Getenv("INDEXER_QUEUE_URL"),
+		ImageExtractorEnabled:  os.Getenv("IMAGE_EXTRACTOR_ENABLED") == "true",
+		ImageExplainerEnabled:  os.Getenv("IMAGE_EXPLAINER_ENABLED") == "true",
+		PageSummarizerEnabled:  os.Getenv("PAGE_SUMMARIZER_ENABLED") == "true",
+		AWSEndpointURLSQS:      getEnv("AWS_ENDPOINT_URL_SQS", os.Getenv("AWS_ENDPOINT_URL")),
+		AWSEndpointURLDynamoDB: getEnv("AWS_ENDPOINT_URL_DYNAMODB", os.Getenv("AWS_ENDPOINT_URL")),
+	}
+
+	if cfg.AWSEndpointURLSQS == "" {
+		cfg.AWSEndpointURLSQS = "http://localstack:4566"
+	}
+	if cfg.AWSEndpointURLDynamoDB == "" {
+		cfg.AWSEndpointURLDynamoDB = "http://localstack:4566"
 	}
 
 	if cfg.InputQueueURL == "" {

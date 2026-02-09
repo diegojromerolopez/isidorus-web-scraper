@@ -1,0 +1,185 @@
+services:
+  # --- Data Stores ---
+
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=isidorus
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./infra/base/init-postgresql.sh:/docker-entrypoint-initdb.d/init.sh
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  opensearch:
+    image: opensearchproject/opensearch:2.11.0
+    environment:
+      - cluster.name=isidorus-cluster
+      - node.name=isidorus-node
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+      - DISABLE_SECURITY_PLUGIN=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    ports:
+      - "9200:9200"
+      - "9600:9600"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9200" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --- Applications ---
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/isidorus
+      - REDIS_HOST=redis
+      - OPENSEARCH_URL=http://opensearch:9200
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+
+  auth-admin:
+    build:
+      context: ./auth_admin
+    ports:
+      - "8001:8000"
+    environment:
+      - SEED_DATA=${SEED_DATA:-true}
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/isidorus
+      - SECRET_KEY=django-insecure-test-key
+      - DEBUG=False
+      - ALLOWED_HOSTS=*
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "3000:8000"
+    depends_on:
+      api:
+        condition: service_started
+
+  scraper-worker:
+    build:
+      context: ./workers/scraper
+    environment:
+      - REDIS_HOST=redis
+      - IMAGE_EXTRACTOR_ENABLED=true
+      - IMAGE_EXPLAINER_ENABLED=false
+      - PAGE_SUMMARIZER_ENABLED=true
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  writer-worker:
+    build:
+      context: ./workers/writer
+    environment:
+      - DATABASE_URL=host=postgres user=postgres password=postgres dbname=isidorus port=5432 sslmode=disable
+      - DYNAMODB_TABLE=scraping_jobs
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  image-extractor-worker:
+    build:
+      context: ./workers/image_extractor
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/isidorus
+      - IMAGES_BUCKET=isidorus-images
+      - IMAGE_EXPLAINER_ENABLED=${IMAGE_EXPLAINER_ENABLED:-false}
+    depends_on:
+      writer-worker:
+        condition: service_started
+
+  image-explainer-worker:
+    build:
+      context: .
+      dockerfile: workers/image_explainer/Dockerfile
+    environment:
+      - LLM_PROVIDER=ollama
+      - LLM_API_KEY=${LLM_API_KEY}
+    depends_on:
+      writer-worker:
+        condition: service_started
+
+  page-summarizer-worker:
+    build:
+      context: .
+      dockerfile: workers/page_summarizer/Dockerfile
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/isidorus
+      - OPENSEARCH_URL=http://opensearch:9200
+      - LLM_PROVIDER=ollama
+      - LLM_API_KEY=${LLM_API_KEY}
+    depends_on:
+      writer-worker:
+        condition: service_started
+
+  indexer-worker:
+    build:
+      context: ./workers/indexer
+    environment:
+      - OPENSEARCH_URL=http://opensearch:9200
+    depends_on:
+      opensearch:
+        condition: service_healthy
+
+  deletion-worker:
+    build:
+      context: .
+      dockerfile: workers/deletion/Dockerfile
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/isidorus
+      - DYNAMODB_TABLE=scraping_jobs
+      - IMAGES_BUCKET=isidorus-images
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  default:
+    name: isidorus-net

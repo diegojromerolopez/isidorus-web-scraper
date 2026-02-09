@@ -7,10 +7,19 @@ import (
 )
 
 type Config struct {
-	InputQueueURL string
-	DatabaseURL   string
-	DynamoDBTable string
-	BatchSize     int
+	InputQueueURL          string
+	DatabaseURL            string
+	DynamoDBTable          string
+	BatchSize              int
+	AWSEndpointURLSQS      string
+	AWSEndpointURLDynamoDB string
+}
+
+func getEnv(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+	return fallback
 }
 
 func Load() (*Config, error) {
@@ -21,10 +30,19 @@ func Load() (*Config, error) {
 	}
 
 	cfg := &Config{
-		InputQueueURL: os.Getenv("INPUT_QUEUE_URL"),
-		DatabaseURL:   os.Getenv("DATABASE_URL"),
-		DynamoDBTable: os.Getenv("DYNAMODB_TABLE"),
-		BatchSize:     batchSize,
+		InputQueueURL:          os.Getenv("INPUT_QUEUE_URL"),
+		DatabaseURL:            os.Getenv("DATABASE_URL"),
+		DynamoDBTable:          os.Getenv("DYNAMODB_TABLE"),
+		BatchSize:              batchSize,
+		AWSEndpointURLSQS:      getEnv("AWS_ENDPOINT_URL_SQS", os.Getenv("AWS_ENDPOINT_URL")),
+		AWSEndpointURLDynamoDB: getEnv("AWS_ENDPOINT_URL_DYNAMODB", os.Getenv("AWS_ENDPOINT_URL")),
+	}
+
+	if cfg.AWSEndpointURLSQS == "" {
+		cfg.AWSEndpointURLSQS = "http://localstack:4566"
+	}
+	if cfg.AWSEndpointURLDynamoDB == "" {
+		cfg.AWSEndpointURLDynamoDB = "http://localstack:4566"
 	}
 
 	if cfg.InputQueueURL == "" {

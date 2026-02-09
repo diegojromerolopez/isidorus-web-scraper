@@ -1,0 +1,224 @@
+services:
+  # --- Infrastructure ---
+
+  minio:
+    image: minio/minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=test
+      - MINIO_ROOT_PASSWORD=testpassword123
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  elasticmq:
+    image: softwaremill/elasticmq-native
+    ports:
+      - "9324:9324"
+      - "9325:9325"
+    volumes:
+      - ./infra/prod/elasticmq.conf:/opt/elasticmq.conf
+    healthcheck:
+      test: [ "CMD-SHELL", "wget --spider http://localhost:9325 || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  scylla:
+    image: scylladb/scylla:5.2.0
+    ports:
+      - "8042:8000" # Map host 8042 to container 8000 (Alternator)
+      - "9042:9042" # Native CQL port
+    volumes:
+      - scylla_data:/var/lib/scylla
+    command: --smp 1 --memory 1G --overprovisioned 1 --alternator-port 8000 --alternator-write-isolation always
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://$(hostname -i):8000 || exit 1" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  init-resources:
+    image: amazon/aws-cli
+    volumes:
+      - ./infra/prod/init-resources.sh:/init.sh
+    environment:
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=testpassword123
+      - AWS_DEFAULT_REGION=us-east-1
+    entrypoint: []
+    command: [ "/bin/bash", "/init.sh" ]
+    depends_on:
+      minio:
+        condition: service_healthy
+      scylla:
+        condition: service_healthy
+
+  # --- AI (Self-Hosted) ---
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: [ "CMD", "ollama", "list" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ollama-setup:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      - OLLAMA_HOST=ollama:11434
+    entrypoint: /bin/sh
+    command: -c "ollama pull tinyllama"
+
+  # --- Application Overrides ---
+
+  api:
+    environment:
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=testpassword123
+      - AWS_ENDPOINT_URL_S3=http://minio:9000
+      - AWS_ENDPOINT_URL_SQS=http://elasticmq:9324
+      - AWS_ENDPOINT_URL_DYNAMODB=http://scylla:8000
+      - SQS_QUEUE_URL=http://elasticmq:9324/000000000000/scraper-queue
+      - DELETION_QUEUE_URL=http://elasticmq:9324/000000000000/deletion-queue
+    depends_on:
+      elasticmq:
+        condition: service_healthy
+      scylla:
+        condition: service_healthy
+
+  scraper-worker:
+    environment:
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=testpassword123
+      - AWS_ENDPOINT_URL_S3=http://minio:9000
+      - AWS_ENDPOINT_URL_SQS=http://elasticmq:9324
+      - AWS_ENDPOINT_URL_DYNAMODB=http://scylla:8000
+      - INPUT_QUEUE_URL=http://elasticmq:9324/000000000000/scraper-queue
+      - SUMMARIZER_QUEUE_URL=http://elasticmq:9324/000000000000/page-summarizer-queue
+      - IMAGE_QUEUE_URL=http://elasticmq:9324/000000000000/image-extractor-queue
+      - WRITER_QUEUE_URL=http://elasticmq:9324/000000000000/writer-queue
+      - INDEXER_QUEUE_URL=http://elasticmq:9324/000000000000/indexer-queue
+    depends_on:
+      elasticmq:
+        condition: service_healthy
+
+  writer-worker:
+    environment:
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=testpassword123
+      - AWS_ENDPOINT_URL_S3=http://minio:9000
+      - AWS_ENDPOINT_URL_SQS=http://elasticmq:9324
+      - AWS_ENDPOINT_URL_DYNAMODB=http://scylla:8000
+      - INPUT_QUEUE_URL=http://elasticmq:9324/000000000000/writer-queue
+    depends_on:
+      elasticmq:
+        condition: service_healthy
+      scylla:
+        condition: service_healthy
+
+  image-extractor-worker:
+    environment:
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=testpassword123
+      - AWS_ENDPOINT_URL_S3=http://minio:9000
+      - AWS_ENDPOINT_URL_SQS=http://elasticmq:9324
+      - INPUT_QUEUE_URL=http://elasticmq:9324/000000000000/image-extractor-queue
+      - WRITER_QUEUE_URL=http://elasticmq:9324/000000000000/writer-queue
+      - IMAGE_EXPL_QUEUE_URL=http://elasticmq:9324/000000000000/image-explainer-queue
+    depends_on:
+      elasticmq:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  image-explainer-worker:
+    environment:
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=testpassword123
+      - AWS_ENDPOINT_URL_S3=http://minio:9000
+      - AWS_ENDPOINT_URL_SQS=http://elasticmq:9324
+      - INPUT_QUEUE_URL=http://elasticmq:9324/000000000000/image-explainer-queue
+      - WRITER_QUEUE_URL=http://elasticmq:9324/000000000000/writer-queue
+      - OLLAMA_BASE_URL=http://ollama:11434
+    depends_on:
+      elasticmq:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+
+  page-summarizer-worker:
+    environment:
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=testpassword123
+      - AWS_ENDPOINT_URL_S3=http://minio:9000
+      - AWS_ENDPOINT_URL_SQS=http://elasticmq:9324
+      - AWS_ENDPOINT_URL_DYNAMODB=http://scylla:8000
+      - INPUT_QUEUE_URL=http://elasticmq:9324/000000000000/page-summarizer-queue
+      - WRITER_QUEUE_URL=http://elasticmq:9324/000000000000/writer-queue
+      - INDEXER_QUEUE_URL=http://elasticmq:9324/000000000000/indexer-queue
+      - OLLAMA_BASE_URL=http://ollama:11434
+    depends_on:
+      elasticmq:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+
+  indexer-worker:
+    environment:
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=testpassword123
+      - AWS_ENDPOINT_URL_SQS=http://elasticmq:9324
+      - INPUT_QUEUE_URL=http://elasticmq:9324/000000000000/indexer-queue
+    depends_on:
+      elasticmq:
+        condition: service_healthy
+
+  deletion-worker:
+    environment:
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=testpassword123
+      - AWS_ENDPOINT_URL_S3=http://minio:9000
+      - AWS_ENDPOINT_URL_SQS=http://elasticmq:9324
+      - AWS_ENDPOINT_URL_DYNAMODB=http://scylla:8000
+      - INPUT_QUEUE_URL=http://elasticmq:9324/000000000000/deletion-queue
+    depends_on:
+      elasticmq:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      scylla:
+        condition: service_healthy
+
+volumes:
+  minio_data:
+    driver: local
+  scylla_data:
+    driver: local
+  ollama_data:
+    driver: local

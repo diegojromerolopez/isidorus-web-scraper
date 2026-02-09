@@ -32,7 +32,7 @@ class SQSClient:
         Creates an SQSClient instance from the configuration.
         """
         return SQSClient(
-            endpoint_url=config.aws_endpoint_url,
+            endpoint_url=config.aws_endpoint_url_sqs,
             region=config.aws_region,
             access_key=config.aws_access_key_id,
             secret_key=config.aws_secret_access_key,
