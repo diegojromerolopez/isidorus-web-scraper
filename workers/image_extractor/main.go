@@ -34,7 +34,7 @@ func main() {
 	// SQS Config
 	sqsAwsCfg, err := awsConfig.LoadDefaultConfig(setupCtx,
 		awsConfig.WithRegion(cfg.AWSRegion),
-		awsConfig.WithBaseEndpoint(cfg.AWSEndpointURLSQS),
+		awsConfig.WithBaseEndpoint(cfg.SQSEndpointURL),
 		awsConfig.WithHTTPClient(&http.Client{Timeout: 30 * time.Second}),
 	)
 	if err != nil {
@@ -44,7 +44,7 @@ func main() {
 	// S3 Config
 	s3AwsCfg, err := awsConfig.LoadDefaultConfig(setupCtx,
 		awsConfig.WithRegion(cfg.AWSRegion),
-		awsConfig.WithBaseEndpoint(cfg.AWSEndpointURLS3),
+		awsConfig.WithBaseEndpoint(cfg.S3EndpointURL),
 		awsConfig.WithHTTPClient(&http.Client{Timeout: 30 * time.Second}),
 	)
 	if err != nil {

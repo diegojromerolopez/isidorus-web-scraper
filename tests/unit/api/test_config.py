@@ -13,7 +13,7 @@ class TestConfiguration(unittest.TestCase):
         with patch.dict("os.environ", {}, clear=True):
             config = Configuration.from_env()
 
-        self.assertEqual(config.aws_endpoint_url, "http://localstack:4566")
+        self.assertEqual(config.base_endpoint_url, "http://localstack:4566")
         self.assertEqual(config.aws_region, "us-east-1")
         # Validate other defaults...
 
@@ -22,7 +22,7 @@ class TestConfiguration(unittest.TestCase):
         Test that env vars override defaults.
         """
         env_vars = {
-            "AWS_ENDPOINT_URL": "http://production",
+            "BASE_ENDPOINT_URL": "http://production",
             "AWS_REGION": "eu-west-1",
             "AWS_ACCESS_KEY_ID": "prod-key",
             "AWS_SECRET_ACCESS_KEY": "prod-secret",
@@ -35,6 +35,6 @@ class TestConfiguration(unittest.TestCase):
         with patch.dict("os.environ", env_vars):
             config = Configuration.from_env()
 
-        self.assertEqual(config.aws_endpoint_url, "http://production")
+        self.assertEqual(config.base_endpoint_url, "http://production")
         self.assertEqual(config.aws_region, "eu-west-1")
         self.assertEqual(config.redis_port, 1234)

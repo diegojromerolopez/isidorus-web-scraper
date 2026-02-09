@@ -49,16 +49,16 @@ func main() {
 	}
 
 	rawSQSClient := sqs.NewFromConfig(awsCfg, func(o *sqs.Options) {
-		if cfg.AWSEndpointURLSQS != "" {
-			o.BaseEndpoint = &cfg.AWSEndpointURLSQS
+		if cfg.SQSEndpointURL != "" {
+			o.BaseEndpoint = &cfg.SQSEndpointURL
 		}
 	})
 	sqsClient := repositories.NewSQSClient(rawSQSClient)
 	dbRepo := repositories.NewDBRepository(db, cfg.BatchSize)
 
 	rawDynamoClient := dynamodb.NewFromConfig(awsCfg, func(o *dynamodb.Options) {
-		if cfg.AWSEndpointURLDynamoDB != "" {
-			o.BaseEndpoint = &cfg.AWSEndpointURLDynamoDB
+		if cfg.DynamoDBEndpointURL != "" {
+			o.BaseEndpoint = &cfg.DynamoDBEndpointURL
 		}
 	})
 	dynamoClient := repositories.NewDynamoDBClient(rawDynamoClient, cfg.DynamoDBTable)

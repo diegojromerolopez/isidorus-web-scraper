@@ -33,8 +33,8 @@ func main() {
 	}
 
 	rawSQSClient := sqs.NewFromConfig(awsCfg, func(o *sqs.Options) {
-		if cfg.AWSEndpointURLSQS != "" {
-			o.BaseEndpoint = &cfg.AWSEndpointURLSQS
+		if cfg.SQSEndpointURL != "" {
+			o.BaseEndpoint = &cfg.SQSEndpointURL
 		}
 	})
 	sqsClient := repositories.NewSQSClient(rawSQSClient)

@@ -30,7 +30,7 @@ class S3Client:
         Creates an S3Client instance from the configuration.
         """
         return S3Client(
-            endpoint_url=config.aws_endpoint_url_s3,
+            endpoint_url=config.s3_endpoint_url,
             region_name=config.aws_region,
             access_key=config.aws_access_key_id,
             secret_key=config.aws_secret_access_key,

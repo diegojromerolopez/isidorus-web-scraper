@@ -92,9 +92,9 @@ services:
       - AWS_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=testpassword123
-      - AWS_ENDPOINT_URL_S3=http://minio:9000
-      - AWS_ENDPOINT_URL_SQS=http://elasticmq:9324
-      - AWS_ENDPOINT_URL_DYNAMODB=http://scylla:8000
+      - S3_ENDPOINT_URL=http://minio:9000
+      - SQS_ENDPOINT_URL=http://elasticmq:9324
+      - DYNAMODB_ENDPOINT_URL=http://scylla:8000
       - SQS_QUEUE_URL=http://elasticmq:9324/000000000000/scraper-queue
       - DELETION_QUEUE_URL=http://elasticmq:9324/000000000000/deletion-queue
     depends_on:
@@ -108,9 +108,9 @@ services:
       - AWS_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=testpassword123
-      - AWS_ENDPOINT_URL_S3=http://minio:9000
-      - AWS_ENDPOINT_URL_SQS=http://elasticmq:9324
-      - AWS_ENDPOINT_URL_DYNAMODB=http://scylla:8000
+      - S3_ENDPOINT_URL=http://minio:9000
+      - SQS_ENDPOINT_URL=http://elasticmq:9324
+      - DYNAMODB_ENDPOINT_URL=http://scylla:8000
       - INPUT_QUEUE_URL=http://elasticmq:9324/000000000000/scraper-queue
       - SUMMARIZER_QUEUE_URL=http://elasticmq:9324/000000000000/page-summarizer-queue
       - IMAGE_QUEUE_URL=http://elasticmq:9324/000000000000/image-extractor-queue
@@ -125,9 +125,9 @@ services:
       - AWS_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=testpassword123
-      - AWS_ENDPOINT_URL_S3=http://minio:9000
-      - AWS_ENDPOINT_URL_SQS=http://elasticmq:9324
-      - AWS_ENDPOINT_URL_DYNAMODB=http://scylla:8000
+      - S3_ENDPOINT_URL=http://minio:9000
+      - SQS_ENDPOINT_URL=http://elasticmq:9324
+      - DYNAMODB_ENDPOINT_URL=http://scylla:8000
       - INPUT_QUEUE_URL=http://elasticmq:9324/000000000000/writer-queue
     depends_on:
       elasticmq:
@@ -140,8 +140,8 @@ services:
       - AWS_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=testpassword123
-      - AWS_ENDPOINT_URL_S3=http://minio:9000
-      - AWS_ENDPOINT_URL_SQS=http://elasticmq:9324
+      - S3_ENDPOINT_URL=http://minio:9000
+      - SQS_ENDPOINT_URL=http://elasticmq:9324
       - INPUT_QUEUE_URL=http://elasticmq:9324/000000000000/image-extractor-queue
       - WRITER_QUEUE_URL=http://elasticmq:9324/000000000000/writer-queue
       - IMAGE_EXPL_QUEUE_URL=http://elasticmq:9324/000000000000/image-explainer-queue
@@ -156,8 +156,8 @@ services:
       - AWS_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=testpassword123
-      - AWS_ENDPOINT_URL_S3=http://minio:9000
-      - AWS_ENDPOINT_URL_SQS=http://elasticmq:9324
+      - S3_ENDPOINT_URL=http://minio:9000
+      - SQS_ENDPOINT_URL=http://elasticmq:9324
       - INPUT_QUEUE_URL=http://elasticmq:9324/000000000000/image-explainer-queue
       - WRITER_QUEUE_URL=http://elasticmq:9324/000000000000/writer-queue
       - OLLAMA_BASE_URL=http://ollama:11434
@@ -174,9 +174,9 @@ services:
       - AWS_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=testpassword123
-      - AWS_ENDPOINT_URL_S3=http://minio:9000
-      - AWS_ENDPOINT_URL_SQS=http://elasticmq:9324
-      - AWS_ENDPOINT_URL_DYNAMODB=http://scylla:8000
+      - S3_ENDPOINT_URL=http://minio:9000
+      - SQS_ENDPOINT_URL=http://elasticmq:9324
+      - DYNAMODB_ENDPOINT_URL=http://scylla:8000
       - INPUT_QUEUE_URL=http://elasticmq:9324/000000000000/page-summarizer-queue
       - WRITER_QUEUE_URL=http://elasticmq:9324/000000000000/writer-queue
       - INDEXER_QUEUE_URL=http://elasticmq:9324/000000000000/indexer-queue
@@ -192,7 +192,7 @@ services:
       - AWS_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=testpassword123
-      - AWS_ENDPOINT_URL_SQS=http://elasticmq:9324
+      - SQS_ENDPOINT_URL=http://elasticmq:9324
       - INPUT_QUEUE_URL=http://elasticmq:9324/000000000000/indexer-queue
     depends_on:
       elasticmq:
@@ -203,9 +203,9 @@ services:
       - AWS_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=testpassword123
-      - AWS_ENDPOINT_URL_S3=http://minio:9000
-      - AWS_ENDPOINT_URL_SQS=http://elasticmq:9324
-      - AWS_ENDPOINT_URL_DYNAMODB=http://scylla:8000
+      - S3_ENDPOINT_URL=http://minio:9000
+      - SQS_ENDPOINT_URL=http://elasticmq:9324
+      - DYNAMODB_ENDPOINT_URL=http://scylla:8000
       - INPUT_QUEUE_URL=http://elasticmq:9324/000000000000/deletion-queue
     depends_on:
       elasticmq:

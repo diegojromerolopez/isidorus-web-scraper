@@ -38,7 +38,7 @@ async def main(stop_event: asyncio.Event | None = None) -> None:
     await init_db(config.database_url)
 
     sqs_client = SQSClient(
-        endpoint_url=config.aws_endpoint_url_sqs,
+        endpoint_url=config.sqs_endpoint_url,
         region=config.aws_region,
         access_key=config.aws_access_key_id,
         secret_key=config.aws_secret_access_key,
@@ -46,7 +46,7 @@ async def main(stop_event: asyncio.Event | None = None) -> None:
     )
 
     dynamodb_client = DynamoDBClient(
-        endpoint_url=config.aws_endpoint_url_dynamodb,
+        endpoint_url=config.dynamodb_endpoint_url,
         region=config.aws_region,
         access_key=config.aws_access_key_id,
         secret_key=config.aws_secret_access_key,
@@ -54,7 +54,7 @@ async def main(stop_event: asyncio.Event | None = None) -> None:
     )
 
     s3_client = S3Client(
-        endpoint_url=config.aws_endpoint_url_s3,
+        endpoint_url=config.s3_endpoint_url,
         region_name=config.aws_region,
         access_key=config.aws_access_key_id,
         secret_key=config.aws_secret_access_key,

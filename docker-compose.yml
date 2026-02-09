@@ -44,7 +44,7 @@ services:
 
   api:
     environment:
-      - AWS_ENDPOINT_URL=http://localstack:4566
+      - BASE_ENDPOINT_URL=http://localstack:4566
       - AWS_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
@@ -61,7 +61,7 @@ services:
 
   scraper-worker:
     environment:
-      - AWS_ENDPOINT_URL=http://localstack:4566
+      - BASE_ENDPOINT_URL=http://localstack:4566
       - AWS_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
@@ -77,7 +77,7 @@ services:
 
   writer-worker:
     environment:
-      - AWS_ENDPOINT_URL=http://localstack:4566
+      - BASE_ENDPOINT_URL=http://localstack:4566
       - AWS_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
@@ -89,7 +89,7 @@ services:
 
   image-extractor-worker:
     environment:
-      - AWS_ENDPOINT_URL=http://localstack:4566
+      - BASE_ENDPOINT_URL=http://localstack:4566
       - AWS_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
@@ -102,7 +102,7 @@ services:
 
   image-explainer-worker:
     environment:
-      - AWS_ENDPOINT_URL=http://localstack:4566
+      - BASE_ENDPOINT_URL=http://localstack:4566
       - AWS_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
@@ -117,7 +117,7 @@ services:
 
   page-summarizer-worker:
     environment:
-      - AWS_ENDPOINT_URL=http://localstack:4566
+      - BASE_ENDPOINT_URL=http://localstack:4566
       - AWS_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
@@ -133,7 +133,7 @@ services:
 
   indexer-worker:
     environment:
-      - AWS_ENDPOINT_URL=http://localstack:4566
+      - BASE_ENDPOINT_URL=http://localstack:4566
       - AWS_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
@@ -144,7 +144,7 @@ services:
 
   deletion-worker:
     environment:
-      - AWS_ENDPOINT_URL=http://localstack:4566
+      - BASE_ENDPOINT_URL=http://localstack:4566
       - AWS_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test

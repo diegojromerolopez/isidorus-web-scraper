@@ -65,22 +65,16 @@ def monitor_job(job_id: int) -> None:
     while time.time() - start_time < TIMEOUT:
         try:
             response = requests.get(
-                f"{API_URL}/scrape", params={"scraping_id": job_id}, headers=headers
+                f"{API_URL}/scraping/{job_id}", headers=headers
             )
             response.raise_for_status()
             data = response.json()
 
-            # Assuming the API returns a list or a single object.
-            # Adjusting based on likely API structure.
-            # If the API returns a list of scrapings,
-            # we pick the first one matching our ID.
-            if isinstance(data, list):
-                if not data:
-                    print("Job not found.")
-                    sys.exit(1)
-                job = data[0]
-            else:
-                job = data
+            # The API returns {"scraping": {...}}
+            job = data.get("scraping", {})
+            if not job:
+                print("Job not found in response.")
+                sys.exit(1)
 
             status = job.get("status")
             print(f"Job Status: {status}")
