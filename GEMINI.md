@@ -2,7 +2,9 @@
 
 **About the Name**: Isidorus is named after **Isidore of Seville** (c. 560-636 AD), the renowned scholar and Archbishop of Seville who compiled the *Etymologiae*, the first encyclopedia of all human knowledge. Known as "The Schoolmaster of the Middle Ages," Isidore meticulously gathered, organized, and preserved the wisdom of his time across all fields of knowledge. Just as Isidore collected and systematized information, this application scrapes and archives web content.
 
-The main aim of this repository is to serve as a showcase of how to use localstack as a way to replace the AWS services an application is based on, and create e2e tests.
+The main aim of this repository is to serve as a showcase of how to use localstack as a way to replace the AWS services an application is based on, and create e2e tests. 
+
+Furthermore, it demonstrates a **provider-agnostic architecture**, showing how an application designed for AWS can be seamlessly transitioned to self-hosted, open-source alternatives like Minio, ElasticMQ, and ScyllaDB.
 
 This application is a web scraper. Its main goal is to show the websites where a specific term appears.
 
@@ -23,7 +25,7 @@ This application is designed for scenarios where deep content analysis of a web 
 ├── workers/
 │   ├── scraper/        # Recursive Web Scraper (Go)
 │   ├── writer/         # Batch DB Writer (Go)
-│   ├── image_extractor/# Image Metadata Extractor (Python)
+│   ├── image_extractor/# Image Metadata Extractor (Go)
 │   ├── image_explainer/# AI Image Explainer (Python)
 │   └── page_summarizer/# AI Page Summarizer (Python)
 ├── tests/
@@ -33,6 +35,49 @@ This application is designed for scenarios where deep content analysis of a web 
 │       └── mock_website/# Static target for scraping
 ├── Makefile            # Central Developer Entry Point
 └── docker compose.*.yml# Infrastructure Orchestration
+```
+
+## 🏗️ Showcases
+
+### LocalStack Showcase (Development & E2E)
+Emulates S3, SQS, and DynamoDB for local development and high-fidelity integration testing. This architecture is defined in `docker-compose.e2e.yml`.
+
+```mermaid
+graph TD
+    subgraph "Development (LocalStack)"
+        LS[LocalStack]
+        S3_L[S3 Storage]
+        SQS_L[SQS Queues]
+        DDB_L[DynamoDB Table]
+        LS --- S3_L
+        LS --- SQS_L
+        LS --- DDB_L
+    end
+
+    TR[Test Runner] -->|Monitor| API[API]
+    API -->|Enqueue| SQS_L
+    Scraper[Scraper Worker] -->|Consume| SQS_L
+    Scraper -->|Scan| Site[Mock Website]
+```
+
+### Agnostic Infrastructure Showcase (Production)
+Replaces cloud service dependencies with self-hosted, open-source alternatives. This architecture is defined in `docker-compose.prod.yml`.
+
+```mermaid
+graph TD
+    subgraph "Production (Self-Hosted)"
+        Minio[Minio - S3]
+        EMQ[ElasticMQ - SQS]
+        Scylla[ScyllaDB - DynamoDB]
+    end
+
+    API[API Service] -->|S3_URL| Minio
+    API -->|SQS_URL| EMQ
+    API -->|DYNAMO_URL| Scylla
+    
+    Workers[Worker Pool] --> Minio
+    Workers --> EMQ
+    Workers --> Scylla
 ```
 
 ## Design Principles
@@ -114,7 +159,10 @@ Workers are decoupled and highly testable through repository mocking.
 
 | Variable | Description | Default/Example |
 |----------|-------------|-----------------|
-| `AWS_ENDPOINT_URL` | LocalStack URL | `http://localstack:4566` |
+| `BASE_ENDPOINT_URL` | Base service endpoint fallback | `http://localstack:4566` |
+| `S3_ENDPOINT_URL` | Specific S3 endpoint override | `http://minio:9000` |
+| `SQS_ENDPOINT_URL` | Specific SQS endpoint override | `http://elasticmq:9324` |
+| `DYNAMODB_ENDPOINT_URL`| Specific DynamoDB endpoint override | `http://scylla:8042` |
 | `DATABASE_URL` | Postgres Connection String | `postgres://user:pass@localhost:5432/isidorus` |
 | `INPUT_QUEUE_URL` | Queue for scrape requests | `http://localstack:4566/000000000000/scraper-input` |
 | `WRITER_QUEUE_URL`| Queue for results to be written | `http://localstack:4566/000000000000/writer-queue` |

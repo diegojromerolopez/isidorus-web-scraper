@@ -42,13 +42,65 @@ Isidorus goes beyond simple scraping by integrating AI into the heart of its pro
 - **Computer Vision (Alt-Text Generation)**: Processes images found during scraping to generate descriptive text, making visual content searchable and accessible.
 - **Local LLM Support**: Defaults to **Ollama** (`tinyllama`) for privacy-conscious, local-first inference, but supports OpenAI and other providers via LangChain.
 
-## ☁️ LocalStack Showcase
+## ☁️ LocalStack Showcase (E2E & Dev)
 
-This project is a premier example of utilizing **LocalStack** to accelerate development:
+This project demonstrates how to use **LocalStack** to emulate a complete AWS environment locally. This is the heart of our **End-to-End (E2E) testing** strategy, allowing for high-fidelity verification without cloud costs.
+
+```mermaid
+graph TD
+    subgraph "Testing Infrastructure (LocalStack)"
+        LS[LocalStack]
+        S3_L[S3 Bucket]
+        SQS_L[SQS Queues]
+        DDB_L[DynamoDB Table]
+        LS --- S3_L
+        LS --- SQS_L
+        LS --- DDB_L
+    end
+
+    TR[Test Runner] -->|Start Scrape| API[API]
+    API -->|Enqueue| SQS_L
+    API -->|Status| DDB_L
+    
+    Scraper[Scraper Worker] -->|Consume| SQS_L
+    Scraper -->|Extract| Site[Mock Website]
+    
+    Extractor[Image Extractor] -->|Upload| S3_L
+    Summarizer[Page Summarizer] -->|Mock AI| OllamaMock[Ollama Mock]
+```
 
 - **Zero-Cloud Architecture**: Emulates SQS, S3, and DynamoDB, allowing for a 1:1 local-to-cloud development experience.
 - **Rapid Iteration**: Test complex event-driven workflows (like asynchronous image processing) instantly without waiting for cloud provisioning.
 - **E2E Testing Fidelity**: Uses real AWS SDKs (`aioboto3`, `boto3`, AWS Go SDK) against high-fidelity mocks, ensuring production-ready code.
+
+## 🏗️ Provider-Agnostic Infrastructure (Production)
+
+Isidorus is strictly **provider-agnostic**. While it can run on AWS, it can also be deployed entirely on self-hosted, open-source infrastructure replacing those cloud services. This is showcased in our **Production Stack** (`make prod-up`).
+
+```mermaid
+graph TD
+    subgraph "Agnostic Infrastructure (Self-Hosted)"
+        Minio[Minio - S3 Compatible]
+        EMQ[ElasticMQ - SQS Compatible]
+        Scylla[ScyllaDB - DynamoDB Compatible]
+    end
+
+    User((User)) -->|HTTP| API[API]
+    API -->|S3_ENDPOINT_URL| Minio
+    API -->|SQS_ENDPOINT_URL| EMQ
+    API -->|DYNAMODB_ENDPOINT_URL| Scylla
+
+    Workers[Workers Pool] --> Minio
+    Workers --> EMQ
+    Workers --> Scylla
+    
+    AI[Self-Hosted AI] -->|Local Inference| Ollama[Ollama - tinyllama]
+    Workers --> Ollama
+```
+
+- **Endpoint Agnosticism**: By using `BASE_ENDPOINT_URL` (or service-specific overrides), the application can talk to any S3/SQS/DynamoDB compatible API.
+- **Cloud-Native & Hybrid**: Deploy on Kubernetes using local storage/queues or mix-and-match with managed cloud services.
+- **Self-Hosted AI**: Integration with **Ollama** ensures even the LLM processing is completely decoupled from external vendors.
 
 ## Architecture
 
@@ -205,7 +257,10 @@ The system is built with a microservices approach:
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `AWS_ENDPOINT_URL` | LocalStack URL | `http://localstack:4566` |
+| `BASE_ENDPOINT_URL` | Base service endpoint fallback | `http://localstack:4566` |
+| `S3_ENDPOINT_URL` | Specific S3 endpoint override | `http://minio:9000` |
+| `SQS_ENDPOINT_URL` | Specific SQS endpoint override | `http://elasticmq:9324` |
+| `DYNAMODB_ENDPOINT_URL`| Specific DynamoDB endpoint override | `http://scylla:8042` |
 | `DATABASE_URL` | Postgres Connection String | `postgres://user:pass@host:5432/db` |
 | `REDIS_HOST` | Redis host | `localhost` or `redis` |
 | `IMAGE_BUCKET` | S3 bucket for images | `isidorus-images` |
@@ -376,7 +431,7 @@ The project emphasizes high test coverage:
 -   **Unit Tests**: ~100% coverage for all components (API, Frontend, Scraper, Writer, Image Extractor, Page Summarizer).
     - **Frontend**: Tested using **Vitest** and **React Testing Library**.
 -   **E2E Tests**: Full integration tests using a local test runner and mock website.
-    - **Reliable Verification**: Tests utilize a centralized polling mechanism that monitors the `GET /scrape` endpoint, waiting up to **5 minutes (300 seconds)** for a `COMPLETED` status to ensure all asynchronous background tasks (AI extraction, DB writes) have finished.
+    - **Reliable Verification**: Tests utilize a centralized polling mechanism that monitors the `GET /scraping/{id}` endpoint, waiting up to **5 minutes (300 seconds)** for a `COMPLETED` status to ensure all asynchronous background tasks (AI extraction, DB writes) have finished.
 -   **Shared Library Tests**: Located in `tests/unit/shared/` for common client testing.
 
 ### AI Worker Testing

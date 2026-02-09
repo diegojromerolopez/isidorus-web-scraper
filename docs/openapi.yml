@@ -170,7 +170,6 @@ components:
       type: object
       required:
         - url
-        - depth
       properties:
         url:
           type: string
@@ -179,6 +178,7 @@ components:
           type: integer
           minimum: 0
           maximum: 5
+          default: 1
 
     FullScrapingRecord:
       type: object
