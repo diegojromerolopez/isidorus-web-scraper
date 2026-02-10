@@ -265,9 +265,32 @@ The system is built with a microservices approach:
 | `REDIS_HOST` | Redis host | `localhost` or `redis` |
 | `IMAGE_BUCKET` | S3 bucket for images | `isidorus-images` |
 | `LLM_PROVIDER` | AI provider for explanations | `mock`, `openai`, `gemini`, etc. |
-| `MAX_DEPTH` | Maximum recursive depth | `2` (Default from API) |
-| `IMAGE_EXPLAINER_ENABLED` | Enable AI image explanation | `true` |
-| `PAGE_SUMMARIZER_ENABLED` | Enable page summarization | `true` |
+| `SCRAPER_REPLICAS` | Number of Scraper instances | `3` |
+| `WRITER_REPLICAS` | Number of Writer instances | `2` |
+| `IMAGE_EXTRACTOR_REPLICAS`| Number of Extractor instances | `3` |
+| `IMAGE_EXPLAINER_REPLICAS`| Number of Explainer instances | `4` |
+| `PAGE_SUMMARIZER_REPLICAS`| Number of Summarizer instances | `2` |
+| `INDEXER_REPLICAS` | Number of Indexer instances | `1` |
+| `DELETION_REPLICAS` | Number of Deletion instances | `1` |
+
+## Horizontal Scaling
+
+The application is designed for horizontal scalability. You can adjust the "funnel" of your scraping pipeline by setting the number of replicas for each worker in your environment.
+
+| Worker | Default Replicas | Role |
+|--------|------------------|------|
+| **Scraper** | 3 | High-throughput Go crawler. |
+| **Writer** | 2 | Concurrent DB persistence. |
+| **Explainer** | 4 | AI processing (The "Bottleneck"). |
+| **Summarizer** | 2 | AI summarization. |
+| **Extractor** | 3 | Network-intensive S3 heavy lifting. |
+| **Indexer** | 1 | OpenSearch indexing. |
+| **Deletion** | 1 | Resource cleanup. |
+
+Example for scaling up the AI explainer:
+```bash
+IMAGE_EXPLAINER_REPLICAS=10 docker compose up -d --scale image-explainer-worker=10
+```
 
 ## API Endpoints
 

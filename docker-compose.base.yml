@@ -106,6 +106,8 @@ services:
       - IMAGE_EXTRACTOR_ENABLED=true
       - IMAGE_EXPLAINER_ENABLED=false
       - PAGE_SUMMARIZER_ENABLED=true
+    deploy:
+      replicas: ${SCRAPER_REPLICAS:-3}
     depends_on:
       redis:
         condition: service_healthy
@@ -116,6 +118,8 @@ services:
     environment:
       - DATABASE_URL=host=postgres user=postgres password=postgres dbname=isidorus port=5432 sslmode=disable
       - DYNAMODB_TABLE=scraping_jobs
+    deploy:
+      replicas: ${WRITER_REPLICAS:-2}
     depends_on:
       postgres:
         condition: service_healthy
@@ -127,6 +131,8 @@ services:
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/isidorus
       - IMAGES_BUCKET=isidorus-images
       - IMAGE_EXPLAINER_ENABLED=${IMAGE_EXPLAINER_ENABLED:-false}
+    deploy:
+      replicas: ${IMAGE_EXTRACTOR_REPLICAS:-3}
     depends_on:
       writer-worker:
         condition: service_started
@@ -138,6 +144,8 @@ services:
     environment:
       - LLM_PROVIDER=ollama
       - LLM_API_KEY=${LLM_API_KEY}
+    deploy:
+      replicas: ${IMAGE_EXPLAINER_REPLICAS:-4}
     depends_on:
       writer-worker:
         condition: service_started
@@ -151,6 +159,8 @@ services:
       - OPENSEARCH_URL=http://opensearch:9200
       - LLM_PROVIDER=ollama
       - LLM_API_KEY=${LLM_API_KEY}
+    deploy:
+      replicas: ${PAGE_SUMMARIZER_REPLICAS:-2}
     depends_on:
       writer-worker:
         condition: service_started
@@ -160,6 +170,8 @@ services:
       context: ./workers/indexer
     environment:
       - OPENSEARCH_URL=http://opensearch:9200
+    deploy:
+      replicas: ${INDEXER_REPLICAS:-1}
     depends_on:
       opensearch:
         condition: service_healthy
@@ -172,6 +184,8 @@ services:
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/isidorus
       - DYNAMODB_TABLE=scraping_jobs
       - IMAGES_BUCKET=isidorus-images
+    deploy:
+      replicas: ${DELETION_REPLICAS:-1}
     depends_on:
       postgres:
         condition: service_healthy
