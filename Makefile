@@ -115,7 +115,7 @@ lint-check:
 	@echo "Running mypy type checker..."
 	mypy .
 	@echo "Running pylint..."
-	pylint api/ workers/image_explainer/ workers/page_summarizer/ tests/unit/ tests/e2e/runner/runner.py
+	pylint api/ shared/ trigger/ workers/image_explainer/ workers/page_summarizer/ workers/deletion/ tests/unit/ tests/e2e/runner/runner.py
 	@echo "Checking Go code formatting..."
 	@if [ -n "$$(docker run --rm -v "$$(pwd):/app" -w /app/workers/scraper golang:1.25-alpine gofmt -l .)" ]; then \
 		echo "Go formatting errors found in scraper worker. Run 'make format' to fix."; \

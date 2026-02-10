@@ -6,18 +6,18 @@ import (
 )
 
 type Config struct {
-	InputQueueURL          string
-	WriterQueueURL         string
-	SummarizerQueueURL     string
-	ImageQueueURL          string
-	IndexerQueueURL        string
-	RedisHost              string
-	RedisPort              string
-	ImageExtractorEnabled  bool
+	InputQueueURL         string
+	WriterQueueURL        string
+	SummarizerQueueURL    string
+	ImageQueueURL         string
+	IndexerQueueURL       string
+	RedisHost             string
+	RedisPort             string
+	ImageExtractorEnabled bool
 	ImageExplainerEnabled bool
 	PageSummarizerEnabled bool
-	SQSEndpointURL         string
-	DynamoDBEndpointURL    string
+	SQSEndpointURL        string
+	DynamoDBEndpointURL   string
 }
 
 func getEnv(key, fallback string) string {
@@ -29,18 +29,18 @@ func getEnv(key, fallback string) string {
 
 func Load() (*Config, error) {
 	cfg := &Config{
-		InputQueueURL:          os.Getenv("INPUT_QUEUE_URL"),
-		WriterQueueURL:         os.Getenv("WRITER_QUEUE_URL"),
-		SummarizerQueueURL:     os.Getenv("SUMMARIZER_QUEUE_URL"),
-		ImageQueueURL:          os.Getenv("IMAGE_QUEUE_URL"),
-		RedisHost:              os.Getenv("REDIS_HOST"),
-		RedisPort:              os.Getenv("REDIS_PORT"),
-		IndexerQueueURL:        os.Getenv("INDEXER_QUEUE_URL"),
-		ImageExtractorEnabled:  os.Getenv("IMAGE_EXTRACTOR_ENABLED") == "true",
-		ImageExplainerEnabled:  os.Getenv("IMAGE_EXPLAINER_ENABLED") == "true",
-		PageSummarizerEnabled:  os.Getenv("PAGE_SUMMARIZER_ENABLED") == "true",
-		SQSEndpointURL:      getEnv("SQS_ENDPOINT_URL", os.Getenv("BASE_ENDPOINT_URL")),
-		DynamoDBEndpointURL: getEnv("DYNAMODB_ENDPOINT_URL", os.Getenv("BASE_ENDPOINT_URL")),
+		InputQueueURL:         os.Getenv("INPUT_QUEUE_URL"),
+		WriterQueueURL:        os.Getenv("WRITER_QUEUE_URL"),
+		SummarizerQueueURL:    os.Getenv("SUMMARIZER_QUEUE_URL"),
+		ImageQueueURL:         os.Getenv("IMAGE_QUEUE_URL"),
+		RedisHost:             os.Getenv("REDIS_HOST"),
+		RedisPort:             os.Getenv("REDIS_PORT"),
+		IndexerQueueURL:       os.Getenv("INDEXER_QUEUE_URL"),
+		ImageExtractorEnabled: os.Getenv("IMAGE_EXTRACTOR_ENABLED") == "true",
+		ImageExplainerEnabled: os.Getenv("IMAGE_EXPLAINER_ENABLED") == "true",
+		PageSummarizerEnabled: os.Getenv("PAGE_SUMMARIZER_ENABLED") == "true",
+		SQSEndpointURL:        getEnv("SQS_ENDPOINT_URL", os.Getenv("BASE_ENDPOINT_URL")),
+		DynamoDBEndpointURL:   getEnv("DYNAMODB_ENDPOINT_URL", os.Getenv("BASE_ENDPOINT_URL")),
 	}
 
 	if cfg.SQSEndpointURL == "" {

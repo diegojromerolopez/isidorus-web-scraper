@@ -1,7 +1,7 @@
 import logging
 from typing import Any
 
-from opensearchpy import AsyncOpenSearch
+from opensearchpy import AsyncOpenSearch  # pylint: disable=import-error
 
 from api import models as api_models
 from api.clients.dynamodb_client import DynamoDBClient
@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class DeletionService:  # pylint: disable=too-few-public-methods
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         dynamodb_client: DynamoDBClient,
         s3_client: S3Client,
@@ -53,9 +53,9 @@ class DeletionService:  # pylint: disable=too-few-public-methods
 
             logger.info("Successfully cleaned up scraping_id: %s", scraping_id)
             return True
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Failed to cleanup scraping_id %s: %s", scraping_id, e)
-            raise e
+            raise
 
     async def __cleanup_s3_objects(self, scraping_id: int) -> None:
         """
@@ -142,7 +142,7 @@ class DeletionService:  # pylint: disable=too-few-public-methods
                 refresh=True,
             )
             logger.info("OpenSearch cleanup finished for scraping_id: %s", scraping_id)
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             # We log but don't fail the whole cleanup if OpenSearch fails
             # This is to avoid leaving inconsistent state in DB/S3
             logger.error(

@@ -57,7 +57,7 @@ class SQSClient:
                 return True
         except Exception as e:
             logger.error("Failed to send SQS message: %s", e)
-            raise e
+            raise  # pylint: disable=broad-exception-caught
 
     async def receive_messages(
         self, queue_url: str, max_messages: int = 1, wait_time: int = 20
@@ -80,7 +80,7 @@ class SQSClient:
                 )
                 messages: list[dict[str, Any]] = response.get("Messages", [])
                 return messages
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Failed to receive SQS messages: %s", e)
             return []
 
@@ -100,6 +100,6 @@ class SQSClient:
                     QueueUrl=queue_url, ReceiptHandle=receipt_handle
                 )
                 return True
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Failed to delete SQS message: %s", e)
             return False

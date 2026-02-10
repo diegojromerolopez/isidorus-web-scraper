@@ -3,8 +3,8 @@ import json
 import logging
 import signal
 
-from opensearchpy import AsyncOpenSearch
-from tortoise import Tortoise
+from opensearchpy import AsyncOpenSearch  # pylint: disable=import-error
+from tortoise import Tortoise  # pylint: disable=import-error
 
 from api.clients.dynamodb_client import DynamoDBClient
 from shared.clients.s3_client import S3Client
@@ -109,10 +109,10 @@ async def main(stop_event: asyncio.Event | None = None) -> None:
                     await sqs_client.delete_message(
                         config.input_queue_url, msg["ReceiptHandle"]
                     )
-                except Exception as e:
-                    logger.error(f"Error processing message: {e}")
-        except Exception as e:
-            logger.error(f"Error receiving messages: {e}")
+                except Exception as e:  # pylint: disable=broad-exception-caught
+                    logger.error("Error processing message: %s", e)
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("Error receiving messages: %s", e)
             await asyncio.sleep(5)
 
     await os_client.close()

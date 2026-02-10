@@ -7,9 +7,9 @@ import (
 )
 
 type Config struct {
-	InputQueueURL          string
-	DatabaseURL            string
-	DynamoDBTable          string
+	InputQueueURL       string
+	DatabaseURL         string
+	DynamoDBTable       string
 	BatchSize           int
 	SQSEndpointURL      string
 	DynamoDBEndpointURL string
@@ -30,10 +30,10 @@ func Load() (*Config, error) {
 	}
 
 	cfg := &Config{
-		InputQueueURL:          os.Getenv("INPUT_QUEUE_URL"),
-		DatabaseURL:            os.Getenv("DATABASE_URL"),
-		DynamoDBTable:          os.Getenv("DYNAMODB_TABLE"),
-		BatchSize:              batchSize,
+		InputQueueURL:       os.Getenv("INPUT_QUEUE_URL"),
+		DatabaseURL:         os.Getenv("DATABASE_URL"),
+		DynamoDBTable:       os.Getenv("DYNAMODB_TABLE"),
+		BatchSize:           batchSize,
 		SQSEndpointURL:      getEnv("SQS_ENDPOINT_URL", os.Getenv("BASE_ENDPOINT_URL")),
 		DynamoDBEndpointURL: getEnv("DYNAMODB_ENDPOINT_URL", os.Getenv("BASE_ENDPOINT_URL")),
 	}
