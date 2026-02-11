@@ -11,7 +11,11 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 # Copy source code
-COPY . .
+COPY main.go .
+COPY config/ config/
+COPY domain/ domain/
+COPY repositories/ repositories/
+COPY services/ services/
 
 # Build the binary
 RUN CGO_ENABLED=0 GOOS=linux go build -o image-extractor main.go

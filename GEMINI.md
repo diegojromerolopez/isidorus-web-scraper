@@ -245,3 +245,11 @@ The `scrapings` table uses an internal Integer `id` for primary keys and a `uuid
     - **Public interface**: Only expose methods and attributes that are part of the class's contract.
     - **Testing Private Members**: **Do not access private attributes or methods in tests** (e.g., `client._Class__attribute`). Instead, use `unittest.mock.patch` to mock dependencies or inject mocks via the constructor. Tests should verify behavior through the public interface.
 10. **Constant-Driven Defaults**: Never define default values in function parameters with raw values (literals). Always use class constants or module-level constants to ensure maintainability and a single source of truth for configuration values.
+
+## Docker Best Practices
+
+1.  **Explicit Copying**: Never use `COPY . .` in Dockerfiles.
+    -   **Why**: It creates a large build context, invalidates the cache on any file change (even irrelevant ones like `README.md`), and risks including sensitive files.
+    -   **Rule**: Always copy only the specific files and directories needed for the build (e.g., `COPY main.go .`, `COPY config/ config/`).
+2.  **Multi-Stage Builds**: Use multi-stage builds to keep production images small (e.g., building Go binaries in a `builder` stage and copying only the binary to a scratch or alpine final image).
+3.  **Rootless Containers**: Where possible, configure containers to run as non-root users for security.
