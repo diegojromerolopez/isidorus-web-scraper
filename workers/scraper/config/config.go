@@ -16,6 +16,15 @@ type Config struct {
 	ImageExtractorEnabled bool
 	ImageExplainerEnabled bool
 	PageSummarizerEnabled bool
+	SQSEndpointURL        string
+	DynamoDBEndpointURL   string
+}
+
+func getEnv(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+	return fallback
 }
 
 func Load() (*Config, error) {
@@ -30,6 +39,15 @@ func Load() (*Config, error) {
 		ImageExtractorEnabled: os.Getenv("IMAGE_EXTRACTOR_ENABLED") == "true",
 		ImageExplainerEnabled: os.Getenv("IMAGE_EXPLAINER_ENABLED") == "true",
 		PageSummarizerEnabled: os.Getenv("PAGE_SUMMARIZER_ENABLED") == "true",
+		SQSEndpointURL:        getEnv("SQS_ENDPOINT_URL", os.Getenv("BASE_ENDPOINT_URL")),
+		DynamoDBEndpointURL:   getEnv("DYNAMODB_ENDPOINT_URL", os.Getenv("BASE_ENDPOINT_URL")),
+	}
+
+	if cfg.SQSEndpointURL == "" {
+		cfg.SQSEndpointURL = "http://localstack:4566"
+	}
+	if cfg.DynamoDBEndpointURL == "" {
+		cfg.DynamoDBEndpointURL = "http://localstack:4566"
 	}
 
 	if cfg.InputQueueURL == "" {

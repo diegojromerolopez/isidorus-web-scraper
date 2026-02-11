@@ -70,11 +70,11 @@ func (m *MockSQSClient) DeleteMessage(ctx context.Context, queueURL string, rece
 
 func TestWriterService_ProcessMessage(t *testing.T) {
 	tests := []struct {
-		name           string
-		msg            domain.WriterMessage
-		setupMocks     func(*MockDBRepository, *MockJobStatusRepository)
-		expectedError  error
-		expectNoCalls  bool
+		name          string
+		msg           domain.WriterMessage
+		setupMocks    func(*MockDBRepository, *MockJobStatusRepository)
+		expectedError error
+		expectNoCalls bool
 	}{
 		{
 			name: "Page Data Success",
@@ -115,8 +115,8 @@ func TestWriterService_ProcessMessage(t *testing.T) {
 			},
 		},
 		{
-			name: "Unknown Type - No Action",
-			msg:  domain.WriterMessage{Type: "unknown"},
+			name:          "Unknown Type - No Action",
+			msg:           domain.WriterMessage{Type: "unknown"},
 			expectNoCalls: true,
 		},
 		{
@@ -160,4 +160,3 @@ func TestWriterService_ProcessMessage(t *testing.T) {
 		})
 	}
 }
-

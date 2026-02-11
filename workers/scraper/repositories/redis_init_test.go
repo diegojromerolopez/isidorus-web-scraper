@@ -26,4 +26,3 @@ func TestNewRedisClient(t *testing.T) {
 		})
 	}
 }
-

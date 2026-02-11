@@ -1,0 +1,39 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  namespace: isidorus
+  labels:
+    io.kompose.service: init-resources
+  name: init-resources
+spec:
+  template:
+    metadata:
+      labels:
+        io.kompose.service: init-resources
+    spec:
+      containers:
+        - command: ["/bin/bash"]
+          args:
+            - /init.sh
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              value: test
+            - name: AWS_DEFAULT_REGION
+              value: us-east-1
+            - name: AWS_SECRET_ACCESS_KEY
+              value: testpassword123
+          image: amazon/aws-cli
+          imagePullPolicy: IfNotPresent
+          name: init-resources
+          volumeMounts:
+            - mountPath: /init.sh
+              name: init-resources-cm0
+              subPath: init.sh
+      restartPolicy: OnFailure
+      volumes:
+        - configMap:
+            items:
+              - key: init-resources.sh
+                path: init.sh
+            name: init-resources-cm0
+          name: init-resources-cm0

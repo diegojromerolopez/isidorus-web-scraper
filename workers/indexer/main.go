@@ -26,7 +26,7 @@ func main() {
 	// AWS/SQS Client
 	awsCfg, err := config.LoadDefaultConfig(context.Background(),
 		config.WithRegion(cfg.AWSRegion),
-		config.WithBaseEndpoint(cfg.AWSEndpointURL),
+		config.WithBaseEndpoint(cfg.SQSEndpointURL),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(cfg.AWSAccessKeyID, cfg.AWSSecretKey, "")),
 		config.WithHTTPClient(&http.Client{Timeout: 30 * time.Second}),
 	)

@@ -17,7 +17,7 @@ services:
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/isidorus
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - AWS_ENDPOINT_URL=http://localstack:4566
+      - BASE_ENDPOINT_URL=http://localstack:4566
       - AWS_REGION=us-east-1
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
@@ -32,6 +32,7 @@ services:
         condition: service_started
 
   # Optimization: Mock Ollama with a lightweight container to save memory
+  # This overrides the 'ollama' service from docker-compose.yml (Dev)
   ollama:
     image: alpine:latest
     entrypoint: [ "sh", "-c", "while true; do sleep 3600; done" ]

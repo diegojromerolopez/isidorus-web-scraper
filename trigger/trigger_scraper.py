@@ -30,7 +30,7 @@ def wait_for_api() -> None:
     sys.exit(1)
 
 
-def submit_job() -> int:
+def create_scraping() -> int:
     """Submits a scraping job."""
     headers = {"X-API-Key": API_KEY}
     payload = {
@@ -41,14 +41,16 @@ def submit_job() -> int:
 
     print(f"Submitting scrape job for {SCRAPE_URL}...")
     try:
-        response = requests.post(f"{API_URL}/scrape", json=payload, headers=headers)
+        response = requests.post(
+            f"{API_URL}/scrape", json=payload, headers=headers, timeout=30
+        )
         response.raise_for_status()
         job_data = response.json()
-        job_id = job_data.get("scraping_id") or job_data.get(
+        scraping_id = job_data.get("scraping_id") or job_data.get(
             "id"
         )  # Handle potential response variations
-        print(f"Job submitted successfully. Job ID: {job_id}")
-        return int(job_id)
+        print(f"Job submitted successfully. Job ID: {scraping_id}")
+        return int(scraping_id)
     except requests.RequestException as e:
         print(f"Failed to submit job: {e}")
         if hasattr(e, "response") and e.response is not None:
@@ -56,31 +58,25 @@ def submit_job() -> int:
         sys.exit(1)
 
 
-def monitor_job(job_id: int) -> None:
+def monitor_scraping(scraping_id: int) -> None:
     """Polls the job status until completion."""
     headers = {"X-API-Key": API_KEY}
     start_time = time.time()
 
-    print(f"Monitoring job {job_id}...")
+    print(f"Monitoring job {scraping_id}...")
     while time.time() - start_time < TIMEOUT:
         try:
             response = requests.get(
-                f"{API_URL}/scrape", params={"scraping_id": job_id}, headers=headers
+                f"{API_URL}/scraping/{scraping_id}", headers=headers, timeout=30
             )
             response.raise_for_status()
             data = response.json()
 
-            # Assuming the API returns a list or a single object.
-            # Adjusting based on likely API structure.
-            # If the API returns a list of scrapings,
-            # we pick the first one matching our ID.
-            if isinstance(data, list):
-                if not data:
-                    print("Job not found.")
-                    sys.exit(1)
-                job = data[0]
-            else:
-                job = data
+            # The API returns {"scraping": {...}}
+            job = data.get("scraping", {})
+            if not job:
+                print("Job not found in response.")
+                sys.exit(1)
 
             status = job.get("status")
             print(f"Job Status: {status}")
@@ -88,7 +84,7 @@ def monitor_job(job_id: int) -> None:
             if status == "COMPLETED":
                 print("Job completed successfully!")
                 return
-            elif status == "FAILED" or status == "ERROR":
+            if status in ("FAILED", "ERROR"):
                 print("Job failed.")
                 sys.exit(1)
 
@@ -101,9 +97,13 @@ def monitor_job(job_id: int) -> None:
     sys.exit(1)
 
 
-if __name__ == "__main__":
+def main():
     wait_for_api()
     # Give a small buffer for Auth Admin to sync keys if this is a fresh start
     time.sleep(5)
-    job_id = submit_job()
-    monitor_job(job_id)
+    scraping_id = create_scraping()
+    monitor_scraping(scraping_id)
+
+
+if __name__ == "__main__":
+    main()

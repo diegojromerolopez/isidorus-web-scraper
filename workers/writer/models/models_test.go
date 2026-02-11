@@ -24,4 +24,3 @@ func TestTableNames(t *testing.T) {
 		})
 	}
 }
-

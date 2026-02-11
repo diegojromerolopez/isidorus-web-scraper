@@ -94,4 +94,3 @@ func TestSQSRepository_DeleteMessage(t *testing.T) {
 		})
 	}
 }
-

@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: isidorus
+  annotations:
+    kompose.cmd: kompose convert -f docker-compose.base.yml -f docker-compose.prod.yml -o k8s/base/
+    kompose.version: 1.38.0 (HEAD)
+  labels:
+    io.kompose.service: elasticmq
+  name: elasticmq
+spec:
+  ports:
+    - name: "9324"
+      port: 9324
+      targetPort: 9324
+    - name: "9325"
+      port: 9325
+      targetPort: 9325
+  selector:
+    io.kompose.service: elasticmq

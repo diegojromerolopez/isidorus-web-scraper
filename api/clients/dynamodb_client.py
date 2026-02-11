@@ -30,7 +30,7 @@ class DynamoDBClient:
         Creates a DynamoDBClient instance from the configuration.
         """
         return DynamoDBClient(
-            endpoint_url=config.aws_endpoint_url,
+            endpoint_url=config.dynamodb_endpoint_url,
             region=config.aws_region,
             access_key=config.aws_access_key_id,
             secret_key=config.aws_secret_access_key,

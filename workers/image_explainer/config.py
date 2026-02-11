@@ -22,9 +22,13 @@ class Configuration(BaseConfiguration):
         """
         Loads worker configuration from environment variables.
         """
+        base_endpoint = os.getenv("BASE_ENDPOINT_URL", "http://localstack:4566")
         return cls(
             # Base fields
-            aws_endpoint_url=os.getenv("AWS_ENDPOINT_URL", "http://localstack:4566"),
+            base_endpoint_url=base_endpoint,
+            s3_endpoint_url=os.getenv("S3_ENDPOINT_URL", base_endpoint),
+            sqs_endpoint_url=os.getenv("SQS_ENDPOINT_URL", base_endpoint),
+            dynamodb_endpoint_url=os.getenv("DYNAMODB_ENDPOINT_URL", base_endpoint),
             aws_region=os.getenv("AWS_REGION", "us-east-1"),
             aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID", "test"),
             aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY", "test"),

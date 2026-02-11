@@ -112,7 +112,6 @@ func TestDBRepository_InsertPageData(t *testing.T) {
 	}
 }
 
-
 func TestDBRepository_InsertImageExplanation(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -177,7 +176,6 @@ func TestDBRepository_InsertImageExplanation(t *testing.T) {
 		})
 	}
 }
-
 
 func TestDBRepository_InsertPageSummary(t *testing.T) {
 	tests := []struct {
@@ -247,4 +245,3 @@ func TestDBRepository_CompleteScraping(t *testing.T) {
 	err := repo.CompleteScraping(context.Background(), 123)
 	assert.NoError(t, err)
 }
-

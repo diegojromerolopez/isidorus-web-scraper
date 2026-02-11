@@ -27,7 +27,7 @@ class TestDeletionMain(unittest.IsolatedAsyncioTestCase):
         mock_config = MagicMock()
         mock_config.input_queue_url = "http://test-queue"
         mock_config.database_url = "sqlite://:memory:"
-        mock_config.aws_endpoint_url = "http://test"
+        mock_config.base_endpoint_url = "http://test"
         mock_config.aws_region = "us-east-1"
         mock_config.aws_access_key_id = "test"
         mock_config.aws_secret_access_key = "test"
@@ -82,7 +82,7 @@ class TestDeletionMain(unittest.IsolatedAsyncioTestCase):
         mock_config = MagicMock()
         mock_config.input_queue_url = "http://test-queue"
         mock_config.database_url = "sqlite://:memory:"
-        mock_config.aws_endpoint_url = "http://test"
+        mock_config.base_endpoint_url = "http://test"
         mock_config.aws_region = "us-east-1"
         mock_config.aws_access_key_id = "test"
         mock_config.aws_secret_access_key = "test"
@@ -124,7 +124,7 @@ class TestDeletionMain(unittest.IsolatedAsyncioTestCase):
         mock_config = MagicMock()
         mock_config.input_queue_url = "http://test-queue"
         mock_config.database_url = "sqlite://:memory:"
-        mock_config.aws_endpoint_url = "http://test"
+        mock_config.base_endpoint_url = "http://test"
         mock_config.aws_region = "us-east-1"
         mock_config.aws_access_key_id = "test"
         mock_config.aws_secret_access_key = "test"

@@ -42,13 +42,65 @@ Isidorus goes beyond simple scraping by integrating AI into the heart of its pro
 - **Computer Vision (Alt-Text Generation)**: Processes images found during scraping to generate descriptive text, making visual content searchable and accessible.
 - **Local LLM Support**: Defaults to **Ollama** (`tinyllama`) for privacy-conscious, local-first inference, but supports OpenAI and other providers via LangChain.
 
-## ☁️ LocalStack Showcase
+## ☁️ LocalStack Showcase (E2E & Dev)
 
-This project is a premier example of utilizing **LocalStack** to accelerate development:
+This project demonstrates how to use **LocalStack** to emulate a complete AWS environment locally. This is the heart of our **End-to-End (E2E) testing** strategy, allowing for high-fidelity verification without cloud costs.
+
+```mermaid
+graph TD
+    subgraph "Testing Infrastructure (LocalStack)"
+        LS[LocalStack]
+        S3_L[S3 Bucket]
+        SQS_L[SQS Queues]
+        DDB_L[DynamoDB Table]
+        LS --- S3_L
+        LS --- SQS_L
+        LS --- DDB_L
+    end
+
+    TR[Test Runner] -->|Start Scrape| API[API]
+    API -->|Enqueue| SQS_L
+    API -->|Status| DDB_L
+    
+    Scraper[Scraper Worker] -->|Consume| SQS_L
+    Scraper -->|Extract| Site[Mock Website]
+    
+    Extractor[Image Extractor] -->|Upload| S3_L
+    Summarizer[Page Summarizer] -->|Mock AI| OllamaMock[Ollama Mock]
+```
 
 - **Zero-Cloud Architecture**: Emulates SQS, S3, and DynamoDB, allowing for a 1:1 local-to-cloud development experience.
 - **Rapid Iteration**: Test complex event-driven workflows (like asynchronous image processing) instantly without waiting for cloud provisioning.
 - **E2E Testing Fidelity**: Uses real AWS SDKs (`aioboto3`, `boto3`, AWS Go SDK) against high-fidelity mocks, ensuring production-ready code.
+
+## 🏗️ Provider-Agnostic Infrastructure (Production)
+
+Isidorus is strictly **provider-agnostic**. While it can run on AWS, it can also be deployed entirely on self-hosted, open-source infrastructure replacing those cloud services. This is showcased in our **Production Stack** (`make prod-up`).
+
+```mermaid
+graph TD
+    subgraph "Agnostic Infrastructure (Self-Hosted)"
+        Minio[Minio - S3 Compatible]
+        EMQ[ElasticMQ - SQS Compatible]
+        Scylla[ScyllaDB - DynamoDB Compatible]
+    end
+
+    User((User)) -->|HTTP| API[API]
+    API -->|S3_ENDPOINT_URL| Minio
+    API -->|SQS_ENDPOINT_URL| EMQ
+    API -->|DYNAMODB_ENDPOINT_URL| Scylla
+
+    Workers[Workers Pool] --> Minio
+    Workers --> EMQ
+    Workers --> Scylla
+    
+    AI[Self-Hosted AI] -->|Local Inference| Ollama[Ollama - tinyllama]
+    Workers --> Ollama
+```
+
+- **Endpoint Agnosticism**: By using `BASE_ENDPOINT_URL` (or service-specific overrides), the application can talk to any S3/SQS/DynamoDB compatible API.
+- **Cloud-Native & Hybrid**: Deploy on Kubernetes using local storage/queues or mix-and-match with managed cloud services.
+- **Self-Hosted AI**: Integration with **Ollama** ensures even the LLM processing is completely decoupled from external vendors.
 
 ## Architecture
 
@@ -205,14 +257,40 @@ The system is built with a microservices approach:
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `AWS_ENDPOINT_URL` | LocalStack URL | `http://localstack:4566` |
+| `BASE_ENDPOINT_URL` | Base service endpoint fallback | `http://localstack:4566` |
+| `S3_ENDPOINT_URL` | Specific S3 endpoint override | `http://minio:9000` |
+| `SQS_ENDPOINT_URL` | Specific SQS endpoint override | `http://elasticmq:9324` |
+| `DYNAMODB_ENDPOINT_URL`| Specific DynamoDB endpoint override | `http://scylla:8042` |
 | `DATABASE_URL` | Postgres Connection String | `postgres://user:pass@host:5432/db` |
 | `REDIS_HOST` | Redis host | `localhost` or `redis` |
 | `IMAGE_BUCKET` | S3 bucket for images | `isidorus-images` |
 | `LLM_PROVIDER` | AI provider for explanations | `mock`, `openai`, `gemini`, etc. |
-| `MAX_DEPTH` | Maximum recursive depth | `2` (Default from API) |
-| `IMAGE_EXPLAINER_ENABLED` | Enable AI image explanation | `true` |
-| `PAGE_SUMMARIZER_ENABLED` | Enable page summarization | `true` |
+| `SCRAPER_REPLICAS` | Number of Scraper instances | `3` |
+| `WRITER_REPLICAS` | Number of Writer instances | `2` |
+| `IMAGE_EXTRACTOR_REPLICAS`| Number of Extractor instances | `3` |
+| `IMAGE_EXPLAINER_REPLICAS`| Number of Explainer instances | `4` |
+| `PAGE_SUMMARIZER_REPLICAS`| Number of Summarizer instances | `2` |
+| `INDEXER_REPLICAS` | Number of Indexer instances | `1` |
+| `DELETION_REPLICAS` | Number of Deletion instances | `1` |
+
+## Horizontal Scaling
+
+The application is designed for horizontal scalability. You can adjust the "funnel" of your scraping pipeline by setting the number of replicas for each worker in your environment.
+
+| Worker | Default Replicas | Role |
+|--------|------------------|------|
+| **Scraper** | 3 | High-throughput Go crawler. |
+| **Writer** | 2 | Concurrent DB persistence. |
+| **Explainer** | 4 | AI processing (The "Bottleneck"). |
+| **Summarizer** | 2 | AI summarization. |
+| **Extractor** | 3 | Network-intensive S3 heavy lifting. |
+| **Indexer** | 1 | OpenSearch indexing. |
+| **Deletion** | 1 | Resource cleanup. |
+
+Example for scaling up the AI explainer:
+```bash
+IMAGE_EXPLAINER_REPLICAS=10 docker compose up -d --scale image-explainer-worker=10
+```
 
 ## API Endpoints
 
@@ -266,6 +344,23 @@ The entire stack runs locally via Docker Compose:
 -   **DynamoDB**: NoSQL store for job history and metadata.
 -   **Redis**: In-memory store for cycle detection and job tracking counters.
 
+### 🐳 Docker Compose Architecture
+
+The project uses a modular Docker Compose setup to support multiple environments without duplication:
+
+-   **`docker-compose.base.yml`**: Defines common services (API, Workers, DBs) and builds.
+-   **`docker-compose.yml`**: **Development** overrides. Adds LocalStack, Ollama, and host ports.
+-   **`docker-compose.prod.yml`**: **Production** overrides. Adds Minio, ScyllaDB, ElasticMQ.
+-   **`docker-compose.e2e.yml`**: **Testing** overrides. Adds Test Runner and Mocks.
+
+**Note**: The `Makefile` handles the complex file chaining for you (e.g., `docker compose -f docker-compose.base.yml -f ...`).
+
+### Production-Ready Infrastructure (Optional)
+You can switch to a more production-aligned stack using `make prod-up`. This replaces LocalStack with:
+-   **Minio**: S3-compatible object storage.
+-   **ElasticMQ**: Standalone SQS-compatible queue system.
+-   **ScyllaDB (Alternator)**: High-performance DynamoDB-compatible NoSQL store.
+
 ## Technologies
 
 -   **Frontend**: React 18, TypeScript, TailwindCSS, Vite
@@ -286,6 +381,8 @@ The entire stack runs locally via Docker Compose:
 -   Python 3.14+
 -   Go 1.24+
 -   Make
+-   [Kind](https://kind.sigs.k8s.io/) (for local Kubernetes)
+-   [kubectl](https://kubernetes.io/docs/tasks/tools/)
 
 ## Getting Started
 
@@ -311,7 +408,43 @@ The entire stack runs locally via Docker Compose:
     make test-e2e-basic
     ```
 
-5.  **Run a Demo Scrape**:
+5.  **Run on Kubernetes (Kind)**:
+    Deploy the entire stack to a local [Kind](https://kind.sigs.k8s.io/) cluster.
+    ```bash
+    # 1. Automated setup of cluster, images, and manifests
+    make k8s-setup-all
+
+    # 2. Access the application (Port-forwarding)
+    make k8s-port-forward
+    ```
+    Access the Frontend at **http://localhost:3000** and the API at **http://localhost:8000**.
+
+6.  **Cloud Deployment (Production)**:
+    For production deployments (EKS, GKE, AKS), refer to our [Cloud Kubernetes Deployment Plan](file:///Users/diegoj/.gemini/antigravity/brain/934f552a-c11e-4b2d-9ca2-aa92695a8df0/cloud_implementation_plan.md).
+    
+    You can use the helper script to prepare your local manifests for a remote registry:
+    ```bash
+    bash scripts/k8s-cloud-prepare.sh <your-registry-url>
+    ```
+
+### ☸️ Kubernetes Operations
+
+The following commands are available for managing the local Kind cluster:
+
+| Command | Description |
+|---------|-------------|
+| `make k8s-setup-all` | Full automated setup: cluster creation, image build/load, and deployment. |
+| `make k8s-port-forward` | Forwards Frontend (3000) and API (8000) to your local machine. |
+| `make k8s-deploy` | Re-applies all manifests to the cluster (useful for rapid manifest testing). |
+| `make k8s-secrets` | Generates and applies Kubernetes secrets using local environment variables. |
+| `make k8s-update-images` | Rebuilds and re-loads images into the cluster without recreating it. |
+
+**Clean Up**: To delete the Kind cluster and stop all Kubernetes resources:
+```bash
+kind delete cluster --name isidorus
+```
+
+7.  **Run a Demo Scrape**:
     Starts the stack and triggers a scrape job.
     
     Default (Hacker News, depth 1):
@@ -359,7 +492,7 @@ The project emphasizes high test coverage:
 -   **Unit Tests**: ~100% coverage for all components (API, Frontend, Scraper, Writer, Image Extractor, Page Summarizer).
     - **Frontend**: Tested using **Vitest** and **React Testing Library**.
 -   **E2E Tests**: Full integration tests using a local test runner and mock website.
-    - **Reliable Verification**: Tests utilize a centralized polling mechanism that monitors the `GET /scrape` endpoint, waiting up to **5 minutes (300 seconds)** for a `COMPLETED` status to ensure all asynchronous background tasks (AI extraction, DB writes) have finished.
+    - **Reliable Verification**: Tests utilize a centralized polling mechanism that monitors the `GET /scraping/{id}` endpoint, waiting up to **5 minutes (300 seconds)** for a `COMPLETED` status to ensure all asynchronous background tasks (AI extraction, DB writes) have finished.
 -   **Shared Library Tests**: Located in `tests/unit/shared/` for common client testing.
 
 ### AI Worker Testing

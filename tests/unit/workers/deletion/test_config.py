@@ -9,7 +9,7 @@ class TestDeletionConfig(unittest.TestCase):
     @patch.dict(
         os.environ,
         {
-            "AWS_ENDPOINT_URL": "http://test-aws",
+            "BASE_ENDPOINT_URL": "http://test-aws",
             "AWS_REGION": "us-west-2",
             "AWS_ACCESS_KEY_ID": "key",
             "AWS_SECRET_ACCESS_KEY": "secret",
@@ -25,7 +25,7 @@ class TestDeletionConfig(unittest.TestCase):
     )
     def test_from_env(self) -> None:
         config = Configuration.from_env()
-        self.assertEqual(config.aws_endpoint_url, "http://test-aws")
+        self.assertEqual(config.base_endpoint_url, "http://test-aws")
         self.assertEqual(config.aws_region, "us-west-2")
         self.assertEqual(config.aws_access_key_id, "key")
         self.assertEqual(config.aws_secret_access_key, "secret")

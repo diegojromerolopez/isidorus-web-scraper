@@ -8,7 +8,7 @@ class TestConfiguration(unittest.TestCase):
     def test_from_env_defaults(self) -> None:
         # Clear env vars that might affect the test
         vars_to_clear = [
-            "AWS_ENDPOINT_URL",
+            "BASE_ENDPOINT_URL",
             "AWS_REGION",
             "AWS_ACCESS_KEY_ID",
             "AWS_SECRET_ACCESS_KEY",
@@ -29,7 +29,7 @@ class TestConfiguration(unittest.TestCase):
 
         try:
             config = Configuration.from_env()
-            self.assertEqual(config.aws_endpoint_url, "http://localstack:4566")
+            self.assertEqual(config.base_endpoint_url, "http://localstack:4566")
             self.assertEqual(config.input_queue_url, "")
             self.assertEqual(config.llm_provider, "openai")
         finally:

@@ -1,0 +1,50 @@
+apiVersion: v1
+data:
+  elasticmq.conf: |
+    include classpath("application.conf")
+
+    queues {
+        scraper-queue {
+            defaultVisibilityTimeout = 30 seconds
+            delay = 0 seconds
+            receiveMessageWait = 0 seconds
+        }
+        image-extractor-queue {
+            defaultVisibilityTimeout = 30 seconds
+            delay = 0 seconds
+            receiveMessageWait = 0 seconds
+        }
+        writer-queue {
+            defaultVisibilityTimeout = 30 seconds
+            delay = 0 seconds
+            receiveMessageWait = 0 seconds
+        }
+        page-summarizer-queue {
+            defaultVisibilityTimeout = 30 seconds
+            delay = 0 seconds
+            receiveMessageWait = 0 seconds
+        }
+        deletion-queue {
+            defaultVisibilityTimeout = 30 seconds
+            delay = 0 seconds
+            receiveMessageWait = 0 seconds
+        }
+        indexer-queue {
+            defaultVisibilityTimeout = 30 seconds
+            delay = 0 seconds
+            receiveMessageWait = 0 seconds
+        }
+        image-explainer-queue {
+            defaultVisibilityTimeout = 30 seconds
+            delay = 0 seconds
+            receiveMessageWait = 0 seconds
+        }
+    }
+kind: ConfigMap
+metadata:
+  namespace: isidorus
+  annotations:
+    use-subpath: "true"
+  labels:
+    io.kompose.service: elasticmq
+  name: elasticmq-cm0

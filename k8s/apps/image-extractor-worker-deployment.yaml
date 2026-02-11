@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: isidorus
+  annotations:
+    kompose.cmd: kompose convert -f docker-compose.base.yml -f docker-compose.prod.yml -o k8s/base/
+    kompose.version: 1.38.0 (HEAD)
+  labels:
+    io.kompose.service: image-extractor-worker
+  name: image-extractor-worker
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      io.kompose.service: image-extractor-worker
+  template:
+    metadata:
+      annotations:
+        kompose.cmd: kompose convert -f docker-compose.base.yml -f docker-compose.prod.yml -o k8s/base/
+        kompose.version: 1.38.0 (HEAD)
+      labels:
+        io.kompose.service: image-extractor-worker
+    spec:
+      containers:
+        - env:
+            - name: REDIS_PORT
+              value: "6379"
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-secrets
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_REGION
+              value: us-east-1
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-secrets
+                  key: AWS_SECRET_ACCESS_KEY
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-secrets
+                  key: DATABASE_URL
+            - name: IMAGES_BUCKET
+              value: isidorus-images
+            - name: IMAGE_EXPLAINER_ENABLED
+              value: "false"
+            - name: IMAGE_EXPL_QUEUE_URL
+              value: http://elasticmq.isidorus.svc.cluster.local:9324/000000000000/image-explainer-queue
+            - name: INPUT_QUEUE_URL
+              value: http://elasticmq.isidorus.svc.cluster.local:9324/000000000000/image-extractor-queue
+            - name: S3_ENDPOINT_URL
+              value: http://minio.isidorus.svc.cluster.local:9000
+            - name: SQS_ENDPOINT_URL
+              value: http://elasticmq.isidorus.svc.cluster.local:9324
+            - name: WRITER_QUEUE_URL
+              value: http://elasticmq.isidorus.svc.cluster.local:9324/000000000000/writer-queue
+          image: docker.io/library/image-extractor-worker:latest
+          imagePullPolicy: IfNotPresent
+          name: image-extractor-worker
+      restartPolicy: Always

@@ -27,19 +27,33 @@ func main() {
 	}
 
 	// 1. AWS Config
+	// 1. AWS Config
 	// Use background context for initial setup
 	setupCtx := context.Background()
-	awsCfg, err := awsConfig.LoadDefaultConfig(setupCtx,
+
+	// SQS Config
+	sqsAwsCfg, err := awsConfig.LoadDefaultConfig(setupCtx,
 		awsConfig.WithRegion(cfg.AWSRegion),
+		awsConfig.WithBaseEndpoint(cfg.SQSEndpointURL),
 		awsConfig.WithHTTPClient(&http.Client{Timeout: 30 * time.Second}),
 	)
 	if err != nil {
-		log.Fatalf("unable to load SDK config, %v", err)
+		log.Fatalf("unable to load SQS SDK config, %v", err)
+	}
+
+	// S3 Config
+	s3AwsCfg, err := awsConfig.LoadDefaultConfig(setupCtx,
+		awsConfig.WithRegion(cfg.AWSRegion),
+		awsConfig.WithBaseEndpoint(cfg.S3EndpointURL),
+		awsConfig.WithHTTPClient(&http.Client{Timeout: 30 * time.Second}),
+	)
+	if err != nil {
+		log.Fatalf("unable to load S3 SDK config, %v", err)
 	}
 
 	// 2. Dependency Injection
-	sqsRepo := repositories.NewSQSRepository(awsCfg)
-	s3Repo := repositories.NewS3Repository(awsCfg)
+	sqsRepo := repositories.NewSQSRepository(sqsAwsCfg)
+	s3Repo := repositories.NewS3Repository(s3AwsCfg)
 	httpRepo := repositories.NewHTTPRepository()
 
 	extractorService := services.NewExtractorService(

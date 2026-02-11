@@ -3,8 +3,8 @@ import json
 import logging
 import signal
 
-from opensearchpy import AsyncOpenSearch
-from tortoise import Tortoise
+from opensearchpy import AsyncOpenSearch  # pylint: disable=import-error
+from tortoise import Tortoise  # pylint: disable=import-error
 
 from api.clients.dynamodb_client import DynamoDBClient
 from shared.clients.s3_client import S3Client
@@ -38,7 +38,7 @@ async def main(stop_event: asyncio.Event | None = None) -> None:
     await init_db(config.database_url)
 
     sqs_client = SQSClient(
-        endpoint_url=config.aws_endpoint_url,
+        endpoint_url=config.sqs_endpoint_url,
         region=config.aws_region,
         access_key=config.aws_access_key_id,
         secret_key=config.aws_secret_access_key,
@@ -46,7 +46,7 @@ async def main(stop_event: asyncio.Event | None = None) -> None:
     )
 
     dynamodb_client = DynamoDBClient(
-        endpoint_url=config.aws_endpoint_url,
+        endpoint_url=config.dynamodb_endpoint_url,
         region=config.aws_region,
         access_key=config.aws_access_key_id,
         secret_key=config.aws_secret_access_key,
@@ -54,7 +54,7 @@ async def main(stop_event: asyncio.Event | None = None) -> None:
     )
 
     s3_client = S3Client(
-        endpoint_url=config.aws_endpoint_url,
+        endpoint_url=config.s3_endpoint_url,
         region_name=config.aws_region,
         access_key=config.aws_access_key_id,
         secret_key=config.aws_secret_access_key,
@@ -109,10 +109,10 @@ async def main(stop_event: asyncio.Event | None = None) -> None:
                     await sqs_client.delete_message(
                         config.input_queue_url, msg["ReceiptHandle"]
                     )
-                except Exception as e:
-                    logger.error(f"Error processing message: {e}")
-        except Exception as e:
-            logger.error(f"Error receiving messages: {e}")
+                except Exception as e:  # pylint: disable=broad-exception-caught
+                    logger.error("Error processing message: %s", e)
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("Error receiving messages: %s", e)
             await asyncio.sleep(5)
 
     await os_client.close()

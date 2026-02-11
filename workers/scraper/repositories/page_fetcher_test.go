@@ -45,4 +45,3 @@ func TestPageFetcher_Fetch(t *testing.T) {
 		})
 	}
 }
-

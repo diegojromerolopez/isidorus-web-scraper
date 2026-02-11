@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  namespace: isidorus
+  labels:
+    io.kompose.service: scylla
+  name: scylla
+spec:
+  replicas: 1
+  serviceName: scylla
+  selector:
+    matchLabels:
+      io.kompose.service: scylla
+  template:
+    metadata:
+      labels:
+        io.kompose.service: scylla
+    spec:
+      containers:
+        - args:
+            - --smp
+            - "1"
+            - --memory
+            - 1G
+            - --overprovisioned
+            - "1"
+            - --alternator-port
+            - "8000"
+            - --alternator-write-isolation
+            - always
+          image: scylladb/scylla:5.2.0
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - curl -f http://localhost:8000 || exit 1
+            failureThreshold: 5
+            periodSeconds: 30
+            timeoutSeconds: 10
+          name: scylla
+          ports:
+            - containerPort: 8000
+              protocol: TCP
+            - containerPort: 9042
+              protocol: TCP
+          volumeMounts:
+            - mountPath: /var/lib/scylla
+              name: scylla-data
+      restartPolicy: Always
+  volumeClaimTemplates:
+    - metadata:
+        name: scylla-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 5Gi
