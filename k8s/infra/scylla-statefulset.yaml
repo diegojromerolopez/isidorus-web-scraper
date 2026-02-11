@@ -29,6 +29,7 @@ spec:
             - --alternator-write-isolation
             - always
           image: scylladb/scylla:5.2.0
+          imagePullPolicy: IfNotPresent
           livenessProbe:
             exec:
               command:

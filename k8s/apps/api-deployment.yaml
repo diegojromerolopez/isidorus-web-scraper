@@ -23,6 +23,10 @@ spec:
     spec:
       containers:
         - env:
+            - name: REDIS_PORT
+              value: "6379"
+            - name: POSTGRES_PORT
+              value: "5432"
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:
@@ -54,7 +58,8 @@ spec:
               value: http://elasticmq.isidorus.svc.cluster.local:9324
             - name: SQS_QUEUE_URL
               value: http://elasticmq.isidorus.svc.cluster.local:9324/000000000000/scraper-queue
-          image: api
+          image: docker.io/library/api:latest
+          imagePullPolicy: IfNotPresent
           name: api
           ports:
             - containerPort: 8000

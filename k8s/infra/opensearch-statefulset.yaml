@@ -33,6 +33,7 @@ spec:
             - name: node.name
               value: isidorus-node
           image: opensearchproject/opensearch:2.11.0
+          imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
               path: /

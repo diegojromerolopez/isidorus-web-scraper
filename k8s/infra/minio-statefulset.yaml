@@ -28,6 +28,7 @@ spec:
             - name: MINIO_ROOT_USER
               value: test
           image: minio/minio
+          imagePullPolicy: IfNotPresent
           livenessProbe:
             httpGet:
               path: /minio/health/live

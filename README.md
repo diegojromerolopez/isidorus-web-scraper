@@ -381,6 +381,8 @@ You can switch to a more production-aligned stack using `make prod-up`. This rep
 -   Python 3.14+
 -   Go 1.24+
 -   Make
+-   [Kind](https://kind.sigs.k8s.io/) (for local Kubernetes)
+-   [kubectl](https://kubernetes.io/docs/tasks/tools/)
 
 ## Getting Started
 
@@ -406,7 +408,43 @@ You can switch to a more production-aligned stack using `make prod-up`. This rep
     make test-e2e-basic
     ```
 
-5.  **Run a Demo Scrape**:
+5.  **Run on Kubernetes (Kind)**:
+    Deploy the entire stack to a local [Kind](https://kind.sigs.k8s.io/) cluster.
+    ```bash
+    # 1. Automated setup of cluster, images, and manifests
+    make k8s-setup-all
+
+    # 2. Access the application (Port-forwarding)
+    make k8s-port-forward
+    ```
+    Access the Frontend at **http://localhost:3000** and the API at **http://localhost:8000**.
+
+6.  **Cloud Deployment (Production)**:
+    For production deployments (EKS, GKE, AKS), refer to our [Cloud Kubernetes Deployment Plan](file:///Users/diegoj/.gemini/antigravity/brain/934f552a-c11e-4b2d-9ca2-aa92695a8df0/cloud_implementation_plan.md).
+    
+    You can use the helper script to prepare your local manifests for a remote registry:
+    ```bash
+    bash scripts/k8s-cloud-prepare.sh <your-registry-url>
+    ```
+
+### ☸️ Kubernetes Operations
+
+The following commands are available for managing the local Kind cluster:
+
+| Command | Description |
+|---------|-------------|
+| `make k8s-setup-all` | Full automated setup: cluster creation, image build/load, and deployment. |
+| `make k8s-port-forward` | Forwards Frontend (3000) and API (8000) to your local machine. |
+| `make k8s-deploy` | Re-applies all manifests to the cluster (useful for rapid manifest testing). |
+| `make k8s-secrets` | Generates and applies Kubernetes secrets using local environment variables. |
+| `make k8s-update-images` | Rebuilds and re-loads images into the cluster without recreating it. |
+
+**Clean Up**: To delete the Kind cluster and stop all Kubernetes resources:
+```bash
+kind delete cluster --name isidorus
+```
+
+7.  **Run a Demo Scrape**:
     Starts the stack and triggers a scrape job.
     
     Default (Hacker News, depth 1):

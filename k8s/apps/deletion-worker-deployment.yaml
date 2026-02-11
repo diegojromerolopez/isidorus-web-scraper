@@ -15,7 +15,6 @@ spec:
       io.kompose.service: deletion-worker
   template:
     metadata:
-  namespace: isidorus
       annotations:
         kompose.cmd: kompose convert -f docker-compose.base.yml -f docker-compose.prod.yml -o k8s/base/
         kompose.version: 1.38.0 (HEAD)
@@ -24,6 +23,10 @@ spec:
     spec:
       containers:
         - env:
+            - name: REDIS_PORT
+              value: "6379"
+            - name: POSTGRES_PORT
+              value: "5432"
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:
@@ -53,6 +56,7 @@ spec:
               value: http://minio.isidorus.svc.cluster.local:9000
             - name: SQS_ENDPOINT_URL
               value: http://elasticmq.isidorus.svc.cluster.local:9324
-          image: deletion-worker
+          image: docker.io/library/deletion-worker:latest
+          imagePullPolicy: IfNotPresent
           name: deletion-worker
       restartPolicy: Always

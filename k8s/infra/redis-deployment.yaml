@@ -15,7 +15,6 @@ spec:
       io.kompose.service: redis
   template:
     metadata:
-  namespace: isidorus
       annotations:
         kompose.cmd: kompose convert -f docker-compose.base.yml -f docker-compose.prod.yml -o k8s/base/
         kompose.version: 1.38.0 (HEAD)
@@ -24,6 +23,7 @@ spec:
     spec:
       containers:
         - image: redis:7
+          imagePullPolicy: IfNotPresent
           livenessProbe:
             exec:
               command:

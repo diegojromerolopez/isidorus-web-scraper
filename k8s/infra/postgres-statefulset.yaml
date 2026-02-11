@@ -22,15 +22,19 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: postgres-secret
-              value: isidorus
+                  key: POSTGRES_DB
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: postgres-secret
                   key: POSTGRES_PASSWORD
             - name: POSTGRES_USER
-              value: postgres
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_USER
           image: postgres:15
+          imagePullPolicy: IfNotPresent
           livenessProbe:
             exec:
               command:

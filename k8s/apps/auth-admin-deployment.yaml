@@ -15,7 +15,6 @@ spec:
       io.kompose.service: auth-admin
   template:
     metadata:
-  namespace: isidorus
       annotations:
         kompose.cmd: kompose convert -f docker-compose.base.yml -f docker-compose.prod.yml -o k8s/base/
         kompose.version: 1.38.0 (HEAD)
@@ -24,6 +23,10 @@ spec:
     spec:
       containers:
         - env:
+            - name: REDIS_PORT
+              value: "6379"
+            - name: POSTGRES_PORT
+              value: "5432"
             - name: ALLOWED_HOSTS
               value: '*'
             - name: DATABASE_URL
@@ -34,7 +37,8 @@ spec:
               value: django-insecure-test-key
             - name: SEED_DATA
               value: "true"
-          image: auth-admin
+          image: docker.io/library/auth-admin:latest
+          imagePullPolicy: IfNotPresent
           name: auth-admin
           ports:
             - containerPort: 8000

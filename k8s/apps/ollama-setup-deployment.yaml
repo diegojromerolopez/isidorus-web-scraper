@@ -15,7 +15,6 @@ spec:
       io.kompose.service: ollama-setup
   template:
     metadata:
-  namespace: isidorus
       annotations:
         kompose.cmd: kompose convert -f docker-compose.base.yml -f docker-compose.prod.yml -o k8s/base/
         kompose.version: 1.38.0 (HEAD)
@@ -31,6 +30,7 @@ spec:
           env:
             - name: OLLAMA_HOST
               value: ollama:11434
-          image: ollama/ollama:latest
+          image: docker.io/library/ollama/ollama:latest
+          imagePullPolicy: IfNotPresent
           name: ollama-setup
       restartPolicy: Always

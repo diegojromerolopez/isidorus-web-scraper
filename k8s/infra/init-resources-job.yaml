@@ -12,8 +12,8 @@ spec:
         io.kompose.service: init-resources
     spec:
       containers:
-        - args:
-            - /bin/bash
+        - command: ["/bin/bash"]
+          args:
             - /init.sh
           env:
             - name: AWS_ACCESS_KEY_ID
@@ -23,6 +23,7 @@ spec:
             - name: AWS_SECRET_ACCESS_KEY
               value: testpassword123
           image: amazon/aws-cli
+          imagePullPolicy: IfNotPresent
           name: init-resources
           volumeMounts:
             - mountPath: /init.sh
