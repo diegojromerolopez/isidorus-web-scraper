@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: isidorus
+  annotations:
+    kompose.cmd: kompose convert -f docker-compose.base.yml -f docker-compose.prod.yml -o k8s/base/
+    kompose.version: 1.38.0 (HEAD)
+  labels:
+    io.kompose.service: ollama-setup
+  name: ollama-setup
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      io.kompose.service: ollama-setup
+  template:
+    metadata:
+  namespace: isidorus
+      annotations:
+        kompose.cmd: kompose convert -f docker-compose.base.yml -f docker-compose.prod.yml -o k8s/base/
+        kompose.version: 1.38.0 (HEAD)
+      labels:
+        io.kompose.service: ollama-setup
+    spec:
+      containers:
+        - args:
+            - -c
+            - ollama pull tinyllama
+          command:
+            - /bin/sh
+          env:
+            - name: OLLAMA_HOST
+              value: ollama:11434
+          image: ollama/ollama:latest
+          name: ollama-setup
+      restartPolicy: Always

@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  namespace: isidorus
+  labels:
+    io.kompose.service: opensearch
+  name: opensearch
+spec:
+  replicas: 1
+  serviceName: opensearch
+  selector:
+    matchLabels:
+      io.kompose.service: opensearch
+  template:
+    metadata:
+      labels:
+        io.kompose.service: opensearch
+    spec:
+      containers:
+        - env:
+            - name: DISABLE_INSTALL_DEMO_CONFIG
+              value: "true"
+            - name: DISABLE_SECURITY_PLUGIN
+              value: "true"
+            - name: OPENSEARCH_JAVA_OPTS
+              value: -Xms512m -Xmx512m
+            - name: bootstrap.memory_lock
+              value: "true"
+            - name: cluster.name
+              value: isidorus-cluster
+            - name: discovery.type
+              value: single-node
+            - name: node.name
+              value: isidorus-node
+          image: opensearchproject/opensearch:2.11.0
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 9200
+            failureThreshold: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+          name: opensearch
+          ports:
+            - containerPort: 9200
+              protocol: TCP
+            - containerPort: 9600
+              protocol: TCP
+          volumeMounts:
+            - mountPath: /usr/share/opensearch/data
+              name: opensearch-data
+      restartPolicy: Always
+  volumeClaimTemplates:
+    - metadata:
+        name: opensearch-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 2Gi

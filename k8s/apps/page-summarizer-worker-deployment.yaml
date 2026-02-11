@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: isidorus
+  annotations:
+    kompose.cmd: kompose convert -f docker-compose.base.yml -f docker-compose.prod.yml -o k8s/base/
+    kompose.version: 1.38.0 (HEAD)
+  labels:
+    io.kompose.service: page-summarizer-worker
+  name: page-summarizer-worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      io.kompose.service: page-summarizer-worker
+  template:
+    metadata:
+  namespace: isidorus
+      annotations:
+        kompose.cmd: kompose convert -f docker-compose.base.yml -f docker-compose.prod.yml -o k8s/base/
+        kompose.version: 1.38.0 (HEAD)
+      labels:
+        io.kompose.service: page-summarizer-worker
+    spec:
+      containers:
+        - env:
+            - name: AWS_ACCESS_KEY_ID
+              value: test
+            - name: AWS_REGION
+              value: us-east-1
+            - name: AWS_SECRET_ACCESS_KEY
+              value: testpassword123
+            - name: DATABASE_URL
+              value: postgres://postgres:postgres@postgres.isidorus.svc.cluster.local:5432/isidorus
+            - name: DYNAMODB_ENDPOINT_URL
+              value: http://scylla.isidorus.svc.cluster.local:8000
+            - name: INDEXER_QUEUE_URL
+              value: http://elasticmq.isidorus.svc.cluster.local:9324/000000000000/indexer-queue
+            - name: INPUT_QUEUE_URL
+              value: http://elasticmq.isidorus.svc.cluster.local:9324/000000000000/page-summarizer-queue
+            - name: LLM_API_KEY
+            - name: LLM_PROVIDER
+              value: ollama.isidorus.svc.cluster.local
+            - name: OLLAMA_BASE_URL
+              value: http://ollama.isidorus.svc.cluster.local:11434
+            - name: OPENSEARCH_URL
+              value: http://opensearch.isidorus.svc.cluster.local:9200
+            - name: S3_ENDPOINT_URL
+              value: http://minio.isidorus.svc.cluster.local:9000
+            - name: SQS_ENDPOINT_URL
+              value: http://elasticmq.isidorus.svc.cluster.local:9324
+            - name: WRITER_QUEUE_URL
+              value: http://elasticmq.isidorus.svc.cluster.local:9324/000000000000/writer-queue
+          image: page-summarizer-worker
+          name: page-summarizer-worker
+      restartPolicy: Always

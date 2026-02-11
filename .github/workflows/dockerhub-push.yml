@@ -1,0 +1,33 @@
+name: Docker Hub Push
+
+on:
+  push:
+    branches:
+      - '**'
+
+jobs:
+  dockerhub_push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        shell: bash
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: ./scripts/dockerhub-login.sh
+
+      - name: Build and Push Images
+        shell: bash
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          # Slugify the branch name
+          BRANCH_SLUG=$(echo "${{ github.ref_name }}" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/^-//;s/-$//')
+          DOCKER_USER="${{ secrets.DOCKERHUB_USERNAME }}" BRANCH="$BRANCH_SLUG" make dockerhub-push

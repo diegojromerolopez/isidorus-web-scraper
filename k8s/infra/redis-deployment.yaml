@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: isidorus
+  annotations:
+    kompose.cmd: kompose convert -f docker-compose.base.yml -f docker-compose.prod.yml -o k8s/base/
+    kompose.version: 1.38.0 (HEAD)
+  labels:
+    io.kompose.service: redis
+  name: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      io.kompose.service: redis
+  template:
+    metadata:
+  namespace: isidorus
+      annotations:
+        kompose.cmd: kompose convert -f docker-compose.base.yml -f docker-compose.prod.yml -o k8s/base/
+        kompose.version: 1.38.0 (HEAD)
+      labels:
+        io.kompose.service: redis
+    spec:
+      containers:
+        - image: redis:7
+          livenessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            failureThreshold: 5
+            periodSeconds: 5
+            timeoutSeconds: 5
+          name: redis
+          ports:
+            - containerPort: 6379
+              protocol: TCP
+      restartPolicy: Always

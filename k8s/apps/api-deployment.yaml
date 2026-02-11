@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: isidorus
+  annotations:
+    kompose.cmd: kompose convert -f docker-compose.base.yml -f docker-compose.prod.yml -o k8s/base/
+    kompose.version: 1.38.0 (HEAD)
+  labels:
+    io.kompose.service: api
+  name: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      io.kompose.service: api
+  template:
+    metadata:
+      annotations:
+        kompose.cmd: kompose convert -f docker-compose.base.yml -f docker-compose.prod.yml -o k8s/base/
+        kompose.version: 1.38.0 (HEAD)
+      labels:
+        io.kompose.service: api
+    spec:
+      containers:
+        - env:
+            - name: AWS_ACCESS_KEY_ID
+              value: test
+            - name: AWS_REGION
+              value: us-east-1
+            - name: AWS_SECRET_ACCESS_KEY
+              value: testpassword123
+            - name: DATABASE_URL
+              value: postgres://postgres:postgres@postgres.isidorus.svc.cluster.local:5432/isidorus
+            - name: DELETION_QUEUE_URL
+              value: http://elasticmq.isidorus.svc.cluster.local:9324/000000000000/deletion-queue
+            - name: DYNAMODB_ENDPOINT_URL
+              value: http://scylla.isidorus.svc.cluster.local:8000
+            - name: OPENSEARCH_URL
+              value: http://opensearch.isidorus.svc.cluster.local:9200
+            - name: REDIS_HOST
+              value: redis.isidorus.svc.cluster.local
+            - name: S3_ENDPOINT_URL
+              value: http://minio.isidorus.svc.cluster.local:9000
+            - name: SQS_ENDPOINT_URL
+              value: http://elasticmq.isidorus.svc.cluster.local:9324
+            - name: SQS_QUEUE_URL
+              value: http://elasticmq.isidorus.svc.cluster.local:9324/000000000000/scraper-queue
+          image: api
+          name: api
+          ports:
+            - containerPort: 8000
+              protocol: TCP
+      restartPolicy: Always

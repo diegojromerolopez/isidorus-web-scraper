@@ -137,4 +137,29 @@ lint-check:
 # Run all linters and show errors (alias for lint-check)
 lint: lint-check
 
-.PHONY: all up down build logs test test-e2e test-e2e-basic run migrate seed-db test-unit clean format lint-check lint
+# --- Kubernetes & Registry ---
+
+DOCKER_USER ?= $(USER)
+TAG ?= latest
+
+dockerhub-push:
+	@if [ -n "$$DOCKERHUB_TOKEN" ] && [ -n "$$DOCKERHUB_USERNAME" ]; then \
+		./scripts/dockerhub-login.sh; \
+	else \
+		echo "Logging into Docker Hub (Interactive)..."; \
+		docker login -u $(DOCKER_USER); \
+	fi
+	DOCKER_USER=$(DOCKER_USER) TAG=$(TAG) BRANCH=$(BRANCH) ./scripts/dockerhub-push.sh
+
+k8s-secrets:
+	./scripts/k8s-manage-secrets.sh apply
+
+k8s-deploy: k8s-secrets
+	kubectl apply -f k8s/base/namespace.yaml
+	kubectl apply -f k8s/infra/
+	kubectl apply -f k8s/apps/
+
+k8s-update-images:
+	DOCKER_USER=$(DOCKER_USER) TAG=$(TAG) ./scripts/k8s-update-images.sh
+
+.PHONY: all up down build logs test test-e2e test-e2e-basic run migrate seed-db test-unit clean format lint-check lint k8s-secrets k8s-deploy dockerhub-push k8s-update-images

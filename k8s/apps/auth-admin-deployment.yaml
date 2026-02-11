@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: isidorus
+  annotations:
+    kompose.cmd: kompose convert -f docker-compose.base.yml -f docker-compose.prod.yml -o k8s/base/
+    kompose.version: 1.38.0 (HEAD)
+  labels:
+    io.kompose.service: auth-admin
+  name: auth-admin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      io.kompose.service: auth-admin
+  template:
+    metadata:
+  namespace: isidorus
+      annotations:
+        kompose.cmd: kompose convert -f docker-compose.base.yml -f docker-compose.prod.yml -o k8s/base/
+        kompose.version: 1.38.0 (HEAD)
+      labels:
+        io.kompose.service: auth-admin
+    spec:
+      containers:
+        - env:
+            - name: ALLOWED_HOSTS
+              value: '*'
+            - name: DATABASE_URL
+              value: postgres://postgres:postgres@postgres.isidorus.svc.cluster.local:5432/isidorus
+            - name: DEBUG
+              value: "False"
+            - name: SECRET_KEY
+              value: django-insecure-test-key
+            - name: SEED_DATA
+              value: "true"
+          image: auth-admin
+          name: auth-admin
+          ports:
+            - containerPort: 8000
+              protocol: TCP
+      restartPolicy: Always

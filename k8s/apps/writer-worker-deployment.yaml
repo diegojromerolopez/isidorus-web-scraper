@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: isidorus
+  annotations:
+    kompose.cmd: kompose convert -f docker-compose.base.yml -f docker-compose.prod.yml -o k8s/base/
+    kompose.version: 1.38.0 (HEAD)
+  labels:
+    io.kompose.service: writer-worker
+  name: writer-worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      io.kompose.service: writer-worker
+  template:
+    metadata:
+  namespace: isidorus
+      annotations:
+        kompose.cmd: kompose convert -f docker-compose.base.yml -f docker-compose.prod.yml -o k8s/base/
+        kompose.version: 1.38.0 (HEAD)
+      labels:
+        io.kompose.service: writer-worker
+    spec:
+      containers:
+        - env:
+            - name: AWS_ACCESS_KEY_ID
+              value: test
+            - name: AWS_REGION
+              value: us-east-1
+            - name: AWS_SECRET_ACCESS_KEY
+              value: testpassword123
+            - name: DATABASE_URL
+              value: host=postgres user=postgres password=postgres dbname=isidorus port=5432 sslmode=disable
+            - name: DYNAMODB_ENDPOINT_URL
+              value: http://scylla.isidorus.svc.cluster.local:8000
+            - name: DYNAMODB_TABLE
+              value: scraping_jobs
+            - name: INPUT_QUEUE_URL
+              value: http://elasticmq.isidorus.svc.cluster.local:9324/000000000000/writer-queue
+            - name: S3_ENDPOINT_URL
+              value: http://minio.isidorus.svc.cluster.local:9000
+            - name: SQS_ENDPOINT_URL
+              value: http://elasticmq.isidorus.svc.cluster.local:9324
+          image: writer-worker
+          name: writer-worker
+      restartPolicy: Always
