@@ -1,0 +1,67 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: image-explainer-scaler
+  namespace: isidorus
+spec:
+  scaleTargetRef:
+    name: image-explainer-worker
+  minReplicaCount: 0
+  maxReplicaCount: 8
+  triggers:
+    - type: aws-sqs
+      metadata:
+        queueURL: http://elasticmq:9324/000000000000/image-explainer-queue
+        queueLength: "1"
+        awsRegion: us-east-1
+        awsEndpoint: http://elasticmq:9324
+      authenticationRef:
+        name: keda-aws-secrets
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: page-summarizer-scaler
+  namespace: isidorus
+spec:
+  scaleTargetRef:
+    name: page-summarizer-worker
+  minReplicaCount: 0
+  maxReplicaCount: 5
+  triggers:
+    - type: aws-sqs
+      metadata:
+        queueURL: http://elasticmq:9324/000000000000/page-summarizer-queue
+        queueLength: "1"
+        awsRegion: us-east-1
+        awsEndpoint: http://elasticmq:9324
+      authenticationRef:
+        name: keda-aws-secrets
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: ollama-server-scaler
+  namespace: isidorus
+spec:
+  scaleTargetRef:
+    name: ollama
+  minReplicaCount: 1
+  maxReplicaCount: 4
+  triggers:
+    - type: aws-sqs
+      metadata:
+        queueURL: http://elasticmq:9324/000000000000/image-explainer-queue
+        queueLength: "2"
+        awsRegion: us-east-1
+        awsEndpoint: http://elasticmq:9324
+      authenticationRef:
+        name: keda-aws-secrets
+    - type: aws-sqs
+      metadata:
+        queueURL: http://elasticmq:9324/000000000000/page-summarizer-queue
+        queueLength: "2"
+        awsRegion: us-east-1
+        awsEndpoint: http://elasticmq:9324
+      authenticationRef:
+        name: keda-aws-secrets

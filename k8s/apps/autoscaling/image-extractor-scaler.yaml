@@ -1,0 +1,19 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: image-extractor-scaler
+  namespace: isidorus
+spec:
+  scaleTargetRef:
+    name: image-extractor-worker
+  minReplicaCount: 0
+  maxReplicaCount: 10
+  triggers:
+    - type: aws-sqs
+      metadata:
+        queueURL: http://elasticmq:9324/000000000000/image-extractor-queue
+        queueLength: "5"
+        awsRegion: us-east-1
+        awsEndpoint: http://elasticmq:9324
+      authenticationRef:
+        name: keda-aws-secrets

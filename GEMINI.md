@@ -80,6 +80,26 @@ graph TD
     Workers --> Scylla
 ```
 
+### Kubernetes Showcase (Kind & KEDA)
+Automates the deployment of the entire stack into a local [Kind](https://kind.sigs.k8s.io/) cluster and implements **Event-Driven Autoscaling** via [KEDA](https://keda.sh/).
+
+```mermaid
+graph TD
+    subgraph "Kubernetes (Kind)"
+        KEDA[KEDA Operator]
+        SQS[SQS Queues]
+        Workers[Worker Pods]
+        HPA[Horizontal Pod Autoscaler]
+        
+        KEDA -->|Monitor| SQS
+        KEDA -->|Trigger| HPA
+        HPA -->|Scale| Workers
+    end
+
+    API[API Service] -->|Enqueue| SQS
+    Workers -->|Consume| SQS
+```
+
 ## Design Principles
 
 The codebase follows several key design principles to ensure reliability and testability:
@@ -211,6 +231,32 @@ The `scrapings` table uses an internal Integer `id` for primary keys and a `uuid
 - **Infrastructure**: Uses `docker compose` with `docker-compose.e2e.yml` to spin up LocalStack and PostgreSQL.
 - **Mock Website**: Decouples tests from the live internet.
 - **Execution**: Run via `make test-e2e`.
+
+## ☸️ Running on Kubernetes (Kind)
+
+The project provides high-fidelity local Kubernetes automation to mirror production environments.
+
+### Automated Setup
+The entire cluster lifecycle is managed via a single script:
+```bash
+make k8s-setup-all
+```
+This handles:
+1.  **Cluster Creation**: Provisioning a Kind cluster.
+2.  **KEDA Installation**: Deploying the event-driven autoscaling operator.
+3.  **Image Loading**: Building and injecting all 10 services into the cluster nodes.
+4.  **Manifest Application**: Deploying infrastructure (Postgres, Redis, ScyllaDB, OpenSearch, Ollama) and application workers.
+
+### Event-Driven Autoscaling
+The system utilizes [KEDA](https://keda.sh/) to scale workers based on **SQS queue depth** rather than CPU/Memory metrics. This ensures the system stays responsive during large crawl jobs and saves resources by scaling idle workers to zero.
+
+| Component | Scaling Range | Metric |
+|-----------|---------------|--------|
+| **Scraper** | 1 - 10 | 5 messages / pod |
+| **Image Extractor** | 0 - 10 | 5 messages / pod |
+| **Ollama (Inference)** | 1 - 4 | Aggregated AI load |
+| **AI Workers** | 0 - 8 | 1 message / pod |
+| **Writer / Indexer**| 1 - 5 | 10 messages / pod |
 
 ## Development Guidelines
 

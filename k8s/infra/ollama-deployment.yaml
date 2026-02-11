@@ -9,7 +9,6 @@ metadata:
     io.kompose.service: ollama
   name: ollama
 spec:
-  replicas: 1
   selector:
     matchLabels:
       io.kompose.service: ollama

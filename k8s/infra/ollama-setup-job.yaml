@@ -1,0 +1,23 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  namespace: isidorus
+  name: ollama-setup
+  labels:
+    io.kompose.service: ollama-setup
+spec:
+  template:
+    metadata:
+      labels:
+        io.kompose.service: ollama-setup
+    spec:
+      containers:
+        - name: ollama-setup
+          image: ollama/ollama:latest
+          command: ["/bin/sh", "-c"]
+          args: ["ollama pull tinyllama"]
+          env:
+            - name: OLLAMA_HOST
+              value: ollama:11434
+      restartPolicy: OnFailure
+  backoffLimit: 4

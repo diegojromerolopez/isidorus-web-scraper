@@ -9,7 +9,6 @@ metadata:
     io.kompose.service: scraper-worker
   name: scraper-worker
 spec:
-  replicas: 3
   selector:
     matchLabels:
       io.kompose.service: scraper-worker
