@@ -168,4 +168,7 @@ k8s-port-forward:
 k8s-setup-all:
 	./scripts/k8s-setup.sh
 
-.PHONY: all up down build logs test test-e2e test-e2e-basic run migrate seed-db test-unit clean format lint-check lint k8s-secrets k8s-deploy dockerhub-push k8s-update-images k8s-port-forward k8s-setup-all
+dockerhub-cleanup:
+	./scripts/dockerhub-cleanup.sh
+
+.PHONY: all up down build logs test test-e2e test-e2e-basic run migrate seed-db test-unit clean format lint-check lint k8s-secrets k8s-deploy dockerhub-push k8s-update-images k8s-port-forward k8s-setup-all dockerhub-cleanup
