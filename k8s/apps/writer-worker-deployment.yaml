@@ -25,13 +25,22 @@ spec:
       containers:
         - env:
             - name: AWS_ACCESS_KEY_ID
-              value: test
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-secrets
+                  key: AWS_ACCESS_KEY_ID
             - name: AWS_REGION
               value: us-east-1
             - name: AWS_SECRET_ACCESS_KEY
-              value: testpassword123
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-secrets
+                  key: AWS_SECRET_ACCESS_KEY
             - name: DATABASE_URL
-              value: host=postgres user=postgres password=postgres dbname=isidorus port=5432 sslmode=disable
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-secrets
+                  key: DATABASE_URL
             - name: DYNAMODB_ENDPOINT_URL
               value: http://scylla.isidorus.svc.cluster.local:8000
             - name: DYNAMODB_TABLE

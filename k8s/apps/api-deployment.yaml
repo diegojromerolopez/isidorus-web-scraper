@@ -24,13 +24,22 @@ spec:
       containers:
         - env:
             - name: AWS_ACCESS_KEY_ID
-              value: test
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-secrets
+                  key: AWS_ACCESS_KEY_ID
             - name: AWS_REGION
               value: us-east-1
             - name: AWS_SECRET_ACCESS_KEY
-              value: testpassword123
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-secrets
+                  key: AWS_SECRET_ACCESS_KEY
             - name: DATABASE_URL
-              value: postgres://postgres:postgres@postgres.isidorus.svc.cluster.local:5432/isidorus
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-secrets
+                  key: DATABASE_URL
             - name: DELETION_QUEUE_URL
               value: http://elasticmq.isidorus.svc.cluster.local:9324/000000000000/deletion-queue
             - name: DYNAMODB_ENDPOINT_URL
