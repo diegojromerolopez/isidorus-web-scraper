@@ -1,0 +1,38 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - elasticmq-cm0-configmap.yaml
+  - elasticmq-deployment.yaml
+  - elasticmq-service.yaml
+  - init-resources-cm0-configmap.yaml
+  - init-resources-job.yaml
+  - minio-service.yaml
+  - minio-statefulset.yaml
+  - ollama-data-persistentvolumeclaim.yaml
+  - ollama-deployment.yaml
+  - ollama-service.yaml
+  - ollama-setup-job.yaml
+  - opensearch-service.yaml
+  - opensearch-statefulset.yaml
+  - postgres-service.yaml
+  - postgres-statefulset.yaml
+  - redis-deployment.yaml
+  - redis-service.yaml
+  - scylla-service.yaml
+  - scylla-statefulset.yaml
+
+configMapGenerator:
+  - name: postgres-cm0
+    namespace: isidorus
+    files:
+      - init-postgresql.sh=scripts/init-postgresql.sh
+      - pg-replication.sh=scripts/pg-replication.sh
+    options:
+      disableNameSuffixHash: true
+      labels:
+        io.kompose.service: postgres
+
+generatorOptions:
+  annotations:
+    use-subpath: "true"

@@ -1,0 +1,33 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: scraper-scaler
+  namespace: isidorus
+spec:
+  scaleTargetRef:
+    name: scraper-worker
+  minReplicaCount: 2
+  maxReplicaCount: 10
+  triggers:
+    - type: aws-sqs-queue
+      metadata:
+        queueURL: http://elasticmq.isidorus.svc.cluster.local:9324/000000000000/scraper-queue
+        queueLength: "5"
+        awsRegion: us-east-1
+        awsEndpoint: http://elasticmq.isidorus.svc.cluster.local:9324
+      authenticationRef:
+        name: keda-aws-secrets
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: keda-aws-secrets
+  namespace: isidorus
+spec:
+  secretTargetRef:
+    - parameter: awsAccessKeyID
+      name: aws-secret
+      key: AWS_ACCESS_KEY_ID
+    - parameter: awsSecretAccessKey
+      name: aws-secret
+      key: AWS_SECRET_ACCESS_KEY

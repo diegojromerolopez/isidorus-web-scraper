@@ -275,22 +275,29 @@ The system is built with a microservices approach:
 
 ## Horizontal Scaling
 
-The application is designed for horizontal scalability. You can adjust the "funnel" of your scraping pipeline by setting the number of replicas for each worker in your environment.
+The application is designed for horizontal scalability. Depending on your environment, scaling is handled differently:
+
+### 🐳 Docker Compose (Manual)
+You can manually adjust the "funnel" of your scraping pipeline by setting the number of replicas in your environment or using the `--scale` flag.
 
 | Worker | Default Replicas | Role |
 |--------|------------------|------|
 | **Scraper** | 3 | High-throughput Go crawler. |
+| **Extractor** | 3 | Network-intensive S3 heavy lifting. |
 | **Writer** | 2 | Concurrent DB persistence. |
+| **Indexer** | 1 | OpenSearch indexing. |
 | **Explainer** | 4 | AI processing (The "Bottleneck"). |
 | **Summarizer** | 2 | AI summarization. |
-| **Extractor** | 3 | Network-intensive S3 heavy lifting. |
-| **Indexer** | 1 | OpenSearch indexing. |
-| **Deletion** | 1 | Resource cleanup. |
 
 Example for scaling up the AI explainer:
 ```bash
 IMAGE_EXPLAINER_REPLICAS=10 docker compose up -d --scale image-explainer-worker=10
 ```
+
+### ☸️ Kubernetes (Automatic via KEDA)
+In Kubernetes, scaling is **event-driven and automatic**. The cluster uses [KEDA](https://keda.sh/) to monitor SQS queue depths and scale workers proportionally to the workload (even to zero when idle). 
+
+Refer to the [Event-Driven Autoscaling (KEDA)](#-event-driven-autoscaling-keda) section for details on replica boundaries.
 
 ## API Endpoints
 
@@ -439,6 +446,38 @@ The following commands are available for managing the local Kind cluster:
 | `make k8s-secrets` | Generates and applies Kubernetes secrets using local environment variables. |
 | `make k8s-update-images` | Rebuilds and re-loads images into the cluster without recreating it. |
 
+### ⚠️ Kubernetes Production Readiness
+
+The current Kubernetes manifests are designed for a **High-Fidelity Local Environment** (Kind) and are **NOT** fully production-ready. 
+
+**Current Limitations & Required Changes for Production:**
+
+1.  **Single Point of Failure**: The current setup runs on `kind` (Single Node). A production cluster must run on **3+ physical nodes** across multiple Availability Zones (AZs).
+2.  **Affinity Rules**: The current manifests do NOT enforce `podAntiAffinity`. In production, you must add these rules to ensure replicas are scheduled on *different* physical nodes.
+3.  **Manual Orchestration**: We use custom scripts (`k8s/infra/scripts/pg-replication.sh`) for basic Master/Slave replication. For production, use **Operators** (e.g., [CloudNativePG](https://cloudnative-pg.io/), [Scylla Operator](https://operator.scylladb.com/)) to handle automated failover, backups, and recovery.
+    > **Note**: Infrastructure manifests are now managed via **Kustomize** (`kubectl apply -k k8s/infra/`) to dynamically load these scripts from `k8s/infra/scripts/`.
+4.  **Resource Limits**: CPU/Memory requests and limits are not strictly enforced to allow for flexible local development. In production, these **must** be defined to prevent "noisy neighbor" issues.
+
+### 🚀 Event-Driven Autoscaling (KEDA)
+
+The worker pool is configured for **Event-Driven Autoscaling** using [KEDA](https://keda.sh/). Instead of scaling based on CPU, workers scale based on SQS queue depth:
+
+- **Scraper**: Scales between **1 and 10** replicas (target: 5 messages per pod).
+- **Image Extractor**: Scales between **0 and 10** replicas (target: 5 messages per pod).
+- **Writer**: Scales between **1 and 5** replicas (target: 10 messages per pod).
+- **Indexer**: Scales between **1 and 5** replicas (target: 10 messages per pod).
+- **Ollama (Inference)**: Scales between **1 and 4** replicas based on the combined load of the AI queues.
+- **Image Explainer**: Scales between **0 and 8** replicas (target: 1 message per pod).
+- **Page Summarizer**: Scales between **0 and 5** replicas (target: 1 message per pod).
+
+> [!NOTE]
+> AI workers scale to **0** when idle to save local resources, while the scraper always keeps **1** pod ready for immediate responsiveness.
+
+**Monitor Autoscaling**:
+```bash
+kubectl get horizontalpodautoscaler --watch -n isidorus
+```
+
 **Clean Up**: To delete the Kind cluster and stop all Kubernetes resources:
 ```bash
 kind delete cluster --name isidorus
@@ -564,7 +603,7 @@ This project is a functional showcase, but there are several areas planned for "
     - Encryption at rest for S3 objects and database fields.
 - **🏗️ Production Infrastructure**:
     - Native `docker-compose.prod.yml` replacing LocalStack with dedicated services like **Minio** (S3), **RabbitMQ/NATS** (SQS alternative), or native AWS/GCP/Azure services.
-    - **Kubernetes Manifests**: Exporting the stack to K8s via `kompose` for cloud scaling.
+    - **Cloud Kubernetes**: Leverages the existing K8s manifests and KEDA autoscaling for enterprise-grade scalability.
 - **⚡ Performance**:
     - Moving more workers to **Go** where sub-millisecond I/O is critical.
     - Vector database integration for semantic search beyond keyword matching.

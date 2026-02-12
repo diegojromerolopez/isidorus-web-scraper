@@ -9,7 +9,6 @@ metadata:
     io.kompose.service: image-explainer-worker
   name: image-explainer-worker
 spec:
-  replicas: 4
   selector:
     matchLabels:
       io.kompose.service: image-explainer-worker

@@ -6,7 +6,7 @@ metadata:
     io.kompose.service: postgres
   name: postgres
 spec:
-  replicas: 1
+  replicas: 3
   serviceName: postgres
   selector:
     matchLabels:
@@ -33,12 +33,21 @@ spec:
                 secretKeyRef:
                   name: postgres-secret
                   key: POSTGRES_USER
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
           image: postgres:15
           imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - /usr/local/bin/pg-replication.sh
+          args:
+            - postgres
           livenessProbe:
             exec:
               command:
-                - pg_isready -U postgres
+                - pg_isready
+                - -U
+                - postgres
             failureThreshold: 5
             periodSeconds: 5
             timeoutSeconds: 5
@@ -47,18 +56,19 @@ spec:
             - containerPort: 5432
               protocol: TCP
           volumeMounts:
-            - mountPath: /docker-entrypoint-initdb.d/init.sh
+            - mountPath: /docker-entrypoint-initdb.d/init-postgresql.sh
               name: postgres-cm0
-              subPath: init.sh
+              subPath: init-postgresql.sh
+            - mountPath: /usr/local/bin/pg-replication.sh
+              name: postgres-cm0
+              subPath: pg-replication.sh
             - mountPath: /var/lib/postgresql/data
               name: postgres-data
       restartPolicy: Always
       volumes:
         - configMap:
-            items:
-              - key: init-postgresql.sh
-                path: init.sh
             name: postgres-cm0
+            defaultMode: 0755
           name: postgres-cm0
   volumeClaimTemplates:
     - metadata:

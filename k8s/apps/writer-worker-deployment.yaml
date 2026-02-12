@@ -9,7 +9,6 @@ metadata:
     io.kompose.service: writer-worker
   name: writer-worker
 spec:
-  replicas: 2
   selector:
     matchLabels:
       io.kompose.service: writer-worker

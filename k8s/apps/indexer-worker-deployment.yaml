@@ -9,7 +9,6 @@ metadata:
     io.kompose.service: indexer-worker
   name: indexer-worker
 spec:
-  replicas: 1
   selector:
     matchLabels:
       io.kompose.service: indexer-worker

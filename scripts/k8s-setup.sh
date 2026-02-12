@@ -44,6 +44,11 @@ bash scripts/kind-load-images.sh "$CLUSTER_NAME"
 
 # 6. Apply Manifests
 echo "📄 Applying Kubernetes manifests..."
+
+# Install KEDA (using the official manifest for easy installation)
+echo "⚡ Installing KEDA Operator..."
+kubectl apply --server-side --force-conflicts -f https://github.com/kedacore/keda/releases/download/v2.13.0/keda-2.13.0.yaml
+
 kubectl apply -f k8s/base/namespace.yaml
 
 # Apply secrets (using defaults if variables are missing)
@@ -55,8 +60,9 @@ export POSTGRES_DB="${POSTGRES_DB:-isidorus}"
 bash scripts/k8s-manage-secrets.sh apply
 
 # Apply infrastructure and applications
-kubectl apply -f k8s/infra/
-kubectl apply -f k8s/apps/
+echo "🔄 Regenerating Postgres ConfigMap and applying infra via Kustomize..."
+kubectl apply -k k8s/infra/
+kubectl apply -R -f k8s/apps/
 
 echo "⏳ Waiting for pods to be ready (this may take a few minutes)..."
 kubectl wait --for=condition=Ready pods --all -n "$NS" --timeout=300s || echo "⚠️ Some pods are taking longer to start."

@@ -9,7 +9,6 @@ metadata:
     io.kompose.service: image-extractor-worker
   name: image-extractor-worker
 spec:
-  replicas: 3
   selector:
     matchLabels:
       io.kompose.service: image-extractor-worker
