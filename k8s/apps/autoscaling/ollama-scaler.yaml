@@ -9,12 +9,12 @@ spec:
   minReplicaCount: 0
   maxReplicaCount: 8
   triggers:
-    - type: aws-sqs
+    - type: aws-sqs-queue
       metadata:
-        queueURL: http://elasticmq:9324/000000000000/image-explainer-queue
+        queueURL: http://elasticmq.isidorus.svc.cluster.local:9324/000000000000/image-explainer-queue
         queueLength: "1"
         awsRegion: us-east-1
-        awsEndpoint: http://elasticmq:9324
+        awsEndpoint: http://elasticmq.isidorus.svc.cluster.local:9324
       authenticationRef:
         name: keda-aws-secrets
 ---
@@ -29,12 +29,12 @@ spec:
   minReplicaCount: 0
   maxReplicaCount: 5
   triggers:
-    - type: aws-sqs
+    - type: aws-sqs-queue
       metadata:
-        queueURL: http://elasticmq:9324/000000000000/page-summarizer-queue
+        queueURL: http://elasticmq.isidorus.svc.cluster.local:9324/000000000000/page-summarizer-queue
         queueLength: "1"
         awsRegion: us-east-1
-        awsEndpoint: http://elasticmq:9324
+        awsEndpoint: http://elasticmq.isidorus.svc.cluster.local:9324
       authenticationRef:
         name: keda-aws-secrets
 ---
@@ -46,22 +46,22 @@ metadata:
 spec:
   scaleTargetRef:
     name: ollama
-  minReplicaCount: 1
+  minReplicaCount: 2
   maxReplicaCount: 4
   triggers:
-    - type: aws-sqs
+    - type: aws-sqs-queue
       metadata:
-        queueURL: http://elasticmq:9324/000000000000/image-explainer-queue
+        queueURL: http://elasticmq.isidorus.svc.cluster.local:9324/000000000000/image-explainer-queue
         queueLength: "2"
         awsRegion: us-east-1
-        awsEndpoint: http://elasticmq:9324
+        awsEndpoint: http://elasticmq.isidorus.svc.cluster.local:9324
       authenticationRef:
         name: keda-aws-secrets
-    - type: aws-sqs
+    - type: aws-sqs-queue
       metadata:
-        queueURL: http://elasticmq:9324/000000000000/page-summarizer-queue
+        queueURL: http://elasticmq.isidorus.svc.cluster.local:9324/000000000000/page-summarizer-queue
         queueLength: "2"
         awsRegion: us-east-1
-        awsEndpoint: http://elasticmq:9324
+        awsEndpoint: http://elasticmq.isidorus.svc.cluster.local:9324
       authenticationRef:
         name: keda-aws-secrets

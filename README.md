@@ -446,6 +446,18 @@ The following commands are available for managing the local Kind cluster:
 | `make k8s-secrets` | Generates and applies Kubernetes secrets using local environment variables. |
 | `make k8s-update-images` | Rebuilds and re-loads images into the cluster without recreating it. |
 
+### ⚠️ Kubernetes Production Readiness
+
+The current Kubernetes manifests are designed for a **High-Fidelity Local Environment** (Kind) and are **NOT** fully production-ready. 
+
+**Current Limitations & Required Changes for Production:**
+
+1.  **Single Point of Failure**: The current setup runs on `kind` (Single Node). A production cluster must run on **3+ physical nodes** across multiple Availability Zones (AZs).
+2.  **Affinity Rules**: The current manifests do NOT enforce `podAntiAffinity`. In production, you must add these rules to ensure replicas are scheduled on *different* physical nodes.
+3.  **Manual Orchestration**: We use custom scripts (`k8s/infra/scripts/pg-replication.sh`) for basic Master/Slave replication. For production, use **Operators** (e.g., [CloudNativePG](https://cloudnative-pg.io/), [Scylla Operator](https://operator.scylladb.com/)) to handle automated failover, backups, and recovery.
+    > **Note**: Infrastructure manifests are now managed via **Kustomize** (`kubectl apply -k k8s/infra/`) to dynamically load these scripts from `k8s/infra/scripts/`.
+4.  **Resource Limits**: CPU/Memory requests and limits are not strictly enforced to allow for flexible local development. In production, these **must** be defined to prevent "noisy neighbor" issues.
+
 ### 🚀 Event-Driven Autoscaling (KEDA)
 
 The worker pool is configured for **Event-Driven Autoscaling** using [KEDA](https://keda.sh/). Instead of scaling based on CPU, workers scale based on SQS queue depth:

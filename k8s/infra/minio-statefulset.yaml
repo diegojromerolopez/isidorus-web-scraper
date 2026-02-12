@@ -6,7 +6,7 @@ metadata:
     io.kompose.service: minio
   name: minio
 spec:
-  replicas: 1
+  replicas: 2
   serviceName: minio
   selector:
     matchLabels:

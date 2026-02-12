@@ -6,7 +6,7 @@ metadata:
     io.kompose.service: scylla
   name: scylla
 spec:
-  replicas: 1
+  replicas: 3
   serviceName: scylla
   selector:
     matchLabels:
@@ -28,6 +28,8 @@ spec:
             - "8000"
             - --alternator-write-isolation
             - always
+            - --seeds
+            - scylla-0.scylla.isidorus.svc.cluster.local
           image: scylladb/scylla:5.2.0
           imagePullPolicy: IfNotPresent
           livenessProbe:
@@ -35,7 +37,7 @@ spec:
               command:
                 - sh
                 - -c
-                - curl -f http://localhost:8000 || exit 1
+                - cqlsh -e "DESCRIBE KEYSPACES" || exit 1
             failureThreshold: 5
             periodSeconds: 30
             timeoutSeconds: 10

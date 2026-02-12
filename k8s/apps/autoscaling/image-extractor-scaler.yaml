@@ -9,11 +9,11 @@ spec:
   minReplicaCount: 0
   maxReplicaCount: 10
   triggers:
-    - type: aws-sqs
+    - type: aws-sqs-queue
       metadata:
-        queueURL: http://elasticmq:9324/000000000000/image-extractor-queue
+        queueURL: http://elasticmq.isidorus.svc.cluster.local:9324/000000000000/image-extractor-queue
         queueLength: "5"
         awsRegion: us-east-1
-        awsEndpoint: http://elasticmq:9324
+        awsEndpoint: http://elasticmq.isidorus.svc.cluster.local:9324
       authenticationRef:
         name: keda-aws-secrets

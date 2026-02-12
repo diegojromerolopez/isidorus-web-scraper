@@ -6,7 +6,7 @@ metadata:
     io.kompose.service: opensearch
   name: opensearch
 spec:
-  replicas: 1
+  replicas: 2
   serviceName: opensearch
   selector:
     matchLabels:

@@ -6,14 +6,14 @@ metadata:
 spec:
   scaleTargetRef:
     name: indexer-worker
-  minReplicaCount: 1
+  minReplicaCount: 2
   maxReplicaCount: 5
   triggers:
-    - type: aws-sqs
+    - type: aws-sqs-queue
       metadata:
-        queueURL: http://elasticmq:9324/000000000000/indexer-queue
+        queueURL: http://elasticmq.isidorus.svc.cluster.local:9324/000000000000/indexer-queue
         queueLength: "10"
         awsRegion: us-east-1
-        awsEndpoint: http://elasticmq:9324
+        awsEndpoint: http://elasticmq.isidorus.svc.cluster.local:9324
       authenticationRef:
         name: keda-aws-secrets

@@ -9,7 +9,7 @@ metadata:
     io.kompose.service: elasticmq
   name: elasticmq
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       io.kompose.service: elasticmq
@@ -29,6 +29,8 @@ spec:
           livenessProbe:
             exec:
               command:
+                - sh
+                - -c
                 - wget --spider http://localhost:9325 || exit 1
             failureThreshold: 5
             periodSeconds: 10
