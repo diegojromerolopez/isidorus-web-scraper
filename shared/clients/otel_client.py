@@ -58,7 +58,9 @@ def init_telemetry(service_name: str) -> None:
                     OTLPSpanExporter,
                 )
             except ImportError:
-                from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter  # type: ignore
+                from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
+                    OTLPSpanExporter,  # type: ignore
+                )
 
             exporter = OTLPSpanExporter(
                 endpoint=otlp_endpoint, insecure=True
