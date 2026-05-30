@@ -50,7 +50,7 @@ func TestSQSRepository_ReceiveMessages(t *testing.T) {
 			client := sqs.NewFromConfig(aws.Config{}, func(o *sqs.Options) {
 				o.APIOptions = append(o.APIOptions, mockSQSMiddleware(tt.output, tt.err))
 			})
-			repo := NewSQSRepository(client, "test-url")
+			repo := NewSQSRepository(client, "test-url", NewNoopTelemetryClient())
 			messages, handles, err := repo.ReceiveMessages(context.TODO())
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -84,7 +84,7 @@ func TestSQSRepository_DeleteMessage(t *testing.T) {
 			client := sqs.NewFromConfig(aws.Config{}, func(o *sqs.Options) {
 				o.APIOptions = append(o.APIOptions, mockSQSMiddleware(&sqs.DeleteMessageOutput{}, tt.err))
 			})
-			repo := NewSQSRepository(client, "test-url")
+			repo := NewSQSRepository(client, "test-url", NewNoopTelemetryClient())
 			err := repo.DeleteMessage(context.TODO(), "h1")
 			if tt.wantErr {
 				assert.Error(t, err)

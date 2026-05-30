@@ -95,7 +95,7 @@ func TestIndexerService_Start(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			service := NewIndexerService(tt.sqsRepo, tt.osRepo)
+			service := NewIndexerService(tt.sqsRepo, tt.osRepo, nil)
 			service.retryDelay = 1 * time.Millisecond
 
 			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)

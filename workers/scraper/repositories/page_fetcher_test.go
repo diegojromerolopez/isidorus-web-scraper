@@ -34,7 +34,7 @@ func TestPageFetcher_Fetch(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fetcher := NewPageFetcher()
+			fetcher := NewPageFetcher(NewNoopTelemetryClient())
 			resp, err := fetcher.Fetch(context.Background(), tt.url)
 			if tt.wantErr {
 				assert.Error(t, err)

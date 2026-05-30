@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import TypedDict
 
 from api import models
+from shared.clients.otel_client import observe
 
 
 class ScrapingRecord(TypedDict):
@@ -23,6 +24,7 @@ class ScrapedPageRecord(TypedDict):
     summary: str | None
 
 
+@observe
 class DbRepository:
     async def create_scraping(self, url: str, user_id: int | None = None) -> int:
         """

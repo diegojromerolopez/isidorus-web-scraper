@@ -9,6 +9,7 @@ from api.repositories.db_repository import (
     ScrapedPageRecord,
     ScrapingRecord,
 )
+from shared.clients.otel_client import observe
 
 
 class ScrapingNotFoundError(Exception):
@@ -32,6 +33,7 @@ class FullScrapingRecord(ScrapingRecord, ScrapingMetadata):
     pass
 
 
+@observe
 class ScraperService:
     def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,

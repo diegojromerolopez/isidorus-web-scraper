@@ -44,6 +44,8 @@ spec:
               value: http://opensearch.isidorus.svc.cluster.local:9200
             - name: SQS_ENDPOINT_URL
               value: http://elasticmq.isidorus.svc.cluster.local:9324
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://otel-collector.isidorus.svc.cluster.local:4317
           image: docker.io/library/indexer-worker:latest
           imagePullPolicy: IfNotPresent
           name: indexer-worker

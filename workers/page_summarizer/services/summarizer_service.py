@@ -1,12 +1,14 @@
 import json
 import logging
 
+from shared.clients.otel_client import observe
 from shared.clients.sqs_client import SQSClient
 from workers.page_summarizer.services.summarizer_factory import SummarizerFactory
 
 logger = logging.getLogger(__name__)
 
 
+@observe
 class SummarizerService:
     # pylint: disable=too-few-public-methods
     # pylint: disable=too-many-arguments,too-many-positional-arguments

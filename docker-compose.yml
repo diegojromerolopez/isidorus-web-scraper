@@ -51,6 +51,7 @@ services:
       - SQS_QUEUE_URL=http://localstack:4566/000000000000/scraper-queue
       - DELETION_QUEUE_URL=http://localstack:4566/000000000000/deletion-queue
       - REDIS_PORT=6379
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
     depends_on:
       localstack:
         condition: service_healthy
@@ -58,6 +59,7 @@ services:
   auth-admin:
     environment:
       - DEBUG=True
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
 
   scraper-worker:
     environment:
@@ -71,6 +73,7 @@ services:
       - WRITER_QUEUE_URL=http://localstack:4566/000000000000/writer-queue
       - INDEXER_QUEUE_URL=http://localstack:4566/000000000000/indexer-queue
       - REDIS_PORT=6379
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
     depends_on:
       localstack:
         condition: service_healthy
@@ -83,6 +86,7 @@ services:
       - AWS_SECRET_ACCESS_KEY=test
       - INPUT_QUEUE_URL=http://localstack:4566/000000000000/writer-queue
       - DB_BATCH_SIZE=50
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
     depends_on:
       localstack:
         condition: service_healthy
@@ -96,6 +100,7 @@ services:
       - INPUT_QUEUE_URL=http://localstack:4566/000000000000/image-extractor-queue
       - WRITER_QUEUE_URL=http://localstack:4566/000000000000/writer-queue
       - IMAGE_EXPLAINER_QUEUE_URL=http://localstack:4566/000000000000/image-explainer-queue
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
     depends_on:
       localstack:
         condition: service_healthy
@@ -109,6 +114,7 @@ services:
       - INPUT_QUEUE_URL=http://localstack:4566/000000000000/image-explainer-queue
       - WRITER_QUEUE_URL=http://localstack:4566/000000000000/writer-queue
       - OLLAMA_BASE_URL=http://ollama:11434
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
     depends_on:
       localstack:
         condition: service_healthy
@@ -125,6 +131,7 @@ services:
       - WRITER_QUEUE_URL=http://localstack:4566/000000000000/writer-queue
       - INDEXER_QUEUE_URL=http://localstack:4566/000000000000/indexer-queue
       - OLLAMA_BASE_URL=http://ollama:11434
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
     depends_on:
       localstack:
         condition: service_healthy
@@ -138,6 +145,7 @@ services:
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
       - INPUT_QUEUE_URL=http://localstack:4566/000000000000/indexer-queue
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
     depends_on:
       localstack:
         condition: service_healthy
@@ -149,6 +157,7 @@ services:
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
       - INPUT_QUEUE_URL=http://localstack:4566/000000000000/deletion-queue
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
     depends_on:
       localstack:
         condition: service_healthy

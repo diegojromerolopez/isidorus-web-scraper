@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: isidorus
+  labels:
+    io.kompose.service: otel-collector
+  name: otel-collector
+spec:
+  ports:
+    - name: "4317"
+      port: 4317
+      targetPort: 4317
+    - name: "4318"
+      port: 4318
+      targetPort: 4318
+    - name: "13133"
+      port: 13133
+      targetPort: 13133
+  selector:
+    io.kompose.service: otel-collector

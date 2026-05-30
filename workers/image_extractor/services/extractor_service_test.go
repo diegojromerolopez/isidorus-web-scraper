@@ -77,7 +77,7 @@ func TestExtractorService_ProcessMessage(t *testing.T) {
 			sqs := new(MockSQSRepo)
 			s3 := new(MockS3Repo)
 			http := new(MockHTTPRepo)
-			srv := NewExtractorService(sqs, s3, http, "writer-q", "explainer-q", "bucket", true)
+			srv := NewExtractorService(sqs, s3, http, "writer-q", "explainer-q", "bucket", true, nil)
 
 			tt.setupMocks(sqs, s3, http)
 

@@ -1,9 +1,12 @@
 import asyncio
 import logging
 
+from shared.clients.otel_client import init_telemetry
 from shared.clients.sqs_client import SQSClient
 from workers.page_summarizer.config import Configuration
 from workers.page_summarizer.services.summarizer_service import SummarizerService
+
+init_telemetry("page-summarizer")
 
 # Logging setup
 logging.basicConfig(level=logging.INFO)

@@ -4,10 +4,12 @@ from typing import Any, cast
 import aioboto3  # type: ignore
 
 from api.config import Configuration
+from shared.clients.otel_client import observe
 
 logger = logging.getLogger(__name__)
 
 
+@observe
 class DynamoDBClient:
     def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,

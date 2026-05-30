@@ -1,10 +1,13 @@
 import asyncio
 import logging
 
+from shared.clients.otel_client import init_telemetry
 from shared.clients.s3_client import S3Client
 from shared.clients.sqs_client import SQSClient
 from workers.image_explainer.config import Configuration
 from workers.image_explainer.services.explainer_service import ExplainerService
+
+init_telemetry("image-explainer")
 
 # Logging setup
 logging.basicConfig(level=logging.INFO)

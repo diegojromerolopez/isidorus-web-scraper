@@ -16,17 +16,52 @@ import (
 	"workers/image_extractor/services"
 
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/sdk/resource"
+	"go.opentelemetry.io/otel/sdk/trace"
 )
+
+func initTracer(serviceName string) (*trace.TracerProvider, error) {
+	res, err := resource.New(context.Background(),
+		resource.WithAttributes(
+			attribute.String("service.name", serviceName),
+		),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	tp := trace.NewTracerProvider(
+		trace.WithSampler(trace.AlwaysSample()),
+		trace.WithResource(res),
+	)
+	otel.SetTracerProvider(tp)
+	return tp, nil
+}
 
 func main() {
 	log.Println("Image Extractor Worker starting (Go)...")
+
+	tp, err := initTracer("image-extractor")
+	if err != nil {
+		log.Fatalf("failed to initialize tracer: %v", err)
+	}
+	defer func() {
+		if err := tp.Shutdown(context.Background()); err != nil {
+			log.Printf("Error shutting down tracer provider: %v", err)
+		}
+	}()
+
 	cfg := config.LoadConfig()
 
 	if cfg.InputQueueURL == "" || cfg.WriterQueueURL == "" {
 		log.Fatal("INPUT_QUEUE_URL and WRITER_QUEUE_URL must be set")
 	}
 
-	// 1. AWS Config
+	// Create TelemetryClient
+	otelClient := repositories.NewTelemetryClient(tp, "image-extractor")
+
 	// 1. AWS Config
 	// Use background context for initial setup
 	setupCtx := context.Background()
@@ -52,9 +87,9 @@ func main() {
 	}
 
 	// 2. Dependency Injection
-	sqsRepo := repositories.NewSQSRepository(sqsAwsCfg)
-	s3Repo := repositories.NewS3Repository(s3AwsCfg)
-	httpRepo := repositories.NewHTTPRepository()
+	sqsRepo := repositories.NewSQSRepository(sqsAwsCfg, otelClient)
+	s3Repo := repositories.NewS3Repository(s3AwsCfg, otelClient)
+	httpRepo := repositories.NewHTTPRepository(otelClient)
 
 	extractorService := services.NewExtractorService(
 		sqsRepo,
@@ -64,6 +99,7 @@ func main() {
 		cfg.ImageExplainerQueueURL,
 		cfg.ImagesBucket,
 		cfg.ImageExplainerEnabled,
+		otelClient,
 	)
 
 	// 3. Main Loop

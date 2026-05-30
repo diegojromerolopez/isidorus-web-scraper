@@ -11,6 +11,7 @@ import (
 	md "github.com/JohannesKaufmann/html-to-markdown"
 	"github.com/PuerkitoBio/goquery"
 	"workers/scraper/domain"
+	"workers/scraper/repositories"
 )
 
 // Consumer-side interfaces
@@ -33,6 +34,7 @@ type ScraperService struct {
 	sqsClient             SQSClient
 	redisClient           RedisClient
 	pageFetcher           PageFetcher
+	otelClient            repositories.TelemetryClient
 	inputQueueURL         string
 	writerQueueURL        string
 	imageQueueURL         string
@@ -58,6 +60,10 @@ func WithPageFetcher(c PageFetcher) ScraperOption {
 	return func(s *ScraperService) { s.pageFetcher = c }
 }
 
+func WithTelemetryClient(c repositories.TelemetryClient) ScraperOption {
+	return func(s *ScraperService) { s.otelClient = c }
+}
+
 func WithQueues(input, writer, image, summarizer, indexer string) ScraperOption {
 	return func(s *ScraperService) {
 		s.inputQueueURL = input
@@ -81,10 +87,21 @@ func NewScraperService(opts ...ScraperOption) *ScraperService {
 	for _, opt := range opts {
 		opt(s)
 	}
+	if s.otelClient == nil {
+		s.otelClient = repositories.NewNoopTelemetryClient()
+	}
 	return s
 }
 
 func (s *ScraperService) ProcessMessage(ctx context.Context, msg domain.ScrapeMessage) {
+	ctx, span := s.otelClient.StartSpan(ctx, "ScraperService.ProcessMessage",
+		repositories.WithAttribute("url", msg.URL),
+		repositories.WithAttribute("depth", msg.Depth),
+		repositories.WithAttribute("scrapingID", msg.ScrapingID),
+		repositories.WithAttribute("userID", msg.UserID),
+	)
+	defer span.End()
+
 	log.Printf("Scraping URL: %s, Depth: %d", msg.URL, msg.Depth)
 
 	// Context for I/O operations
@@ -117,12 +134,17 @@ func (s *ScraperService) ProcessMessage(ctx context.Context, msg domain.ScrapeMe
 
 	resp, err := s.pageFetcher.Fetch(ctx, msg.URL)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus("error", err.Error())
 		log.Printf("failed to fetch URL %s: %v", msg.URL, err)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		err := fmt.Errorf("non-200 status code: %d", resp.StatusCode)
+		span.RecordError(err)
+		span.SetStatus("error", err.Error())
 		log.Printf("non-200 status code for URL %s: %d", msg.URL, resp.StatusCode)
 		return
 	}
@@ -132,6 +154,8 @@ func (s *ScraperService) ProcessMessage(ctx context.Context, msg domain.ScrapeMe
 	const maxBodySize = 10 * 1024 * 1024
 	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, maxBodySize))
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus("error", err.Error())
 		log.Printf("failed to read body for URL %s: %v", msg.URL, err)
 		return
 	}
@@ -149,6 +173,8 @@ func (s *ScraperService) ProcessMessage(ctx context.Context, msg domain.ScrapeMe
 	// 3. Extract Links and Images using GoQuery
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus("error", err.Error())
 		log.Printf("failed to parse HTML with goquery for URL %s: %v", msg.URL, err)
 		return
 	}
@@ -248,6 +274,8 @@ func (s *ScraperService) ProcessMessage(ctx context.Context, msg domain.ScrapeMe
 		pKey := fmt.Sprintf(domain.RedisKeyPending, msg.ScrapingID)
 		err := s.redisClient.IncrBy(ctx, pKey, int64(len(linksToSend)))
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus("error", err.Error())
 			log.Printf("CRITICAL: failed to increment redis for scraping %d: %v. Aborting to prevent race condition.", msg.ScrapingID, err)
 			return
 		}
@@ -276,4 +304,5 @@ func (s *ScraperService) ProcessMessage(ctx context.Context, msg domain.ScrapeMe
 			log.Printf("CRITICAL: failed to compensate redis for failed sends (scraping %d, count %d): %v", msg.ScrapingID, failedCount, err)
 		}
 	}
+	span.SetStatus("ok", "success")
 }

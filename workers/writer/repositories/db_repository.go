@@ -11,21 +11,29 @@ import (
 )
 
 type PostgresDBRepository struct {
-	db        *gorm.DB
-	batchSize int
+	db         *gorm.DB
+	batchSize  int
+	otelClient TelemetryClient
 }
 
-func NewDBRepository(db *gorm.DB, batchSize int) *PostgresDBRepository {
+func NewDBRepository(db *gorm.DB, batchSize int, otelClient TelemetryClient) *PostgresDBRepository {
 	if batchSize <= 0 {
 		batchSize = 100 // Default
 	}
 	return &PostgresDBRepository{
-		db:        db,
-		batchSize: batchSize,
+		db:         db,
+		batchSize:  batchSize,
+		otelClient: otelClient,
 	}
 }
 
 func (repo *PostgresDBRepository) InsertPageData(ctx context.Context, msg domain.WriterMessage) error {
+	ctx, span := repo.otelClient.StartSpan(ctx, "PostgresDBRepository.InsertPageData",
+		WithAttribute("url", msg.URL),
+		WithAttribute("scrapingID", msg.ScrapingID),
+	)
+	defer span.End()
+
 	// Insert Scraped Page
 	page := models.ScrapedPage{
 		URL:        msg.URL,
@@ -33,6 +41,8 @@ func (repo *PostgresDBRepository) InsertPageData(ctx context.Context, msg domain
 	}
 
 	if err := repo.db.WithContext(ctx).Create(&page).Error; err != nil {
+		span.RecordError(err)
+		span.SetStatus("error", err.Error())
 		return fmt.Errorf("failed to insert scraped page for URL %s: %w", msg.URL, err)
 	}
 
@@ -52,10 +62,18 @@ func (repo *PostgresDBRepository) InsertPageData(ctx context.Context, msg domain
 		}
 	}
 
+	span.SetStatus("ok", "success")
 	return nil
 }
 
 func (repo *PostgresDBRepository) InsertImageExplanation(ctx context.Context, msg domain.WriterMessage) error {
+	ctx, span := repo.otelClient.StartSpan(ctx, "PostgresDBRepository.InsertImageExplanation",
+		WithAttribute("pageURL", msg.PageURL),
+		WithAttribute("s3Path", msg.S3Path),
+		WithAttribute("scrapingID", msg.ScrapingID),
+	)
+	defer span.End()
+
 	// Find the page_id first based on PageURL AND ScrapingID
 	var page models.ScrapedPage
 	err := repo.db.WithContext(ctx).
@@ -64,6 +82,8 @@ func (repo *PostgresDBRepository) InsertImageExplanation(ctx context.Context, ms
 		First(&page).Error
 
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus("error", err.Error())
 		return fmt.Errorf("failed to find page for URL %s and id %d: %w", msg.PageURL, msg.ScrapingID, err)
 	}
 
@@ -80,6 +100,8 @@ func (repo *PostgresDBRepository) InsertImageExplanation(ctx context.Context, ms
 			existingImage.ImageURL = msg.URL // Update URL if provided (e.g. signed URL)
 		}
 		if err := repo.db.WithContext(ctx).Save(&existingImage).Error; err != nil {
+			span.RecordError(err)
+			span.SetStatus("error", err.Error())
 			return fmt.Errorf("failed to update image explanation for S3Path %s: %w", msg.S3Path, err)
 		}
 	} else {
@@ -92,14 +114,23 @@ func (repo *PostgresDBRepository) InsertImageExplanation(ctx context.Context, ms
 			S3Path:      msg.S3Path,
 		}
 		if err := repo.db.WithContext(ctx).Create(&image).Error; err != nil {
+			span.RecordError(err)
+			span.SetStatus("error", err.Error())
 			return fmt.Errorf("failed to insert image for S3Path %s: %w", msg.S3Path, err)
 		}
 	}
 
+	span.SetStatus("ok", "success")
 	return nil
 }
 
 func (repo *PostgresDBRepository) InsertPageSummary(ctx context.Context, msg domain.WriterMessage) error {
+	ctx, span := repo.otelClient.StartSpan(ctx, "PostgresDBRepository.InsertPageSummary",
+		WithAttribute("url", msg.URL),
+		WithAttribute("scrapingID", msg.ScrapingID),
+	)
+	defer span.End()
+
 	// Update the page summary using URL and ScrapingID
 	result := repo.db.WithContext(ctx).
 		Model(&models.ScrapedPage{}).
@@ -107,21 +138,33 @@ func (repo *PostgresDBRepository) InsertPageSummary(ctx context.Context, msg dom
 		Update("summary", msg.Summary)
 
 	if result.Error != nil {
+		span.RecordError(result.Error)
+		span.SetStatus("error", result.Error.Error())
 		return fmt.Errorf("failed to update page summary for URL %s: %w", msg.URL, result.Error)
 	}
 
 	if result.RowsAffected == 0 {
-		return fmt.Errorf("no page found to update summary for URL %s (ScrapingID %d) - will retry", msg.URL, msg.ScrapingID)
+		err := fmt.Errorf("no page found to update summary for URL %s (ScrapingID %d) - will retry", msg.URL, msg.ScrapingID)
+		span.RecordError(err)
+		span.SetStatus("error", err.Error())
+		return err
 	}
 
 	log.Printf("Successfully updated summary for URL %s (ScrapingID %d)", msg.URL, msg.ScrapingID)
+	span.SetStatus("ok", "success")
 	return nil
 }
 
 func (repo *PostgresDBRepository) CompleteScraping(ctx context.Context, scrapingID int) error {
+	ctx, span := repo.otelClient.StartSpan(ctx, "PostgresDBRepository.CompleteScraping",
+		WithAttribute("scrapingID", scrapingID),
+	)
+	defer span.End()
+
 	// Job completion is now handled entirely in DynamoDB.
 	// We keep this hook for now to satisfy the interface,
 	// but it no longer modifies PostgreSQL.
 	log.Printf("Postgres hook: Scraping %d marked complete (No DB changes)", scrapingID)
+	span.SetStatus("ok", "success")
 	return nil
 }

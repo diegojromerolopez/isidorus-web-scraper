@@ -4,11 +4,13 @@ from typing import Any
 
 import aioboto3  # type: ignore
 
+from shared.clients.otel_client import observe
 from shared.config import Configuration
 
 logger = logging.getLogger(__name__)
 
 
+@observe
 class SQSClient:
     # pylint: disable=too-few-public-methods
     def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments

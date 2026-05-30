@@ -13,13 +13,46 @@ import (
 	config_aws "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/sdk/resource"
+	"go.opentelemetry.io/otel/sdk/trace"
+
 	"workers/scraper/config"
 	"workers/scraper/domain"
 	"workers/scraper/repositories"
 	"workers/scraper/services"
 )
 
+func initTracer(serviceName string) (*trace.TracerProvider, error) {
+	res, err := resource.New(context.Background(),
+		resource.WithAttributes(
+			attribute.String("service.name", serviceName),
+		),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	tp := trace.NewTracerProvider(
+		trace.WithSampler(trace.AlwaysSample()),
+		trace.WithResource(res),
+	)
+	otel.SetTracerProvider(tp)
+	return tp, nil
+}
+
 func main() {
+	tp, err := initTracer("scraper")
+	if err != nil {
+		log.Fatalf("failed to initialize tracer: %v", err)
+	}
+	defer func() {
+		if err := tp.Shutdown(context.Background()); err != nil {
+			log.Printf("failed to shutdown trace provider: %v", err)
+		}
+	}()
+
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
@@ -32,19 +65,22 @@ func main() {
 		log.Fatalf("unable to load SDK config, %v", err)
 	}
 
+	otelClient := repositories.NewTelemetryClient(tp, "scraper")
+
 	rawSQSClient := sqs.NewFromConfig(awsCfg, func(o *sqs.Options) {
 		if cfg.SQSEndpointURL != "" {
 			o.BaseEndpoint = &cfg.SQSEndpointURL
 		}
 	})
-	sqsClient := repositories.NewSQSClient(rawSQSClient)
-	pageFetcher := repositories.NewPageFetcher()
-	redisClient := repositories.NewRedisClient(cfg.RedisHost, cfg.RedisPort)
+	sqsClient := repositories.NewSQSClient(rawSQSClient, otelClient)
+	pageFetcher := repositories.NewPageFetcher(otelClient)
+	redisClient := repositories.NewRedisClient(cfg.RedisHost, cfg.RedisPort, otelClient)
 
 	scraperService := services.NewScraperService(
 		services.WithSQSClient(sqsClient),
 		services.WithRedisClient(redisClient),
 		services.WithPageFetcher(pageFetcher),
+		services.WithTelemetryClient(otelClient),
 		services.WithQueues(cfg.InputQueueURL, cfg.WriterQueueURL, cfg.ImageQueueURL, cfg.SummarizerQueueURL, cfg.IndexerQueueURL),
 		services.WithFeatureFlags(cfg.ImageExtractorEnabled, cfg.ImageExplainerEnabled, cfg.PageSummarizerEnabled),
 	)

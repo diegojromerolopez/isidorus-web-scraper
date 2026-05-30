@@ -59,7 +59,7 @@ func TestSQSClient_SendMessage(t *testing.T) {
 					o.APIOptions = append(o.APIOptions, mockSQSMiddleware(tt.output, tt.err))
 				}
 			})
-			repo := NewSQSClient(client)
+			repo := NewSQSClient(client, NewNoopTelemetryClient())
 			err := repo.SendMessage(context.TODO(), "queue-url", tt.body)
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -95,7 +95,7 @@ func TestSQSClient_ReceiveMessages(t *testing.T) {
 			client := sqs.NewFromConfig(aws.Config{}, func(o *sqs.Options) {
 				o.APIOptions = append(o.APIOptions, mockSQSMiddleware(tt.output, tt.err))
 			})
-			repo := NewSQSClient(client)
+			repo := NewSQSClient(client, NewNoopTelemetryClient())
 			res, err := repo.ReceiveMessages(context.TODO(), "queue-url")
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -128,7 +128,7 @@ func TestSQSClient_DeleteMessage(t *testing.T) {
 			client := sqs.NewFromConfig(aws.Config{}, func(o *sqs.Options) {
 				o.APIOptions = append(o.APIOptions, mockSQSMiddleware(&sqs.DeleteMessageOutput{}, tt.err))
 			})
-			repo := NewSQSClient(client)
+			repo := NewSQSClient(client, NewNoopTelemetryClient())
 			handle := "receipt-handle"
 			err := repo.DeleteMessage(context.TODO(), "queue-url", &handle)
 			if tt.wantErr {

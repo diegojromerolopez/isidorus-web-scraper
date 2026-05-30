@@ -16,6 +16,11 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/sdk/resource"
+	"go.opentelemetry.io/otel/sdk/trace"
+
 	"workers/writer/config"
 	"workers/writer/domain"
 	"workers/writer/repositories"
@@ -28,11 +33,42 @@ type SQSClient interface {
 	DeleteMessage(ctx context.Context, queueURL string, receiptHandle *string) error
 }
 
+func initTracer(serviceName string) (*trace.TracerProvider, error) {
+	res, err := resource.New(context.Background(),
+		resource.WithAttributes(
+			attribute.String("service.name", serviceName),
+		),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	tp := trace.NewTracerProvider(
+		trace.WithSampler(trace.AlwaysSample()),
+		trace.WithResource(res),
+	)
+	otel.SetTracerProvider(tp)
+	return tp, nil
+}
+
 func main() {
+	tp, err := initTracer("writer")
+	if err != nil {
+		log.Fatalf("failed to initialize tracer: %v", err)
+	}
+	defer func() {
+		if err := tp.Shutdown(context.Background()); err != nil {
+			log.Printf("Error shutting down tracer provider: %v", err)
+		}
+	}()
+
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
+
+	// Create TelemetryClient
+	otelClient := repositories.NewTelemetryClient(tp, "writer")
 
 	// Connect DB using GORM
 	db, err := gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{})
@@ -53,19 +89,20 @@ func main() {
 			o.BaseEndpoint = &cfg.SQSEndpointURL
 		}
 	})
-	sqsClient := repositories.NewSQSClient(rawSQSClient)
-	dbRepo := repositories.NewDBRepository(db, cfg.BatchSize)
+	sqsClient := repositories.NewSQSClient(rawSQSClient, otelClient)
+	dbRepo := repositories.NewDBRepository(db, cfg.BatchSize, otelClient)
 
 	rawDynamoClient := dynamodb.NewFromConfig(awsCfg, func(o *dynamodb.Options) {
 		if cfg.DynamoDBEndpointURL != "" {
 			o.BaseEndpoint = &cfg.DynamoDBEndpointURL
 		}
 	})
-	dynamoClient := repositories.NewDynamoDBClient(rawDynamoClient, cfg.DynamoDBTable)
+	dynamoClient := repositories.NewDynamoDBClient(rawDynamoClient, cfg.DynamoDBTable, otelClient)
 
 	writerService := services.NewWriterService(
 		services.WithDBRepository(dbRepo),
 		services.WithJobStatusRepository(dynamoClient),
+		services.WithTelemetryClient(otelClient),
 	)
 
 	log.Println("Writer worker started (DDD Refactor with community standards)")

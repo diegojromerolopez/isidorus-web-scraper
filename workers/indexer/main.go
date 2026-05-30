@@ -15,13 +15,49 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/opensearch-project/opensearch-go/v2"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/sdk/resource"
+	"go.opentelemetry.io/otel/sdk/trace"
+
 	indexerConfig "workers/indexer/config"
 	"workers/indexer/repositories"
 	"workers/indexer/services"
 )
 
+func initTracer(serviceName string) (*trace.TracerProvider, error) {
+	res, err := resource.New(context.Background(),
+		resource.WithAttributes(
+			attribute.String("service.name", serviceName),
+		),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	tp := trace.NewTracerProvider(
+		trace.WithSampler(trace.AlwaysSample()),
+		trace.WithResource(res),
+	)
+	otel.SetTracerProvider(tp)
+	return tp, nil
+}
+
 func main() {
+	tp, err := initTracer("indexer")
+	if err != nil {
+		log.Fatalf("failed to initialize tracer: %v", err)
+	}
+	defer func() {
+		if err := tp.Shutdown(context.Background()); err != nil {
+			log.Printf("Error shutting down tracer provider: %v", err)
+		}
+	}()
+
 	cfg := indexerConfig.LoadConfig()
+
+	// Create TelemetryClient
+	otelClient := repositories.NewTelemetryClient(tp, "indexer")
 
 	// AWS/SQS Client
 	awsCfg, err := config.LoadDefaultConfig(context.Background(),
@@ -49,9 +85,9 @@ func main() {
 	}
 
 	// Setup Repositories and Service
-	sqsRepo := repositories.NewSQSRepository(sqsClient, cfg.InputQueueURL)
-	osRepo := repositories.NewOpenSearchRepository(osClient)
-	indexerService := services.NewIndexerService(sqsRepo, osRepo)
+	sqsRepo := repositories.NewSQSRepository(sqsClient, cfg.InputQueueURL, otelClient)
+	osRepo := repositories.NewOpenSearchRepository(osClient, otelClient)
+	indexerService := services.NewIndexerService(sqsRepo, osRepo, otelClient)
 
 	// Context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())

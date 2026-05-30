@@ -11,14 +11,17 @@ from api.dependencies import (
     get_scraper_service,
     get_search_service,
 )
-from api.models import APIKey
-from api.services.scraper_service import (
+from shared.clients.otel_client import init_telemetry
+
+init_telemetry("api")
+from api.models import APIKey  # noqa: E402
+from api.services.scraper_service import (  # noqa: E402
     FullScrapingRecord,
     NotAuthorizedError,
     ScraperService,
     ScrapingNotFoundError,
 )
-from api.services.search_service import SearchPageResult, SearchService
+from api.services.search_service import SearchPageResult, SearchService  # noqa: E402
 
 app = FastAPI()
 app.add_middleware(

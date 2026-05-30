@@ -11,24 +11,33 @@ import (
 )
 
 type SQSRepository struct {
-	client   *sqs.Client
-	queueURL string
+	client     *sqs.Client
+	queueURL   string
+	otelClient TelemetryClient
 }
 
-func NewSQSRepository(client *sqs.Client, queueURL string) *SQSRepository {
+func NewSQSRepository(client *sqs.Client, queueURL string, otelClient TelemetryClient) *SQSRepository {
 	return &SQSRepository{
-		client:   client,
-		queueURL: queueURL,
+		client:     client,
+		queueURL:   queueURL,
+		otelClient: otelClient,
 	}
 }
 
 func (r *SQSRepository) ReceiveMessages(ctx context.Context) ([]domain.IndexMessage, []string, error) {
+	ctx, span := r.otelClient.StartSpan(ctx, "SQSRepository.ReceiveMessages",
+		WithAttribute("queueURL", r.queueURL),
+	)
+	defer span.End()
+
 	output, err := r.client.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
 		QueueUrl:            aws.String(r.queueURL),
 		MaxNumberOfMessages: 10,
 		WaitTimeSeconds:     20,
 	})
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus("error", err.Error())
 		return nil, nil, fmt.Errorf("failed to receive messages: %w", err)
 	}
 
@@ -45,13 +54,25 @@ func (r *SQSRepository) ReceiveMessages(ctx context.Context) ([]domain.IndexMess
 		handles = append(handles, *msg.ReceiptHandle)
 	}
 
+	span.SetStatus("ok", "success")
 	return messages, handles, nil
 }
 
 func (r *SQSRepository) DeleteMessage(ctx context.Context, handle string) error {
+	ctx, span := r.otelClient.StartSpan(ctx, "SQSRepository.DeleteMessage",
+		WithAttribute("queueURL", r.queueURL),
+	)
+	defer span.End()
+
 	_, err := r.client.DeleteMessage(ctx, &sqs.DeleteMessageInput{
 		QueueUrl:      aws.String(r.queueURL),
 		ReceiptHandle: aws.String(handle),
 	})
-	return err
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus("error", err.Error())
+		return err
+	}
+	span.SetStatus("ok", "success")
+	return nil
 }

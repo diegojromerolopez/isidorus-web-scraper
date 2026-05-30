@@ -56,6 +56,8 @@ spec:
               value: http://minio.isidorus.svc.cluster.local:9000
             - name: SQS_ENDPOINT_URL
               value: http://elasticmq.isidorus.svc.cluster.local:9324
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://otel-collector.isidorus.svc.cluster.local:4317
           image: docker.io/library/deletion-worker:latest
           imagePullPolicy: IfNotPresent
           name: deletion-worker

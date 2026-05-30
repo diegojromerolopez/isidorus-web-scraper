@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 	"workers/writer/domain"
+	"workers/writer/repositories"
 )
 
 // Consumer-side interface
@@ -26,6 +27,7 @@ type JobStatusRepository interface {
 type WriterService struct {
 	dbRepo     DBRepository
 	statusRepo JobStatusRepository
+	otelClient repositories.TelemetryClient
 }
 
 // Functional Options Pattern
@@ -39,15 +41,29 @@ func WithJobStatusRepository(r JobStatusRepository) WriterOption {
 	return func(s *WriterService) { s.statusRepo = r }
 }
 
+func WithTelemetryClient(c repositories.TelemetryClient) WriterOption {
+	return func(s *WriterService) { s.otelClient = c }
+}
+
 func NewWriterService(opts ...WriterOption) *WriterService {
 	s := &WriterService{}
 	for _, opt := range opts {
 		opt(s)
 	}
+	if s.otelClient == nil {
+		s.otelClient = repositories.NewNoopTelemetryClient()
+	}
 	return s
 }
 
 func (s *WriterService) ProcessMessage(ctx context.Context, msg domain.WriterMessage) error {
+	ctx, span := s.otelClient.StartSpan(ctx, "WriterService.ProcessMessage",
+		repositories.WithAttribute("type", msg.Type),
+		repositories.WithAttribute("scrapingID", msg.ScrapingID),
+		repositories.WithAttribute("url", msg.URL),
+	)
+	defer span.End()
+
 	var err error
 
 	if msg.Type == domain.MsgTypePageData {
@@ -79,11 +95,15 @@ func (s *WriterService) ProcessMessage(ctx context.Context, msg domain.WriterMes
 			}
 		}
 	} else {
+		span.SetStatus("ok", "success")
 		return nil
 	}
 
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus("error", err.Error())
 		return fmt.Errorf("failed to process message type %s: %w", msg.Type, err)
 	}
+	span.SetStatus("ok", "success")
 	return nil
 }

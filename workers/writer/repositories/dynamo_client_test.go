@@ -23,7 +23,7 @@ func (m *MockDynamoDB) UpdateItem(ctx context.Context, params *dynamodb.UpdateIt
 }
 
 func TestNewDynamoDBClient(t *testing.T) {
-	client := NewDynamoDBClient(nil, "test-table")
+	client := NewDynamoDBClient(nil, "test-table", NewNoopTelemetryClient())
 	assert.NotNil(t, client)
 	assert.Equal(t, "test-table", client.tableName)
 }
@@ -69,7 +69,7 @@ func TestDynamoDBClient_UpdateJobStatus(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockDB := new(MockDynamoDB)
 			tt.mockFunc(mockDB)
-			client := NewDynamoDBClient(mockDB, tt.tableName)
+			client := NewDynamoDBClient(mockDB, tt.tableName, NewNoopTelemetryClient())
 			if tt.tableName == "" {
 				client.client = nil
 			}
@@ -113,7 +113,7 @@ func TestDynamoDBClient_UpdateJobStatusFull(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockDB := new(MockDynamoDB)
 			tt.mockFunc(mockDB)
-			client := NewDynamoDBClient(mockDB, tt.tableName)
+			client := NewDynamoDBClient(mockDB, tt.tableName, NewNoopTelemetryClient())
 
 			err := client.UpdateJobStatusFull(context.Background(), "123", "COMPLETED", "2024-01-01")
 			if tt.wantErr {
@@ -156,7 +156,7 @@ func TestDynamoDBClient_IncrementLinkCount(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockDB := new(MockDynamoDB)
 			tt.mockFunc(mockDB)
-			client := NewDynamoDBClient(mockDB, tt.tableName)
+			client := NewDynamoDBClient(mockDB, tt.tableName, NewNoopTelemetryClient())
 
 			err := client.IncrementLinkCount(context.Background(), "123", 5)
 			if tt.wantErr {

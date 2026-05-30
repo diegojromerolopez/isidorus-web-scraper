@@ -5,11 +5,13 @@ from opensearchpy import AsyncOpenSearch  # pylint: disable=import-error
 
 from api import models as api_models
 from api.clients.dynamodb_client import DynamoDBClient
+from shared.clients.otel_client import observe
 from shared.clients.s3_client import S3Client
 
 logger = logging.getLogger(__name__)
 
 
+@observe
 class DeletionService:  # pylint: disable=too-few-public-methods
     def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,

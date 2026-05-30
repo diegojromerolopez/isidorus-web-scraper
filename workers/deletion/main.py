@@ -7,10 +7,13 @@ from opensearchpy import AsyncOpenSearch  # pylint: disable=import-error
 from tortoise import Tortoise  # pylint: disable=import-error
 
 from api.clients.dynamodb_client import DynamoDBClient
+from shared.clients.otel_client import init_telemetry
 from shared.clients.s3_client import S3Client
 from shared.clients.sqs_client import SQSClient
 from workers.deletion.config import Configuration
 from workers.deletion.services.deletion_service import DeletionService
+
+init_telemetry("deletion-worker")
 
 # Logging configuration
 logging.basicConfig(

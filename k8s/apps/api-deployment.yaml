@@ -58,6 +58,8 @@ spec:
               value: http://elasticmq.isidorus.svc.cluster.local:9324
             - name: SQS_QUEUE_URL
               value: http://elasticmq.isidorus.svc.cluster.local:9324/000000000000/scraper-queue
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://otel-collector.isidorus.svc.cluster.local:4317
           image: docker.io/library/api:latest
           imagePullPolicy: IfNotPresent
           name: api

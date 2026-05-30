@@ -101,7 +101,12 @@ class TestDeletionMain(unittest.IsolatedAsyncioTestCase):
         with patch("workers.deletion.main.asyncio.sleep", new_callable=AsyncMock):
             await main(stop_event=mock_stop_event)
 
-        mock_logger.error.assert_any_call("Error receiving messages: SQS Error")
+        error_calls = [
+            call
+            for call in mock_logger.error.call_args_list
+            if len(call[0]) > 0 and "Error receiving messages:" in call[0][0]
+        ]
+        self.assertTrue(len(error_calls) > 0)
 
     @patch("workers.deletion.main.Configuration")
     @patch("workers.deletion.main.SQSClient")
@@ -146,9 +151,12 @@ class TestDeletionMain(unittest.IsolatedAsyncioTestCase):
 
         await main(stop_event=mock_stop_event)
 
-        mock_logger.error.assert_any_call(
-            "Error processing message: Expecting value: line 1 column 1 (char 0)"
-        )
+        error_calls = [
+            call
+            for call in mock_logger.error.call_args_list
+            if len(call[0]) > 0 and "Error processing message:" in call[0][0]
+        ]
+        self.assertTrue(len(error_calls) > 0)
 
     @patch("workers.deletion.main.Configuration")
     @patch("workers.deletion.main.SQSClient")

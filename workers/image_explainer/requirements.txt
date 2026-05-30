@@ -7,3 +7,6 @@ langchain-google-genai
 langchain-anthropic
 langchain-ollama
 langchain-huggingface
+opentelemetry-api==1.24.0
+opentelemetry-sdk==1.24.0
+opentelemetry-exporter-otlp==1.24.0

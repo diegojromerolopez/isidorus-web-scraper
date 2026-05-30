@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"workers/image_extractor/domain"
+	"workers/image_extractor/repositories"
 
 	"github.com/google/uuid"
 )
@@ -33,6 +34,7 @@ type ExtractorService struct {
 	imageExplainerQueueURL string
 	imagesBucket           string
 	imageExplainerEnabled  bool
+	otelClient             repositories.TelemetryClient
 }
 
 func NewExtractorService(
@@ -43,7 +45,11 @@ func NewExtractorService(
 	imageExplainerQueueURL string,
 	imagesBucket string,
 	imageExplainerEnabled bool,
+	otelClient repositories.TelemetryClient,
 ) *ExtractorService {
+	if otelClient == nil {
+		otelClient = repositories.NewNoopTelemetryClient()
+	}
 	return &ExtractorService{
 		sqsRepo:                sqsRepo,
 		s3Repo:                 s3Repo,
@@ -52,10 +58,17 @@ func NewExtractorService(
 		imageExplainerQueueURL: imageExplainerQueueURL,
 		imagesBucket:           imagesBucket,
 		imageExplainerEnabled:  imageExplainerEnabled,
+		otelClient:             otelClient,
 	}
 }
 
 func (s *ExtractorService) ProcessMessage(ctx context.Context, msg domain.ImageMessage) error {
+	ctx, span := s.otelClient.StartSpan(ctx, "ExtractorService.ProcessMessage",
+		repositories.WithAttribute("url", msg.URL),
+		repositories.WithAttribute("scrapingID", msg.ScrapingID),
+	)
+	defer span.End()
+
 	log.Printf("Processing image: %s for scraping %d (AI Enabled: %v)", msg.URL, msg.ScrapingID, s.imageExplainerEnabled)
 
 	// 1. Download image
@@ -87,6 +100,8 @@ func (s *ExtractorService) ProcessMessage(ctx context.Context, msg domain.ImageM
 		S3Path:      s3Path,
 	}
 	if err := s.sqsRepo.SendMessage(ctx, s.writerQueueURL, writerMsg); err != nil {
+		span.RecordError(err)
+		span.SetStatus("error", err.Error())
 		return fmt.Errorf("failed to send image metadata to writer: %w", err)
 	}
 	log.Printf("Sent image metadata for %s to writer queue", msg.URL)
@@ -108,6 +123,7 @@ func (s *ExtractorService) ProcessMessage(ctx context.Context, msg domain.ImageM
 		log.Printf("Skipping image explanation for %s (disabled globally)", msg.URL)
 	}
 
+	span.SetStatus("ok", "success")
 	return nil
 }
 

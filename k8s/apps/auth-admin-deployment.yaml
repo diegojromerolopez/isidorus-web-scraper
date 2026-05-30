@@ -37,6 +37,8 @@ spec:
               value: django-insecure-test-key
             - name: SEED_DATA
               value: "true"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://otel-collector.isidorus.svc.cluster.local:4317
           image: docker.io/library/auth-admin:latest
           imagePullPolicy: IfNotPresent
           name: auth-admin

@@ -29,7 +29,7 @@ func TestRedisClient_IncrBy(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db, mock := redismock.NewClientMock()
-			client := &redisClient{client: db}
+			client := &redisClient{client: db, otelClient: NewNoopTelemetryClient()}
 			tt.mock(mock)
 
 			err := client.IncrBy(context.TODO(), "key", 5)
@@ -65,7 +65,7 @@ func TestRedisClient_Decr(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db, mock := redismock.NewClientMock()
-			client := &redisClient{client: db}
+			client := &redisClient{client: db, otelClient: NewNoopTelemetryClient()}
 			tt.mock(mock)
 
 			val, err := client.Decr(context.TODO(), "key")
@@ -102,7 +102,7 @@ func TestRedisClient_Get(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db, mock := redismock.NewClientMock()
-			client := &redisClient{client: db}
+			client := &redisClient{client: db, otelClient: NewNoopTelemetryClient()}
 			tt.mock(mock)
 
 			val, err := client.Get(context.TODO(), "key")
@@ -139,7 +139,7 @@ func TestRedisClient_SAdd(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db, mock := redismock.NewClientMock()
-			client := &redisClient{client: db}
+			client := &redisClient{client: db, otelClient: NewNoopTelemetryClient()}
 			tt.mock(mock)
 
 			val, err := client.SAdd(context.TODO(), "key", "member")

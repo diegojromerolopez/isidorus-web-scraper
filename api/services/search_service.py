@@ -1,6 +1,7 @@
 from typing import TypedDict
 
 from api.repositories.search_repository import SearchRepository
+from shared.clients.otel_client import observe
 
 
 class SearchPageResult(TypedDict):
@@ -10,6 +11,7 @@ class SearchPageResult(TypedDict):
     highlights: list[str]
 
 
+@observe
 class SearchService:  # pylint: disable=too-few-public-methods
     def __init__(self, repository: SearchRepository):
         self.__repository = repository

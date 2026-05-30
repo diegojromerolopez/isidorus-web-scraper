@@ -13,14 +13,22 @@ import (
 )
 
 type OpenSearchRepository struct {
-	client *opensearch.Client
+	client     *opensearch.Client
+	otelClient TelemetryClient
 }
 
-func NewOpenSearchRepository(client *opensearch.Client) *OpenSearchRepository {
-	return &OpenSearchRepository{client: client}
+func NewOpenSearchRepository(client *opensearch.Client, otelClient TelemetryClient) *OpenSearchRepository {
+	return &OpenSearchRepository{client: client, otelClient: otelClient}
 }
 
 func (r *OpenSearchRepository) IndexDocument(ctx context.Context, msg domain.IndexMessage) error {
+	ctx, span := r.otelClient.StartSpan(ctx, "OpenSearchRepository.IndexDocument",
+		WithAttribute("url", msg.URL),
+		WithAttribute("scrapingID", msg.ScrapingID),
+		WithAttribute("userID", msg.UserID),
+	)
+	defer span.End()
+
 	document := map[string]interface{}{
 		"url":         msg.URL,
 		"content":     msg.Content,
@@ -32,6 +40,8 @@ func (r *OpenSearchRepository) IndexDocument(ctx context.Context, msg domain.Ind
 
 	body, err := json.Marshal(document)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus("error", err.Error())
 		return fmt.Errorf("failed to marshal document: %w", err)
 	}
 
@@ -44,13 +54,19 @@ func (r *OpenSearchRepository) IndexDocument(ctx context.Context, msg domain.Ind
 
 	res, err := req.Do(ctx, r.client)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus("error", err.Error())
 		return fmt.Errorf("failed to execute index request: %w", err)
 	}
 	defer res.Body.Close()
 
 	if res.IsError() {
-		return fmt.Errorf("error indexing document: %s", res.String())
+		err := fmt.Errorf("error indexing document: %s", res.String())
+		span.RecordError(err)
+		span.SetStatus("error", err.Error())
+		return err
 	}
 
+	span.SetStatus("ok", "success")
 	return nil
 }

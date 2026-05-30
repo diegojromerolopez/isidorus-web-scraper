@@ -52,7 +52,7 @@ func TestOpenSearchRepository_IndexDocument(t *testing.T) {
 				Transport: &mockTransport{Response: mockRes},
 			})
 
-			repo := NewOpenSearchRepository(client)
+			repo := NewOpenSearchRepository(client, NewNoopTelemetryClient())
 			msg := domain.IndexMessage{URL: "http://test.com", Content: "test"}
 			err := repo.IndexDocument(context.TODO(), msg)
 			if tt.wantErr {
