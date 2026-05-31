@@ -18,6 +18,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 
@@ -139,17 +140,25 @@ func main() {
 
 			// Process batch of messages
 			for _, msg := range msgOutput.Messages {
+				msgCtx := ctx
+				var traceContextHolder struct {
+					TraceContext map[string]string `json:"_trace_context"`
+				}
+				if err := json.Unmarshal([]byte(*msg.Body), &traceContextHolder); err == nil && traceContextHolder.TraceContext != nil {
+					msgCtx = otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(traceContextHolder.TraceContext))
+				}
+
 				var body domain.WriterMessage
 				if err := json.Unmarshal([]byte(*msg.Body), &body); err != nil {
 					log.Printf("failed to unmarshal: %v", err)
 					continue
 				}
 
-				if err := writerService.ProcessMessage(ctx, body); err != nil {
+				if err := writerService.ProcessMessage(msgCtx, body); err != nil {
 					log.Printf("Failed to process message: %v", err)
 				} else {
 					// Delete on success
-					if err := sqsClient.DeleteMessage(ctx, cfg.InputQueueURL, msg.ReceiptHandle); err != nil {
+					if err := sqsClient.DeleteMessage(msgCtx, cfg.InputQueueURL, msg.ReceiptHandle); err != nil {
 						log.Printf("failed to delete message: %v", err)
 					}
 				}

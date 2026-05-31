@@ -18,6 +18,7 @@ import (
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 )
@@ -134,18 +135,26 @@ func main() {
 		}
 
 		for _, msg := range messages {
+			msgCtx := ctx
+			var traceContextHolder struct {
+				TraceContext map[string]string `json:"_trace_context"`
+			}
+			if err := json.Unmarshal([]byte(*msg.Body), &traceContextHolder); err == nil && traceContextHolder.TraceContext != nil {
+				msgCtx = otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(traceContextHolder.TraceContext))
+			}
+
 			var imageMsg domain.ImageMessage
 			if err := json.Unmarshal([]byte(*msg.Body), &imageMsg); err != nil {
 				log.Printf("Error unmarshaling message: %v", err)
 			} else {
 				// Process image
-				if err := extractorService.ProcessMessage(ctx, imageMsg); err != nil {
+				if err := extractorService.ProcessMessage(msgCtx, imageMsg); err != nil {
 					log.Printf("Error processing image %s: %v", imageMsg.URL, err)
 				}
 			}
 
 			// Delete message after processing (or if invalid)
-			if err := sqsRepo.DeleteMessage(ctx, cfg.InputQueueURL, *msg.ReceiptHandle); err != nil {
+			if err := sqsRepo.DeleteMessage(msgCtx, cfg.InputQueueURL, *msg.ReceiptHandle); err != nil {
 				log.Printf("Error deleting message: %v", err)
 			}
 		}

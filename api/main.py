@@ -1,7 +1,9 @@
+import uuid
 from typing import TypedDict
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from opentelemetry import baggage, context
 from pydantic import BaseModel
 from tortoise.contrib.fastapi import register_tortoise  # pylint: disable=import-error
 
@@ -87,9 +89,15 @@ async def scrape(
     try:
         # Extract user_id from the APIKey dependency
         user_id = _api_key.user_id if _api_key else None
-        scraping_id = await scraper_service.start_scraping(
-            request.url, request.depth, user_id
-        )
+        correlator_id = str(uuid.uuid4())
+        ctx = baggage.set_baggage("correlator_id", correlator_id)
+        token = context.attach(ctx)
+        try:
+            scraping_id = await scraper_service.start_scraping(
+                request.url, request.depth, user_id
+            )
+        finally:
+            context.detach(token)
         return {"scraping_id": scraping_id}
     except HTTPException:
         raise

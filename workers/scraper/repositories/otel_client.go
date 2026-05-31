@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"strings"
 
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/baggage"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/trace"
 	oteltrace "go.opentelemetry.io/otel/trace"
 )
@@ -44,6 +47,7 @@ type otelTelemetryClient struct {
 }
 
 func NewTelemetryClient(tp *trace.TracerProvider, serviceName string) TelemetryClient {
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	return &otelTelemetryClient{
 		tp:     tp,
 		tracer: tp.Tracer(serviceName),
@@ -63,6 +67,12 @@ func (c *otelTelemetryClient) StartSpan(ctx context.Context, name string, opts .
 			attrs = append(attrs, mapToAttribute(k, v))
 		}
 		otelOpts = append(otelOpts, oteltrace.WithAttributes(attrs...))
+	}
+
+	// Retrieve correlator_id from baggage and set as span attribute
+	b := baggage.FromContext(ctx)
+	if member := b.Member("correlator_id"); member.Value() != "" {
+		otelOpts = append(otelOpts, oteltrace.WithAttributes(attribute.String("correlator_id", member.Value())))
 	}
 
 	ctx, span := c.tracer.Start(ctx, name, otelOpts...)

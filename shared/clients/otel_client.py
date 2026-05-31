@@ -9,11 +9,17 @@ import logging
 import os
 from typing import Any, Callable, TypeVar
 
-from opentelemetry import trace
+from opentelemetry import baggage, trace
+from opentelemetry.baggage.propagation import W3CBaggagePropagator
+from opentelemetry.propagate import set_global_textmap
+from opentelemetry.propagators.composite import CompositePropagator
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.trace import Status, StatusCode
+from opentelemetry.trace.propagation.tracecontext import (
+    TraceContextTextMapPropagator,
+)
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -43,6 +49,11 @@ def init_telemetry(service_name: str) -> None:
         # Already initialized
         return
 
+    # Set the global composite textmap propagator
+    set_global_textmap(
+        CompositePropagator([TraceContextTextMapPropagator(), W3CBaggagePropagator()])
+    )
+
     # Use standard resource attributes
     resource = Resource.create({"service.name": service_name})
     provider = TracerProvider(resource=resource)
@@ -58,8 +69,9 @@ def init_telemetry(service_name: str) -> None:
                     OTLPSpanExporter,
                 )
             except ImportError:
-                from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
-                    OTLPSpanExporter,  # type: ignore
+                # pylint: disable=line-too-long
+                from opentelemetry.exporter.otlp.proto.http.trace_exporter import (  # type: ignore[assignment]
+                    OTLPSpanExporter,
                 )
 
             exporter = OTLPSpanExporter(
@@ -186,6 +198,9 @@ def observe(obj: Any = None, *, tracer_name: str | None = None) -> Any:
                 attrs = __extract_span_attributes(func, args, kwargs)
                 for k, v in attrs.items():
                     span.set_attribute(k, v)
+                correlator_id = baggage.get_baggage("correlator_id")
+                if isinstance(correlator_id, str):
+                    span.set_attribute("correlator_id", correlator_id)
                 try:
                     return await func(*args, **kwargs)
                 except Exception as e:
@@ -194,19 +209,21 @@ def observe(obj: Any = None, *, tracer_name: str | None = None) -> Any:
                     raise
 
         return async_wrapper
-    else:
 
-        @functools.wraps(func)
-        def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
-            with tracer.start_as_current_span(span_name) as span:
-                attrs = __extract_span_attributes(func, args, kwargs)
-                for k, v in attrs.items():
-                    span.set_attribute(k, v)
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    span.record_exception(e)
-                    span.set_status(Status(StatusCode.ERROR, str(e)))
-                    raise
+    @functools.wraps(func)
+    def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+        with tracer.start_as_current_span(span_name) as span:
+            attrs = __extract_span_attributes(func, args, kwargs)
+            for k, v in attrs.items():
+                span.set_attribute(k, v)
+            correlator_id = baggage.get_baggage("correlator_id")
+            if isinstance(correlator_id, str):
+                span.set_attribute("correlator_id", correlator_id)
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                span.record_exception(e)
+                span.set_status(Status(StatusCode.ERROR, str(e)))
+                raise
 
-        return sync_wrapper
+    return sync_wrapper

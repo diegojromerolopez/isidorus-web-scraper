@@ -6,6 +6,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/baggage"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
@@ -67,4 +70,80 @@ func TestTelemetryClient_Spans(t *testing.T) {
 	assert.True(t, floatOk)
 	assert.True(t, sensitivePassRedacted)
 	assert.True(t, sensitiveTokenRedacted)
+}
+
+func TestTelemetryClient_BaggageCorrelationID(t *testing.T) {
+	exporter := tracetest.NewSpanRecorder()
+	tp := trace.NewTracerProvider(trace.WithSpanProcessor(exporter))
+	defer exporter.Reset()
+
+	client := NewTelemetryClient(tp, "test-service")
+
+	// Create context with correlator_id in baggage
+	ctx := context.Background()
+	m, err := baggage.NewMember("correlator_id", "my-unique-correlator-id")
+	assert.NoError(t, err)
+	b, err := baggage.New(m)
+	assert.NoError(t, err)
+	ctx = baggage.ContextWithBaggage(ctx, b)
+
+	_, span := client.StartSpan(ctx, "test-span-with-baggage")
+	span.End()
+
+	spans := exporter.Ended()
+	assert.Len(t, spans, 1)
+	capturedSpan := spans[0]
+	assert.Equal(t, "test-span-with-baggage", capturedSpan.Name())
+
+	var foundCorrelationID bool
+	for _, attr := range capturedSpan.Attributes() {
+		if attr.Key == "correlator_id" {
+			assert.Equal(t, "my-unique-correlator-id", attr.Value.AsString())
+			foundCorrelationID = true
+		}
+	}
+	assert.True(t, foundCorrelationID, "should have found correlator_id attribute")
+}
+
+func TestTelemetryClient_ContextPropagation(t *testing.T) {
+	exporter := tracetest.NewSpanRecorder()
+	tp := trace.NewTracerProvider(trace.WithSpanProcessor(exporter))
+	defer exporter.Reset()
+
+	client := NewTelemetryClient(tp, "test-service")
+
+	// 1. Create a parent span
+	ctx := context.Background()
+	parentCtx, parentSpan := client.StartSpan(ctx, "parent-span")
+
+	// 2. Inject trace context into a carrier (simulating SQS payload injection)
+	traceMap := make(map[string]string)
+	otel.GetTextMapPropagator().Inject(parentCtx, propagation.MapCarrier(traceMap))
+	parentSpan.End()
+
+	// 3. Extract trace context from the carrier (simulating SQS payload extraction)
+	extractedCtx := otel.GetTextMapPropagator().Extract(context.Background(), propagation.MapCarrier(traceMap))
+
+	// 4. Start a child span under the extracted context
+	_, childSpan := client.StartSpan(extractedCtx, "child-span")
+	childSpan.End()
+
+	spans := exporter.Ended()
+	assert.Len(t, spans, 2)
+
+	var pSpan, cSpan trace.ReadOnlySpan
+	for _, s := range spans {
+		if s.Name() == "parent-span" {
+			pSpan = s
+		} else if s.Name() == "child-span" {
+			cSpan = s
+		}
+	}
+
+	assert.NotNil(t, pSpan)
+	assert.NotNil(t, cSpan)
+
+	// Verify parent-child relationship across context propagation
+	assert.Equal(t, pSpan.SpanContext().TraceID(), cSpan.SpanContext().TraceID(), "trace IDs must match")
+	assert.Equal(t, pSpan.SpanContext().SpanID(), cSpan.Parent().SpanID(), "child's parent span ID must match parent's span ID")
 }

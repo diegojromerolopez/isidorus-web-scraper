@@ -39,7 +39,26 @@ async def main() -> None:
         try:
             messages = await sqs_client.receive_messages(config.input_queue_url)
             for message in messages:
-                await summarizer_service.process_message(message["Body"])
+                # Extract and activate OpenTelemetry context
+                import json
+
+                from opentelemetry import context, propagate
+
+                token = None
+                try:
+                    body = json.loads(message["Body"])
+                    trace_context = body.get("_trace_context")
+                    if trace_context:
+                        extracted_context = propagate.extract(trace_context)
+                        token = context.attach(extracted_context)
+                except Exception:  # pylint: disable=broad-exception-caught
+                    pass
+
+                try:
+                    await summarizer_service.process_message(message["Body"])
+                finally:
+                    if token is not None:
+                        context.detach(token)
 
                 await sqs_client.delete_message(
                     config.input_queue_url, message["ReceiptHandle"]

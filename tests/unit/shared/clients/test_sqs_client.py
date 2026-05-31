@@ -57,9 +57,12 @@ class TestSQSClient(unittest.IsolatedAsyncioTestCase):
 
         # 4. Verify
         self.assertTrue(result)
-        mock_sqs_client.send_message.assert_called_once_with(
-            QueueUrl=self.queue_url, MessageBody=json.dumps(message)
-        )
+        _, call_kwargs = mock_sqs_client.send_message.call_args
+        sent_body = json.loads(call_kwargs["MessageBody"])
+        self.assertEqual(sent_body.get("foo"), "bar")
+        self.assertIn("_trace_context", sent_body)
+        self.assertIsInstance(sent_body["_trace_context"], dict)
+
         mock_session.client.assert_called_once_with(
             "sqs",
             endpoint_url=self.endpoint_url,
@@ -92,6 +95,51 @@ class TestSQSClient(unittest.IsolatedAsyncioTestCase):
         message = {"foo": "bar"}
         with self.assertRaisesRegex(Exception, "SQS Error"):
             await client.send_message(message)
+
+    @patch("shared.clients.sqs_client.aioboto3.Session")
+    async def test_send_message_with_trace_context(
+        self, mock_session_cls: MagicMock
+    ) -> None:
+        from opentelemetry.sdk.trace import TracerProvider
+
+        # 1. Setup Mock Session and Client
+        mock_sqs_client = AsyncMock()
+        mock_client_cm = MagicMock()
+        mock_client_cm.__aenter__.return_value = mock_sqs_client
+        mock_client_cm.__aexit__.return_value = None
+
+        mock_session = MagicMock()
+        mock_session.client.return_value = mock_client_cm
+        mock_session_cls.return_value = mock_session
+
+        # 2. Init Client (uses mock session)
+        client = SQSClient(
+            self.endpoint_url,
+            self.region,
+            self.access_key,
+            self.secret_key,
+            self.queue_url,
+        )
+
+        # Start a tracer and active span
+        provider = TracerProvider()
+        tracer = provider.get_tracer("test")
+
+        # 3. Execute under active span
+        message = {"foo": "bar"}
+        with tracer.start_as_current_span(
+            "parent_span"
+        ):  # pylint: disable=not-context-manager
+            result = await client.send_message(message)
+
+        # 4. Verify
+        self.assertTrue(result)
+        # Extract the enqueued payload
+        _, call_kwargs = mock_sqs_client.send_message.call_args
+        sent_body = json.loads(call_kwargs["MessageBody"])
+
+        self.assertIn("_trace_context", sent_body)
+        self.assertIn("traceparent", sent_body["_trace_context"])
 
 
 if __name__ == "__main__":

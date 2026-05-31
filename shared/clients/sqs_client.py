@@ -3,6 +3,7 @@ import logging
 from typing import Any
 
 import aioboto3  # type: ignore
+from opentelemetry import propagate
 
 from shared.clients.otel_client import observe
 from shared.config import Configuration
@@ -46,6 +47,11 @@ class SQSClient:
     ) -> bool:
         try:
             target_queue = queue_url or self.__queue_url
+            body_copy = dict(message_body)
+            carrier: dict[str, str] = {}
+            propagate.inject(carrier)
+            body_copy["_trace_context"] = carrier
+
             async with self.__session.client(
                 "sqs",
                 endpoint_url=self.__endpoint_url,
@@ -54,7 +60,7 @@ class SQSClient:
                 aws_secret_access_key=self.__secret_key,
             ) as client:
                 await client.send_message(
-                    QueueUrl=target_queue, MessageBody=json.dumps(message_body)
+                    QueueUrl=target_queue, MessageBody=json.dumps(body_copy)
                 )
                 return True
         except Exception as e:

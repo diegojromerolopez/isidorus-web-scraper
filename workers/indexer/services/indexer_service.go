@@ -5,6 +5,9 @@ import (
 	"log"
 	"time"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+
 	"workers/indexer/domain"
 	"workers/indexer/repositories"
 )
@@ -55,20 +58,25 @@ func (s *IndexerService) Start(ctx context.Context) {
 			for i, msg := range messages {
 				log.Printf("Indexing document for URL: %s", msg.URL)
 				func() {
-					_, span := s.otelClient.StartSpan(ctx, "IndexerService.ProcessMessage",
+					msgCtx := ctx
+					if msg.TraceContext != nil {
+						msgCtx = otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(msg.TraceContext))
+					}
+
+					msgCtx, span := s.otelClient.StartSpan(msgCtx, "IndexerService.ProcessMessage",
 						repositories.WithAttribute("url", msg.URL),
 						repositories.WithAttribute("scrapingID", msg.ScrapingID),
 					)
 					defer span.End()
 
-					if err := s.openSearchRepo.IndexDocument(ctx, msg); err != nil {
+					if err := s.openSearchRepo.IndexDocument(msgCtx, msg); err != nil {
 						log.Printf("Error indexing document %s: %v", msg.URL, err)
 						span.RecordError(err)
 						span.SetStatus("error", err.Error())
 						return
 					}
 
-					if err := s.sqsRepo.DeleteMessage(ctx, handles[i]); err != nil {
+					if err := s.sqsRepo.DeleteMessage(msgCtx, handles[i]); err != nil {
 						log.Printf("Error deleting message %s: %v", handles[i], err)
 					}
 					span.SetStatus("ok", "success")

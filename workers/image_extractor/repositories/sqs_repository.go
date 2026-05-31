@@ -7,6 +7,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 type SQSRepository struct {
@@ -53,6 +55,18 @@ func (r *SQSRepository) SendMessage(ctx context.Context, queueURL string, body i
 		span.SetStatus("error", err.Error())
 		return err
 	}
+
+	// Inject trace context into the JSON payload
+	var payloadMap map[string]interface{}
+	if err := json.Unmarshal(jsonBody, &payloadMap); err == nil && payloadMap != nil {
+		traceMap := make(map[string]string)
+		otel.GetTextMapPropagator().Inject(ctx, propagation.MapCarrier(traceMap))
+		payloadMap["_trace_context"] = traceMap
+		if updatedBody, err := json.Marshal(payloadMap); err == nil {
+			jsonBody = updatedBody
+		}
+	}
+
 	_, err = r.client.SendMessage(ctx, &sqs.SendMessageInput{
 		QueueUrl:    aws.String(queueURL),
 		MessageBody: aws.String(string(jsonBody)),

@@ -128,3 +128,57 @@ class TestOTelClient(unittest.TestCase):
         self.assertIsNotNone(attrs)
         assert attrs is not None
         self.assertEqual(attrs.get("key_name"), "[REDACTED]")
+
+    def test_observe_baggage_correlator_id(self) -> None:
+        """
+        Verify that @observe extracts correlator_id from baggage.
+        """
+        from opentelemetry import baggage, context
+
+        @observe
+        def sample_func() -> str:
+            return "done"
+
+        # Set correlator_id in baggage
+        ctx = baggage.set_baggage("correlator_id", "my-correlation-id-123")
+        token = context.attach(ctx)
+        try:
+            sample_func()
+        finally:
+            context.detach(token)
+
+        # Check spans
+        spans = self.exporter.get_finished_spans()
+        self.assertEqual(len(spans), 1)
+        span = spans[0]
+        self.assertIsNotNone(span.attributes)
+        assert span.attributes is not None
+        self.assertEqual(span.attributes.get("correlator_id"), "my-correlation-id-123")
+
+    def test_observe_async_baggage_correlator_id(self) -> None:
+        """
+        Verify that @observe extracts correlator_id from async baggage.
+        """
+        from opentelemetry import baggage, context
+
+        @observe
+        async def sample_async_func() -> str:
+            return "done"
+
+        # Set correlator_id in baggage
+        ctx = baggage.set_baggage("correlator_id", "my-async-correlation-id-456")
+        token = context.attach(ctx)
+        try:
+            asyncio.run(sample_async_func())
+        finally:
+            context.detach(token)
+
+        # Check spans
+        spans = self.exporter.get_finished_spans()
+        self.assertEqual(len(spans), 1)
+        span = spans[0]
+        self.assertIsNotNone(span.attributes)
+        assert span.attributes is not None
+        self.assertEqual(
+            span.attributes.get("correlator_id"), "my-async-correlation-id-456"
+        )

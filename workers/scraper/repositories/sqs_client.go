@@ -7,6 +7,8 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 type AWSSQSClient struct {
@@ -63,6 +65,18 @@ func (s *AWSSQSClient) SendMessage(ctx context.Context, queueURL string, msg int
 		span.SetStatus("error", err.Error())
 		return fmt.Errorf("failed to marshal message for %s: %w", queueURL, err)
 	}
+
+	// Inject trace context into the JSON payload
+	var payloadMap map[string]interface{}
+	if err := json.Unmarshal(body, &payloadMap); err == nil && payloadMap != nil {
+		traceMap := make(map[string]string)
+		otel.GetTextMapPropagator().Inject(ctx, propagation.MapCarrier(traceMap))
+		payloadMap["_trace_context"] = traceMap
+		if updatedBody, err := json.Marshal(payloadMap); err == nil {
+			body = updatedBody
+		}
+	}
+
 	_, err = s.client.SendMessage(ctx, &sqs.SendMessageInput{
 		QueueUrl:    aws.String(queueURL),
 		MessageBody: aws.String(string(body)),
