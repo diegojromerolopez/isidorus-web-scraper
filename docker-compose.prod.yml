@@ -223,6 +223,15 @@ services:
       scylla:
         condition: service_healthy
 
+  clickhouse:
+    ports:
+      - "9000:9000"
+      - "8123:8123"
+
+  signoz-query-service:
+    ports:
+      - "3301:8080"
+
 volumes:
   minio_data:
     driver: local

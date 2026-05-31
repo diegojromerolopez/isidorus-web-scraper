@@ -205,8 +205,59 @@ services:
       postgres:
         condition: service_healthy
 
+  zookeeper:
+    image: zookeeper:3.9.1
+    environment:
+      - ZOO_MY_ID=1
+    healthcheck:
+      test: ["CMD", "zkServer.sh", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.1-alpine
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  signoz-query-service:
+    image: signoz/query-service:0.38.0
+    command: ["-config=/root/config/prometheus.yml"]
+    environment:
+      - ClickHouseUrl=tcp://clickhouse:9000
+      - STORAGE=clickhouse
+      - GODEBUG=netdns=go
+    volumes:
+      - signoz_data:/var/lib/signoz
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+
+  signoz-otel-collector:
+    image: signoz/signoz-otel-collector:0.88.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./infra/base/signoz-otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      signoz-query-service:
+        condition: service_started
+
 volumes:
   postgres_data:
+    driver: local
+  clickhouse_data:
+    driver: local
+  signoz_data:
     driver: local
 
 networks:
