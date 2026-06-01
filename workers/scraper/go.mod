@@ -15,7 +15,10 @@ require (
 	go.opentelemetry.io/otel v1.44.0
 	go.opentelemetry.io/otel/sdk v1.44.0
 	go.opentelemetry.io/otel/trace v1.44.0
+	shared/telemetry v0.0.0
 )
+
+replace shared/telemetry => ../../shared/go/telemetry
 
 require (
 	github.com/andybalholm/cascadia v1.3.3 // indirect

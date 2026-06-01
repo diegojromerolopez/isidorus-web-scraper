@@ -14,8 +14,16 @@ from opentelemetry.baggage.propagation import W3CBaggagePropagator
 from opentelemetry.propagate import set_global_textmap
 from opentelemetry.propagators.composite import CompositePropagator
 from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace import SpanProcessor, TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.trace.sampling import (
+    ALWAYS_OFF,
+    ALWAYS_ON,
+    Decision,
+    ParentBased,
+    Sampler,
+    TraceIdRatioBased,
+)
 from opentelemetry.trace import Status, StatusCode
 from opentelemetry.trace.propagation.tracecontext import (
     TraceContextTextMapPropagator,
@@ -40,6 +48,91 @@ F = TypeVar("F", bound=Callable[..., Any])
 C = TypeVar("C", bound=type)
 
 
+class ErrorAwareSampler(Sampler):
+    """
+    A custom sampler that delegates to a ratio sampler,
+    but returns RECORD_ONLY instead of DROP when the ratio sampler returns DROP.
+    This allows us to inspect and export failed spans downstream.
+    """
+
+    def __init__(self, ratio: float):
+        self._ratio_sampler = TraceIdRatioBased(ratio)
+
+    def should_sample(
+        self,
+        parent_context: Any,
+        trace_id: int,
+        name: str,
+        kind: Any = None,
+        attributes: Any = None,
+        links: Any = None,
+    ) -> Decision:
+        decision = self._ratio_sampler.should_sample(
+            parent_context, trace_id, name, kind, attributes, links
+        )
+        if decision.is_sampled():
+            return decision
+        return Decision.RECORD_ONLY
+
+    def get_description(self) -> str:
+        return f"ErrorAwareSampler({self._ratio_sampler.get_description()})"
+
+
+class ErrorAwareSpanProcessor(SpanProcessor):
+    """
+    A custom span processor that wraps another processor and only forwards spans
+    that were sampled OR had a failure status (ERROR).
+    """
+
+    def __init__(self, delegate: SpanProcessor):
+        self._delegate = delegate
+
+    def on_start(self, span: Any, parent_context: Any = None) -> None:
+        self._delegate.on_start(span, parent_context)
+
+    def on_end(self, span: Any) -> None:
+        is_sampled = span.context.trace_flags.sampled
+        is_error = span.status.status_code == StatusCode.ERROR
+        if is_sampled or is_error:
+            self._delegate.on_end(span)
+
+    def shutdown(self) -> None:
+        self._delegate.shutdown()
+
+    def force_flush(self, timeout_millis: int = 30000) -> bool:
+        return self._delegate.force_flush(timeout_millis)
+
+
+def get_sampler_from_env() -> Sampler:
+    """
+    Parses OTEL_TRACES_SAMPLER and OTEL_TRACES_SAMPLER_ARG.
+    Supports ErrorAwareSampler for ratio sampling to ensure failed spans
+    are always captured.
+    """
+    sampler_type = os.getenv("OTEL_TRACES_SAMPLER", "always_on").lower()
+    sampler_arg = os.getenv("OTEL_TRACES_SAMPLER_ARG", "1.0")
+
+    try:
+        ratio = float(sampler_arg)
+    except ValueError:
+        ratio = 1.0
+
+    if sampler_type == "always_on":
+        return ALWAYS_ON
+    elif sampler_type == "always_off":
+        return ALWAYS_OFF
+    elif sampler_type == "traceidratio":
+        return ErrorAwareSampler(ratio)
+    elif sampler_type == "parentbased_always_on":
+        return ParentBased(ALWAYS_ON)
+    elif sampler_type == "parentbased_always_off":
+        return ParentBased(ALWAYS_OFF)
+    elif sampler_type == "parentbased_traceidratio":
+        return ParentBased(ErrorAwareSampler(ratio))
+
+    return ALWAYS_ON
+
+
 def init_telemetry(service_name: str) -> None:
     """
     Initializes OpenTelemetry TracerProvider and registers it globally.
@@ -54,9 +147,10 @@ def init_telemetry(service_name: str) -> None:
         CompositePropagator([TraceContextTextMapPropagator(), W3CBaggagePropagator()])
     )
 
-    # Use standard resource attributes
+    # Use standard resource attributes and the environment-configured sampler
     resource = Resource.create({"service.name": service_name})
-    provider = TracerProvider(resource=resource)
+    sampler = get_sampler_from_env()
+    provider = TracerProvider(resource=resource, sampler=sampler)
 
     # Check for OTLP exporter endpoint
     otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
@@ -77,9 +171,11 @@ def init_telemetry(service_name: str) -> None:
             exporter = OTLPSpanExporter(
                 endpoint=otlp_endpoint, insecure=True
             )  # type: ignore[call-arg]
-            provider.add_span_processor(BatchSpanProcessor(exporter))
+            batch_processor = BatchSpanProcessor(exporter)
+            provider.add_span_processor(ErrorAwareSpanProcessor(batch_processor))
             logger.info(
-                "OpenTelemetry OTLP Exporter initialized for service %s at %s",
+                "OpenTelemetry OTLP Exporter initialized with "
+                "ErrorAwareSpanProcessor for service %s at %s",
                 service_name,
                 otlp_endpoint,
             )

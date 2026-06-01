@@ -182,3 +182,84 @@ class TestOTelClient(unittest.TestCase):
         self.assertEqual(
             span.attributes.get("correlator_id"), "my-async-correlation-id-456"
         )
+
+    def test_get_sampler_from_env(self) -> None:
+        """
+        Verify get_sampler_from_env parses environment variables correctly.
+        """
+        from unittest.mock import patch
+
+        from opentelemetry.sdk.trace.sampling import (
+            ALWAYS_OFF,
+            ALWAYS_ON,
+            ParentBased,
+            TraceIdRatioBased,
+        )
+
+        from shared.clients.otel_client import ErrorAwareSampler, get_sampler_from_env
+
+        with patch.dict("os.environ", {"OTEL_TRACES_SAMPLER": "always_on"}):
+            sampler = get_sampler_from_env()
+            self.assertEqual(sampler, ALWAYS_ON)
+
+        with patch.dict("os.environ", {"OTEL_TRACES_SAMPLER": "always_off"}):
+            sampler = get_sampler_from_env()
+            self.assertEqual(sampler, ALWAYS_OFF)
+
+        with patch.dict(
+            "os.environ",
+            {"OTEL_TRACES_SAMPLER": "traceidratio", "OTEL_TRACES_SAMPLER_ARG": "0.25"},
+        ):
+            sampler = get_sampler_from_env()
+            self.assertIsInstance(sampler, ErrorAwareSampler)
+            self.assertIsInstance(sampler._ratio_sampler, TraceIdRatioBased)
+            self.assertEqual(sampler._ratio_sampler._rate, 0.25)
+
+        with patch.dict(
+            "os.environ",
+            {
+                "OTEL_TRACES_SAMPLER": "parentbased_traceidratio",
+                "OTEL_TRACES_SAMPLER_ARG": "0.25",
+            },
+        ):
+            sampler = get_sampler_from_env()
+            self.assertIsInstance(sampler, ParentBased)
+            self.assertIsInstance(sampler._root, ErrorAwareSampler)
+            self.assertEqual(sampler._root._ratio_sampler._rate, 0.25)
+
+    def test_error_aware_span_processor_filters_correctly(self) -> None:
+        """
+        Verify ErrorAwareSpanProcessor only forwards sampled spans or failed spans.
+        """
+        from unittest.mock import MagicMock
+
+        from opentelemetry.sdk.trace import SpanProcessor
+        from opentelemetry.trace import StatusCode
+
+        from shared.clients.otel_client import ErrorAwareSpanProcessor
+
+        delegate = MagicMock(spec=SpanProcessor)
+        processor = ErrorAwareSpanProcessor(delegate)
+
+        # Case 1: Span is sampled, not error
+        span_sampled = MagicMock()
+        span_sampled.context.trace_flags.sampled = True
+        span_sampled.status.status_code = StatusCode.OK
+        processor.on_end(span_sampled)
+        delegate.on_end.assert_called_once_with(span_sampled)
+        delegate.on_end.reset_mock()
+
+        # Case 2: Span is not sampled, not error
+        span_ignored = MagicMock()
+        span_ignored.context.trace_flags.sampled = False
+        span_ignored.status.status_code = StatusCode.OK
+        processor.on_end(span_ignored)
+        delegate.on_end.assert_not_called()
+
+        # Case 3: Span is not sampled, but is error
+        span_error = MagicMock()
+        span_error.context.trace_flags.sampled = False
+        span_error.status.status_code = StatusCode.ERROR
+        processor.on_end(span_error)
+        delegate.on_end.assert_called_once_with(span_error)
+        delegate.on_end.reset_mock()

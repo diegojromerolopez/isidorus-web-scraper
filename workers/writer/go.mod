@@ -15,7 +15,10 @@ require (
 	go.opentelemetry.io/otel/trace v1.44.0
 	gorm.io/driver/postgres v1.6.0
 	gorm.io/gorm v1.31.1
+	shared/telemetry v0.0.0
 )
+
+replace shared/telemetry => ../../shared/go/telemetry
 
 require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.16.16 // indirect

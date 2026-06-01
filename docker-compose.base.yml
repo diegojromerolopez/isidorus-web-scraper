@@ -77,6 +77,8 @@ services:
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/isidorus
       - REDIS_HOST=redis
       - OPENSEARCH_URL=http://opensearch:9200
+      - OTEL_TRACES_SAMPLER=parentbased_traceidratio
+      - OTEL_TRACES_SAMPLER_ARG=0.25
     depends_on:
       postgres:
         condition: service_healthy
@@ -111,12 +113,15 @@ services:
 
   scraper-worker:
     build:
-      context: ./workers/scraper
+      context: .
+      dockerfile: workers/scraper/Dockerfile
     environment:
       - REDIS_HOST=redis
       - IMAGE_EXTRACTOR_ENABLED=true
       - IMAGE_EXPLAINER_ENABLED=false
       - PAGE_SUMMARIZER_ENABLED=true
+      - OTEL_TRACES_SAMPLER=parentbased_traceidratio
+      - OTEL_TRACES_SAMPLER_ARG=0.25
     deploy:
       replicas: ${SCRAPER_REPLICAS:-3}
     depends_on:
@@ -125,10 +130,13 @@ services:
 
   writer-worker:
     build:
-      context: ./workers/writer
+      context: .
+      dockerfile: workers/writer/Dockerfile
     environment:
       - DATABASE_URL=host=postgres user=postgres password=postgres dbname=isidorus port=5432 sslmode=disable
       - DYNAMODB_TABLE=scraping_jobs
+      - OTEL_TRACES_SAMPLER=parentbased_traceidratio
+      - OTEL_TRACES_SAMPLER_ARG=0.25
     deploy:
       replicas: ${WRITER_REPLICAS:-2}
     depends_on:
@@ -137,11 +145,14 @@ services:
 
   image-extractor-worker:
     build:
-      context: ./workers/image_extractor
+      context: .
+      dockerfile: workers/image_extractor/Dockerfile
     environment:
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/isidorus
       - IMAGES_BUCKET=isidorus-images
       - IMAGE_EXPLAINER_ENABLED=${IMAGE_EXPLAINER_ENABLED:-false}
+      - OTEL_TRACES_SAMPLER=parentbased_traceidratio
+      - OTEL_TRACES_SAMPLER_ARG=0.25
     deploy:
       replicas: ${IMAGE_EXTRACTOR_REPLICAS:-3}
     depends_on:
@@ -155,6 +166,8 @@ services:
     environment:
       - LLM_PROVIDER=ollama
       - LLM_API_KEY=${LLM_API_KEY}
+      - OTEL_TRACES_SAMPLER=parentbased_traceidratio
+      - OTEL_TRACES_SAMPLER_ARG=0.25
     deploy:
       replicas: ${IMAGE_EXPLAINER_REPLICAS:-4}
     depends_on:
@@ -170,6 +183,8 @@ services:
       - OPENSEARCH_URL=http://opensearch:9200
       - LLM_PROVIDER=ollama
       - LLM_API_KEY=${LLM_API_KEY}
+      - OTEL_TRACES_SAMPLER=parentbased_traceidratio
+      - OTEL_TRACES_SAMPLER_ARG=0.25
     deploy:
       replicas: ${PAGE_SUMMARIZER_REPLICAS:-2}
     depends_on:
@@ -178,9 +193,12 @@ services:
 
   indexer-worker:
     build:
-      context: ./workers/indexer
+      context: .
+      dockerfile: workers/indexer/Dockerfile
     environment:
       - OPENSEARCH_URL=http://opensearch:9200
+      - OTEL_TRACES_SAMPLER=parentbased_traceidratio
+      - OTEL_TRACES_SAMPLER_ARG=0.25
     deploy:
       replicas: ${INDEXER_REPLICAS:-1}
     depends_on:
@@ -195,6 +213,8 @@ services:
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/isidorus
       - DYNAMODB_TABLE=scraping_jobs
       - IMAGES_BUCKET=isidorus-images
+      - OTEL_TRACES_SAMPLER=parentbased_traceidratio
+      - OTEL_TRACES_SAMPLER_ARG=0.25
     deploy:
       replicas: ${DELETION_REPLICAS:-1}
     depends_on:

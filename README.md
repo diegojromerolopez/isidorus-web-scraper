@@ -265,6 +265,8 @@ The system is built with a microservices approach:
 | `REDIS_HOST` | Redis host | `localhost` or `redis` |
 | `IMAGE_BUCKET` | S3 bucket for images | `isidorus-images` |
 | `LLM_PROVIDER` | AI provider for explanations | `mock`, `openai`, `gemini`, etc. |
+| `OTEL_TRACES_SAMPLER` | Trace sampler type (always_on, always_off, traceidratio, etc.) | `traceidratio` |
+| `OTEL_TRACES_SAMPLER_ARG` | Sampler ratio argument (used for traceidratio fraction) | `0.1` |
 | `SCRAPER_REPLICAS` | Number of Scraper instances | `3` |
 | `WRITER_REPLICAS` | Number of Writer instances | `2` |
 | `IMAGE_EXTRACTOR_REPLICAS`| Number of Extractor instances | `3` |
@@ -616,7 +618,23 @@ Isidorus includes high-fidelity distributed tracing designed around **Domain-Dri
 2. **Automatic Parameter Mapping**: Function parameters are dynamically extracted and set as span attributes if they are built-in types (`int`, `float`, `bool`, `string`).
 3. **Sensitive Keyword Redaction**: Any parameter name or string value containing authentication or private information is automatically redacted to prevent secret leakage in trace collectors. Flagged terms include:
    `secret`, `token`, `key`, `password`, `pass`, `auth`, `credential`, `private`, `cert`, `jwt`, `conn`, `access`, `sign`
-4. **Local OTel Collector Pipeline**: Traces are exported over OTLP (gRPC on port `4317` and HTTP on port `4318`) to a local OpenTelemetry Collector service which prints detailed traces to standard console output.
+4. **Trace Sampling Control**: Traces can be sampled based on the standard OpenTelemetry configuration variables `OTEL_TRACES_SAMPLER` and `OTEL_TRACES_SAMPLER_ARG`. This allows you to control telemetry volume dynamically (e.g. 10% sampling) under heavy loads.
+5. **Local OTel Collector Pipeline**: Traces are exported over OTLP (gRPC on port `4317` and HTTP on port `4318`) to a local OpenTelemetry Collector service which prints detailed traces to standard console output.
+
+### ⚙️ Trace Sampling Configuration
+To control the volume of telemetry data produced, you can use the standard OpenTelemetry trace sampling variables:
+
+* **`OTEL_TRACES_SAMPLER`**: Configures the trace sampler. Supported samplers are:
+  - `always_on` (Default): All spans are sampled and trace context is propagated.
+  - `always_off`: No spans are sampled.
+  - `traceidratio`: Spans are sampled probabilistically based on the ratio specified in `OTEL_TRACES_SAMPLER_ARG`.
+  - `parentbased_always_on`: Spans are sampled if the parent was sampled, defaulting to on.
+  - `parentbased_always_off`: Spans are sampled if the parent was sampled, defaulting to off.
+  - `parentbased_traceidratio`: Spans are sampled if the parent was sampled, defaulting to a probabilistic ratio.
+
+* **`OTEL_TRACES_SAMPLER_ARG`**: Argument for the configured sampler. Required for `traceidratio` or `parentbased_traceidratio` to specify the sampling fraction (e.g., `0.1` for `10%` sampling, or `0.01` for `1%` sampling).
+
+If these variables are omitted, the system defaults to `always_on` to ensure complete traces during testing.
 
 ### 🔍 Viewing Live Spans & Telemetry
 Since the deprecated `logging` exporter has been replaced by the modern `debug` exporter configured with `verbosity: detailed`, you can view live spans, traces, and metrics directly in the OTel Collector logs:

@@ -20,6 +20,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 
+	"shared/telemetry"
 	indexerConfig "workers/indexer/config"
 	"workers/indexer/repositories"
 	"workers/indexer/services"
@@ -36,7 +37,7 @@ func initTracer(serviceName string) (*trace.TracerProvider, error) {
 	}
 
 	tp := trace.NewTracerProvider(
-		trace.WithSampler(trace.AlwaysSample()),
+		trace.WithSampler(telemetry.GetSamplerFromEnv()),
 		trace.WithResource(res),
 	)
 	otel.SetTracerProvider(tp)

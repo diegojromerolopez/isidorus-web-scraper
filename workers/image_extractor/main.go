@@ -21,6 +21,8 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
+
+	"shared/telemetry"
 )
 
 func initTracer(serviceName string) (*trace.TracerProvider, error) {
@@ -34,7 +36,7 @@ func initTracer(serviceName string) (*trace.TracerProvider, error) {
 	}
 
 	tp := trace.NewTracerProvider(
-		trace.WithSampler(trace.AlwaysSample()),
+		trace.WithSampler(telemetry.GetSamplerFromEnv()),
 		trace.WithResource(res),
 	)
 	otel.SetTracerProvider(tp)
