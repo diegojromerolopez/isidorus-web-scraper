@@ -618,6 +618,19 @@ Isidorus includes high-fidelity distributed tracing designed around **Domain-Dri
    `secret`, `token`, `key`, `password`, `pass`, `auth`, `credential`, `private`, `cert`, `jwt`, `conn`, `access`, `sign`
 4. **Local OTel Collector Pipeline**: Traces are exported over OTLP (gRPC on port `4317` and HTTP on port `4318`) to a local OpenTelemetry Collector service which prints detailed traces to standard console output.
 
+### 🔍 Viewing Live Spans & Telemetry
+Since the deprecated `logging` exporter has been replaced by the modern `debug` exporter configured with `verbosity: detailed`, you can view live spans, traces, and metrics directly in the OTel Collector logs:
+
+* **For Local Development (Docker Compose):**
+  ```bash
+  docker compose logs -f otel-collector
+  ```
+
+* **For Kubernetes (Kind):**
+  ```bash
+  kubectl logs -f deployment/otel-collector -n isidorus
+  ```
+
 ### ⚙️ Infrastructure Integrations
 - **Docker Compose**: The `otel-collector` service is configured in `docker-compose.base.yml`. All services across `docker-compose.yml` and `docker-compose.prod.yml` automatically inherit `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317`.
 - **Kubernetes**: Deployed via custom manifests in `k8s/infra/` (`otel-collector-configmap.yaml`, `otel-collector-deployment.yaml`, `otel-collector-service.yaml`) and registered in the `kustomization.yaml`. FQDN endpoint `http://otel-collector.isidorus.svc.cluster.local:4317` is cleanly injected across all application deployments under `k8s/apps/`.
