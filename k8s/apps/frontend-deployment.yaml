@@ -22,10 +22,7 @@ spec:
         io.kompose.service: frontend
     spec:
       containers:
-        - env:
-            - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: http://otel-collector.isidorus.svc.cluster.local:4317
-          image: docker.io/library/frontend:latest
+        - image: docker.io/library/frontend:latest
           imagePullPolicy: IfNotPresent
           name: frontend
           ports:
