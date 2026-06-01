@@ -1,5 +1,5 @@
 import logging
-from typing import Any
+from typing import Any, cast
 
 from opensearchpy import AsyncOpenSearch  # pylint: disable=import-error
 
@@ -66,11 +66,12 @@ class DeletionService:  # pylint: disable=too-few-public-methods
         # Fetch S3 paths in chunks
         offset = 0
         while True:
-            images = (
+            images = cast(
+                list[str | None],
                 await api_models.PageImage.filter(scraping_id=scraping_id)
                 .offset(offset)
                 .limit(self.__s3_batch_size)
-                .values_list("s3_path", flat=True)
+                .values_list("s3_path", flat=True),
             )
             if not images:
                 break

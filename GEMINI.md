@@ -266,8 +266,8 @@ The system utilizes [KEDA](https://keda.sh/) to scale workers based on **SQS que
 4.  **Python Code Quality Standards**: All Python code must pass the following checks:
     - **Formatting**: `black` (88 char limit).
     - **Import Sorting**: `isort` (compatible with Black).
-    - **Fast Linting**: `ruff` (used for general linting).
-    - **Style/Bugs**: `flake8` (with Black-compatible config) and `pylint` (targeting a 10.0 score).
+    - **Fast Linting**: `ruff` (used for general linting and style checks).
+    - **Deep Analysis**: `pylint` (targeting a 10.0 score).
     - **Static Analysis**: `mypy` with strict mode (`disallow_untyped_defs = true`).
 5.  **CI/CD Pipeline**: 
     - `tests-unit.yml`: Executes unit tests for all components.
@@ -282,7 +282,7 @@ The system utilizes [KEDA](https://keda.sh/) to scale workers based on **SQS que
     - Never use synchronous libraries like `requests`, `boto3` (use `aioboto3`), or `redis` (use `redis.asyncio`) in async contexts.
 8.  **Pre-Commit Linting and Testing**: All code changes must pass linting checks and tests before committing:
     - Run `make format` to auto-format code with `black` and search imports with `isort`.
-    - Run `make lint` to verify all linting checks pass (`black`, `isort`, `ruff`, `flake8`, `mypy`, `pylint`).
+    - Run `make lint` to verify all linting checks pass (`black`, `isort`, `ruff`, `mypy`, `pylint`).
     - Run `make test-unit` to verify all unit tests pass.
     - Run `make test-e2e` to verify all end-to-end tests pass.
     - Target a PyLint score of **≥9.5/10**.

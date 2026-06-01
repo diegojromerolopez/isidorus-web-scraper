@@ -110,12 +110,10 @@ lint-check:
 	isort --check .
 	@echo "Running ruff linter..."
 	ruff check .
-	@echo "Running flake8..."
-	flake8 .
 	@echo "Running mypy type checker..."
 	mypy .
 	@echo "Running pylint..."
-	pylint api/ shared/ trigger/ workers/image_explainer/ workers/page_summarizer/ workers/deletion/ tests/unit/ tests/e2e/runner/runner.py
+	pylint --fail-under=9.5 api/ shared/ trigger/ workers/image_explainer/ workers/page_summarizer/ workers/deletion/ tests/unit/ tests/e2e/runner/runner.py
 	@echo "Checking Go code formatting..."
 	@if [ -n "$$(docker run --rm -v "$$(pwd):/app" -w /app/workers/scraper golang:1.25-alpine gofmt -l .)" ]; then \
 		echo "Go formatting errors found in scraper worker. Run 'make format' to fix."; \

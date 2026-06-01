@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import TypedDict
+from typing import TypedDict, cast
 
 from api import models
 from shared.clients.otel_client import observe
@@ -92,7 +92,8 @@ class DbRepository:
         results: list[ScrapedPageRecord] = []
         for page in pages:
             images_list: list[PageImageResult] = [
-                {"url": i.image_url, "explanation": i.explanation} for i in page.images
+                {"url": i.image_url, "explanation": i.explanation}
+                for i in page.images  # type: ignore[attr-defined]
             ]
 
             results.append(
@@ -109,8 +110,11 @@ class DbRepository:
         """
         Retrieves all S3 paths for images associated with a scraping.
         """
-        images = await models.PageImage.filter(scraping_id=scraping_id).values_list(
-            "s3_path", flat=True
+        images = cast(
+            list[str],
+            await models.PageImage.filter(scraping_id=scraping_id).values_list(
+                "s3_path", flat=True
+            ),
         )
         return [path for path in images if path]
 

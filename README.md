@@ -511,7 +511,6 @@ The project uses several tools to ensure code quality:
 -   **Black**: For deterministic code formatting.
 -   **isort**: For import sorting (compatible with Black).
 -   **Ruff**: For fast linting.
--   **Flake8**: For legacy style checks.
 -   **Mypy**: For strict static type checking.
 -   **Pylint**: For deep code analysis (Rating ≥ 9.5 required).
 

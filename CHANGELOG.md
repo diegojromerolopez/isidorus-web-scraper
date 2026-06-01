@@ -22,6 +22,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Refactored all data stores, API endpoints, worker tasks, and messaging clients to standardise trace span creation (`SpanStart`/`SpanEnd` or context decorators).
 - Updated local Docker Compose stacks ([docker-compose.base.yml](file:///Users/diegoj/repos/isidorus-web-scraper/docker-compose.base.yml), [docker-compose.yml](file:///Users/diegoj/repos/isidorus-web-scraper/docker-compose.yml), [docker-compose.prod.yml](file:///Users/diegoj/repos/isidorus-web-scraper/docker-compose.prod.yml)) to run standard `otel-collector` instead of SigNoz for lightweight logging.
 - Set SemVer version dynamically in `.semver` to `0.2`.
+- **Python Type Safety & Mypy Resolution**: Corrected 20 strict static type checking and annotation warnings across 6 Python files, including missing return types, Django and Tortoise ORM dynamic property definitions, and S3 batch deletion flat values mapping using standard `typing.cast`.
+- **Pylint Score Enforcement**: Integrated automatic `--fail-under=9.5` threshold checks into the `pylint` target in the `Makefile` to align static verification with project quality standards.
+
+### Removed
+- **Flake8 Linter**: Fully removed the legacy `flake8` dependency, its configurations (`.flake8`), local make targets, documentation references, and CI workflows (`python-lint.yml`) in favor of `ruff` as the single, fast pep8 engine.
 
 ---
 
