@@ -162,15 +162,6 @@ services:
       localstack:
         condition: service_healthy
 
-  clickhouse:
-    ports:
-      - "9000:9000"
-      - "8123:8123"
-
-  signoz-query-service:
-    ports:
-      - "3301:8080"
-
 volumes:
   ollama_data:
     driver: local

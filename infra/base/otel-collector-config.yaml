@@ -14,10 +14,6 @@ exporters:
     verbosity: detailed
   logging:
     verbosity: detailed
-  otlp/signoz:
-    endpoint: signoz-otel-collector:4317
-    tls:
-      insecure: true
 
 extensions:
   health_check:
@@ -29,7 +25,7 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [debug, logging, otlp/signoz]
+      exporters: [debug, logging]
     metrics:
       receivers: [otlp]
       processors: [batch]
