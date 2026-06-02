@@ -17,36 +17,15 @@ import (
 
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/sdk/resource"
-	"go.opentelemetry.io/otel/sdk/trace"
 
 	"shared/telemetry"
 )
 
-func initTracer(serviceName string) (*trace.TracerProvider, error) {
-	res, err := resource.New(context.Background(),
-		resource.WithAttributes(
-			attribute.String("service.name", serviceName),
-		),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	tp := trace.NewTracerProvider(
-		trace.WithSampler(telemetry.GetSamplerFromEnv()),
-		trace.WithResource(res),
-	)
-	otel.SetTracerProvider(tp)
-	return tp, nil
-}
-
 func main() {
 	log.Println("Image Extractor Worker starting (Go)...")
 
-	tp, err := initTracer("image-extractor")
+	tp, err := telemetry.InitTelemetry(context.Background(), "image-extractor")
 	if err != nil {
 		log.Fatalf("failed to initialize tracer: %v", err)
 	}
@@ -138,11 +117,15 @@ func main() {
 
 		for _, msg := range messages {
 			msgCtx := ctx
-			var traceContextHolder struct {
-				TraceContext map[string]string `json:"_trace_context"`
+			// Extract trace context from SQS MessageAttributes
+			traceContext := make(map[string]string)
+			for k, attr := range msg.MessageAttributes {
+				if attr.StringValue != nil {
+					traceContext[k] = *attr.StringValue
+				}
 			}
-			if err := json.Unmarshal([]byte(*msg.Body), &traceContextHolder); err == nil && traceContextHolder.TraceContext != nil {
-				msgCtx = otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(traceContextHolder.TraceContext))
+			if len(traceContext) > 0 {
+				msgCtx = otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(traceContext))
 			}
 
 			var imageMsg domain.ImageMessage

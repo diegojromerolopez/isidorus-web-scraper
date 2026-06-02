@@ -60,8 +60,7 @@ class TestSQSClient(unittest.IsolatedAsyncioTestCase):
         _, call_kwargs = mock_sqs_client.send_message.call_args
         sent_body = json.loads(call_kwargs["MessageBody"])
         self.assertEqual(sent_body.get("foo"), "bar")
-        self.assertIn("_trace_context", sent_body)
-        self.assertIsInstance(sent_body["_trace_context"], dict)
+        self.assertIn("MessageAttributes", call_kwargs)
 
         mock_session.client.assert_called_once_with(
             "sqs",
@@ -136,10 +135,11 @@ class TestSQSClient(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result)
         # Extract the enqueued payload
         _, call_kwargs = mock_sqs_client.send_message.call_args
-        sent_body = json.loads(call_kwargs["MessageBody"])
-
-        self.assertIn("_trace_context", sent_body)
-        self.assertIn("traceparent", sent_body["_trace_context"])
+        self.assertIn("MessageAttributes", call_kwargs)
+        self.assertIn("traceparent", call_kwargs["MessageAttributes"])
+        self.assertEqual(
+            call_kwargs["MessageAttributes"]["traceparent"]["DataType"], "String"
+        )
 
 
 if __name__ == "__main__":

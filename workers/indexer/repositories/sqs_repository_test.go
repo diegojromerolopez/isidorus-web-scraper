@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"github.com/aws/smithy-go/middleware"
 	"github.com/stretchr/testify/assert"
+	"workers/indexer/domain"
 )
 
 func mockSQSMiddleware(output interface{}, err error) func(*middleware.Stack) error {
@@ -27,15 +28,37 @@ func mockSQSMiddleware(output interface{}, err error) func(*middleware.Stack) er
 
 func TestSQSRepository_ReceiveMessages(t *testing.T) {
 	tests := []struct {
-		name    string
-		output  *sqs.ReceiveMessageOutput
-		err     error
-		wantErr bool
+		name     string
+		output   *sqs.ReceiveMessageOutput
+		err      error
+		wantErr  bool
+		assertFn func(*testing.T, []domain.IndexMessage)
 	}{
 		{
 			name: "Success",
 			output: &sqs.ReceiveMessageOutput{
 				Messages: []types.Message{{Body: aws.String(`{"url":"http://test.com"}`), ReceiptHandle: aws.String("h1")}},
+			},
+		},
+		{
+			name: "SuccessWithTraceAttributes",
+			output: &sqs.ReceiveMessageOutput{
+				Messages: []types.Message{
+					{
+						Body:          aws.String(`{"url":"http://test.com"}`),
+						ReceiptHandle: aws.String("h2"),
+						MessageAttributes: map[string]types.MessageAttributeValue{
+							"traceparent": {
+								DataType:    aws.String("String"),
+								StringValue: aws.String("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"),
+							},
+						},
+					},
+				},
+			},
+			assertFn: func(t *testing.T, msgs []domain.IndexMessage) {
+				assert.NotEmpty(t, msgs)
+				assert.Equal(t, "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01", msgs[0].TraceContext["traceparent"])
 			},
 		},
 		{
@@ -57,7 +80,14 @@ func TestSQSRepository_ReceiveMessages(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.Equal(t, len(tt.output.Messages), len(messages))
-				assert.Equal(t, "h1", handles[0])
+				if tt.name == "Success" {
+					assert.Equal(t, "h1", handles[0])
+				} else if tt.name == "SuccessWithTraceAttributes" {
+					assert.Equal(t, "h2", handles[0])
+				}
+				if tt.assertFn != nil {
+					tt.assertFn(t, messages)
+				}
 			}
 		})
 	}

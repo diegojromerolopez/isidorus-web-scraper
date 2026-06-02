@@ -40,14 +40,17 @@ async def main() -> None:
             messages = await sqs_client.receive_messages(config.input_queue_url)
             for message in messages:
                 # Extract and activate OpenTelemetry context
-                import json
-
                 from opentelemetry import context, propagate
 
                 token = None
                 try:
-                    body = json.loads(message["Body"])
-                    trace_context = body.get("_trace_context")
+                    # Extract trace context from SQS MessageAttributes
+                    message_attributes = message.get("MessageAttributes", {})
+                    trace_context = {
+                        k: v["StringValue"]
+                        for k, v in message_attributes.items()
+                        if "StringValue" in v
+                    }
                     if trace_context:
                         extracted_context = propagate.extract(trace_context)
                         token = context.attach(extracted_context)

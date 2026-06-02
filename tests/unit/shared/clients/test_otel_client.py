@@ -2,6 +2,8 @@
 Unit tests for OpenTelemetry client and decorator.
 """
 
+# pylint: disable=line-too-long
+
 import asyncio
 import unittest
 
@@ -129,9 +131,9 @@ class TestOTelClient(unittest.TestCase):
         assert attrs is not None
         self.assertEqual(attrs.get("key_name"), "[REDACTED]")
 
-    def test_observe_baggage_correlator_id(self) -> None:
+    def test_observe_baggage_correlation_id(self) -> None:
         """
-        Verify that @observe extracts correlator_id from baggage.
+        Verify that @observe extracts correlation_id from baggage.
         """
         from opentelemetry import baggage, context
 
@@ -139,8 +141,8 @@ class TestOTelClient(unittest.TestCase):
         def sample_func() -> str:
             return "done"
 
-        # Set correlator_id in baggage
-        ctx = baggage.set_baggage("correlator_id", "my-correlation-id-123")
+        # Set correlation_id in baggage
+        ctx = baggage.set_baggage("correlation_id", "my-correlation-id-123")
         token = context.attach(ctx)
         try:
             sample_func()
@@ -153,11 +155,11 @@ class TestOTelClient(unittest.TestCase):
         span = spans[0]
         self.assertIsNotNone(span.attributes)
         assert span.attributes is not None
-        self.assertEqual(span.attributes.get("correlator_id"), "my-correlation-id-123")
+        self.assertEqual(span.attributes.get("correlation_id"), "my-correlation-id-123")
 
-    def test_observe_async_baggage_correlator_id(self) -> None:
+    def test_observe_async_baggage_correlation_id(self) -> None:
         """
-        Verify that @observe extracts correlator_id from async baggage.
+        Verify that @observe extracts correlation_id from async baggage.
         """
         from opentelemetry import baggage, context
 
@@ -165,8 +167,8 @@ class TestOTelClient(unittest.TestCase):
         async def sample_async_func() -> str:
             return "done"
 
-        # Set correlator_id in baggage
-        ctx = baggage.set_baggage("correlator_id", "my-async-correlation-id-456")
+        # Set correlation_id in baggage
+        ctx = baggage.set_baggage("correlation_id", "my-async-correlation-id-456")
         token = context.attach(ctx)
         try:
             asyncio.run(sample_async_func())
@@ -180,7 +182,7 @@ class TestOTelClient(unittest.TestCase):
         self.assertIsNotNone(span.attributes)
         assert span.attributes is not None
         self.assertEqual(
-            span.attributes.get("correlator_id"), "my-async-correlation-id-456"
+            span.attributes.get("correlation_id"), "my-async-correlation-id-456"
         )
 
     def test_get_sampler_from_env(self) -> None:
@@ -212,8 +214,8 @@ class TestOTelClient(unittest.TestCase):
         ):
             sampler = get_sampler_from_env()
             self.assertIsInstance(sampler, ErrorAwareSampler)
-            self.assertIsInstance(sampler._ratio_sampler, TraceIdRatioBased)
-            self.assertEqual(sampler._ratio_sampler._rate, 0.25)
+            self.assertIsInstance(sampler._ratio_sampler, TraceIdRatioBased)  # type: ignore[attr-defined]
+            self.assertEqual(sampler._ratio_sampler._rate, 0.25)  # type: ignore[attr-defined]
 
         with patch.dict(
             "os.environ",
@@ -224,8 +226,8 @@ class TestOTelClient(unittest.TestCase):
         ):
             sampler = get_sampler_from_env()
             self.assertIsInstance(sampler, ParentBased)
-            self.assertIsInstance(sampler._root, ErrorAwareSampler)
-            self.assertEqual(sampler._root._ratio_sampler._rate, 0.25)
+            self.assertIsInstance(sampler._root, ErrorAwareSampler)  # type: ignore[attr-defined]
+            self.assertEqual(sampler._root._ratio_sampler._rate, 0.25)  # type: ignore[attr-defined]
 
     def test_error_aware_span_processor_filters_correctly(self) -> None:
         """
@@ -263,3 +265,50 @@ class TestOTelClient(unittest.TestCase):
         processor.on_end(span_error)
         delegate.on_end.assert_called_once_with(span_error)
         delegate.on_end.reset_mock()
+
+    def test_otel_log_filter(self) -> None:
+        """
+        Verify OTelLogFilter correctly injects trace_id, span_id, and correlation_id.
+        """
+        # pylint: disable=no-member
+        import logging
+
+        from opentelemetry import baggage, context
+
+        from shared.clients.otel_client import OTelLogFilter
+
+        # Define a mock log record
+        record = logging.LogRecord(
+            name="test-logger",
+            level=logging.INFO,
+            pathname="test.py",
+            lineno=10,
+            msg="test message",
+            args=(),
+            exc_info=None,
+        )
+
+        filter_obj = OTelLogFilter()
+
+        # Test case 1: No active span context
+        res = filter_obj.filter(record)
+        self.assertTrue(res)
+        self.assertEqual(record.trace_id, "0" * 32)  # type: ignore[attr-defined]
+        self.assertEqual(record.span_id, "0" * 16)  # type: ignore[attr-defined]
+        self.assertEqual(record.correlation_id, "")  # type: ignore[attr-defined]
+
+        # Test case 2: Inside active span and with baggage correlation_id
+        tracer = self.provider.get_tracer("test-log")
+        with tracer.start_as_current_span("log-span") as span:
+            ctx = baggage.set_baggage("correlation_id", "test-corr-id")
+            token = context.attach(ctx)
+            try:
+                res = filter_obj.filter(record)
+                self.assertTrue(res)
+                expected_trace_id = format(span.get_span_context().trace_id, "032x")
+                expected_span_id = format(span.get_span_context().span_id, "016x")
+                self.assertEqual(record.trace_id, expected_trace_id)  # type: ignore[attr-defined]
+                self.assertEqual(record.span_id, expected_span_id)  # type: ignore[attr-defined]
+                self.assertEqual(record.correlation_id, "test-corr-id")  # type: ignore[attr-defined]
+            finally:
+                context.detach(token)

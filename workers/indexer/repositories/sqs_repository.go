@@ -31,9 +31,10 @@ func (r *SQSRepository) ReceiveMessages(ctx context.Context) ([]domain.IndexMess
 	defer span.End()
 
 	output, err := r.client.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
-		QueueUrl:            aws.String(r.queueURL),
-		MaxNumberOfMessages: 10,
-		WaitTimeSeconds:     20,
+		QueueUrl:              aws.String(r.queueURL),
+		MaxNumberOfMessages:   10,
+		WaitTimeSeconds:       20,
+		MessageAttributeNames: []string{"All"},
 	})
 	if err != nil {
 		span.RecordError(err)
@@ -49,6 +50,16 @@ func (r *SQSRepository) ReceiveMessages(ctx context.Context) ([]domain.IndexMess
 			// Skip invalid messages but log them
 			fmt.Printf("Received invalid message: %v\n", err)
 			continue
+		}
+		// Extract trace context from SQS MessageAttributes
+		traceContext := make(map[string]string)
+		for k, attr := range msg.MessageAttributes {
+			if attr.StringValue != nil {
+				traceContext[k] = *attr.StringValue
+			}
+		}
+		if len(traceContext) > 0 {
+			indexMsg.TraceContext = traceContext
 		}
 		messages = append(messages, indexMsg)
 		handles = append(handles, *msg.ReceiptHandle)

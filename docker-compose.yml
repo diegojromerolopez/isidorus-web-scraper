@@ -162,6 +162,15 @@ services:
       localstack:
         condition: service_healthy
 
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/base/prometheus.yml:/etc/prometheus/prometheus.yml
+    depends_on:
+      - otel-collector
+
 volumes:
   ollama_data:
     driver: local

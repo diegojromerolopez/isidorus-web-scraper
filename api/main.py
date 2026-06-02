@@ -89,8 +89,8 @@ async def scrape(
     try:
         # Extract user_id from the APIKey dependency
         user_id = _api_key.user_id if _api_key else None
-        correlator_id = str(uuid.uuid4())
-        ctx = baggage.set_baggage("correlator_id", correlator_id)
+        correlation_id = str(uuid.uuid4())
+        ctx = baggage.set_baggage("correlation_id", correlation_id)
         token = context.attach(ctx)
         try:
             scraping_id = await scraper_service.start_scraping(

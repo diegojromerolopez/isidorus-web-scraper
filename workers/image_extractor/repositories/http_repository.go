@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 type HTTPRepository struct {
@@ -16,7 +18,8 @@ type HTTPRepository struct {
 func NewHTTPRepository(otelClient TelemetryClient) *HTTPRepository {
 	return &HTTPRepository{
 		client: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout:   30 * time.Second,
+			Transport: otelhttp.NewTransport(http.DefaultTransport),
 		},
 		otelClient: otelClient,
 	}

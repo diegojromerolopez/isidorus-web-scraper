@@ -22,6 +22,7 @@ from opentelemetry.sdk.trace.sampling import (
     Decision,
     ParentBased,
     Sampler,
+    SamplingResult,
     TraceIdRatioBased,
 )
 from opentelemetry.trace import Status, StatusCode
@@ -66,13 +67,18 @@ class ErrorAwareSampler(Sampler):
         kind: Any = None,
         attributes: Any = None,
         links: Any = None,
-    ) -> Decision:
-        decision = self._ratio_sampler.should_sample(
-            parent_context, trace_id, name, kind, attributes, links
+        trace_state: Any = None,
+    ) -> SamplingResult:
+        result = self._ratio_sampler.should_sample(
+            parent_context, trace_id, name, kind, attributes, links, trace_state
         )
-        if decision.is_sampled():
-            return decision
-        return Decision.RECORD_ONLY
+        if result.decision != Decision.DROP:
+            return result
+        return SamplingResult(
+            decision=Decision.RECORD_ONLY,
+            attributes=result.attributes,
+            trace_state=result.trace_state,
+        )
 
     def get_description(self) -> str:
         return f"ErrorAwareSampler({self._ratio_sampler.get_description()})"
@@ -100,7 +106,7 @@ class ErrorAwareSpanProcessor(SpanProcessor):
         self._delegate.shutdown()
 
     def force_flush(self, timeout_millis: int = 30000) -> bool:
-        return self._delegate.force_flush(timeout_millis)
+        return bool(self._delegate.force_flush(timeout_millis))
 
 
 def get_sampler_from_env() -> Sampler:
@@ -131,6 +137,26 @@ def get_sampler_from_env() -> Sampler:
         return ParentBased(ErrorAwareSampler(ratio))
 
     return ALWAYS_ON
+
+
+class OTelLogFilter(logging.Filter):
+    """
+    Injects OTel trace_id, span_id, and correlation_id into log records.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        span = trace.get_current_span()
+        if span and span.get_span_context().is_valid:
+            record.trace_id = format(span.get_span_context().trace_id, "032x")
+            record.span_id = format(span.get_span_context().span_id, "016x")
+        else:
+            record.trace_id = "0" * 32
+            record.span_id = "0" * 16
+
+        # Pull correlation_id from baggage if present
+        correlation_id = baggage.get_baggage("correlation_id")
+        record.correlation_id = str(correlation_id) if correlation_id else ""
+        return True
 
 
 def init_telemetry(service_name: str) -> None:
@@ -183,6 +209,17 @@ def init_telemetry(service_name: str) -> None:
             logger.error("Failed to initialize OpenTelemetry OTLP Exporter: %s", e)
 
     trace.set_tracer_provider(provider)
+
+    # Automatically instrument asyncpg if available
+    try:
+        from opentelemetry.instrumentation.asyncpg import (
+            AsyncPGInstrumentor,  # type: ignore[import-not-found]
+        )
+
+        AsyncPGInstrumentor().instrument()
+        logger.info("Automatically instrumented asyncpg database queries.")
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.debug("asyncpg instrumentation skipped or failed: %s", e)
 
 
 def __is_sensitive(name_or_val: str) -> bool:
@@ -294,9 +331,9 @@ def observe(obj: Any = None, *, tracer_name: str | None = None) -> Any:
                 attrs = __extract_span_attributes(func, args, kwargs)
                 for k, v in attrs.items():
                     span.set_attribute(k, v)
-                correlator_id = baggage.get_baggage("correlator_id")
-                if isinstance(correlator_id, str):
-                    span.set_attribute("correlator_id", correlator_id)
+                correlation_id = baggage.get_baggage("correlation_id")
+                if isinstance(correlation_id, str):
+                    span.set_attribute("correlation_id", correlation_id)
                 try:
                     return await func(*args, **kwargs)
                 except Exception as e:
@@ -312,9 +349,9 @@ def observe(obj: Any = None, *, tracer_name: str | None = None) -> Any:
             attrs = __extract_span_attributes(func, args, kwargs)
             for k, v in attrs.items():
                 span.set_attribute(k, v)
-            correlator_id = baggage.get_baggage("correlator_id")
-            if isinstance(correlator_id, str):
-                span.set_attribute("correlator_id", correlator_id)
+            correlation_id = baggage.get_baggage("correlation_id")
+            if isinstance(correlation_id, str):
+                span.set_attribute("correlation_id", correlation_id)
             try:
                 return func(*args, **kwargs)
             except Exception as e:

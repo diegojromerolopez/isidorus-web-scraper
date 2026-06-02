@@ -26,9 +26,10 @@ func (s *AWSSQSClient) ReceiveMessages(ctx context.Context, queueURL string, max
 	defer span.End()
 
 	out, err := s.client.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
-		QueueUrl:            aws.String(queueURL),
-		MaxNumberOfMessages: maxMessages,
-		WaitTimeSeconds:     waitTime,
+		QueueUrl:              aws.String(queueURL),
+		MaxNumberOfMessages:   maxMessages,
+		WaitTimeSeconds:       waitTime,
+		MessageAttributeNames: []string{"All"},
 	})
 	if err != nil {
 		span.RecordError(err)

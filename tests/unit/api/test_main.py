@@ -56,7 +56,7 @@ class TestMain(unittest.TestCase):
             "http://example.com", 2, 1
         )
 
-    def test_scrape_generates_correlator_id_in_baggage(self) -> None:
+    def test_scrape_generates_correlation_id_in_baggage(self) -> None:
         from unittest.mock import patch
 
         self.mock_scraper_service.start_scraping.return_value = 123
@@ -75,7 +75,7 @@ class TestMain(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             mock_set_baggage.assert_called_once()
             args, _ = mock_set_baggage.call_args
-            self.assertEqual(args[0], "correlator_id")
+            self.assertEqual(args[0], "correlation_id")
             # Verify it's a valid UUID
             import uuid
 

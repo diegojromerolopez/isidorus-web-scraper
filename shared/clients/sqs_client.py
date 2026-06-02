@@ -48,9 +48,13 @@ class SQSClient:
         try:
             target_queue = queue_url or self.__queue_url
             body_copy = dict(message_body)
+
+            # Inject standard trace context as SQS Message Attributes
             carrier: dict[str, str] = {}
             propagate.inject(carrier)
-            body_copy["_trace_context"] = carrier
+            message_attributes = {}
+            for k, v in carrier.items():
+                message_attributes[k] = {"DataType": "String", "StringValue": str(v)}
 
             async with self.__session.client(
                 "sqs",
@@ -60,7 +64,9 @@ class SQSClient:
                 aws_secret_access_key=self.__secret_key,
             ) as client:
                 await client.send_message(
-                    QueueUrl=target_queue, MessageBody=json.dumps(body_copy)
+                    QueueUrl=target_queue,
+                    MessageBody=json.dumps(body_copy),
+                    MessageAttributes=message_attributes,
                 )
                 return True
         except Exception as e:
@@ -71,7 +77,7 @@ class SQSClient:
         self, queue_url: str, max_messages: int = 1, wait_time: int = 20
     ) -> list[dict[str, Any]]:
         """
-        Receives messages from the SQS queue.
+        Receives messages from the SQS queue with standard message attributes.
         """
         try:
             async with self.__session.client(
@@ -85,6 +91,7 @@ class SQSClient:
                     QueueUrl=queue_url,
                     MaxNumberOfMessages=max_messages,
                     WaitTimeSeconds=wait_time,
+                    MessageAttributeNames=["All"],
                 )
                 messages: list[dict[str, Any]] = response.get("Messages", [])
                 return messages

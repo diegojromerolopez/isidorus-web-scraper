@@ -69,10 +69,10 @@ func (c *otelTelemetryClient) StartSpan(ctx context.Context, name string, opts .
 		otelOpts = append(otelOpts, oteltrace.WithAttributes(attrs...))
 	}
 
-	// Retrieve correlator_id from baggage and set as span attribute
+	// Retrieve correlation_id from baggage and set as span attribute
 	b := baggage.FromContext(ctx)
-	if member := b.Member("correlator_id"); member.Value() != "" {
-		otelOpts = append(otelOpts, oteltrace.WithAttributes(attribute.String("correlator_id", member.Value())))
+	if member := b.Member("correlation_id"); member.Value() != "" {
+		otelOpts = append(otelOpts, oteltrace.WithAttributes(attribute.String("correlation_id", member.Value())))
 	}
 
 	ctx, span := c.tracer.Start(ctx, name, otelOpts...)

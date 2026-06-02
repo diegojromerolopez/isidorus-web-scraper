@@ -15,37 +15,16 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/opensearch-project/opensearch-go/v2"
 
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/sdk/resource"
-	"go.opentelemetry.io/otel/sdk/trace"
-
 	"shared/telemetry"
 	indexerConfig "workers/indexer/config"
 	"workers/indexer/repositories"
 	"workers/indexer/services"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
-func initTracer(serviceName string) (*trace.TracerProvider, error) {
-	res, err := resource.New(context.Background(),
-		resource.WithAttributes(
-			attribute.String("service.name", serviceName),
-		),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	tp := trace.NewTracerProvider(
-		trace.WithSampler(telemetry.GetSamplerFromEnv()),
-		trace.WithResource(res),
-	)
-	otel.SetTracerProvider(tp)
-	return tp, nil
-}
-
 func main() {
-	tp, err := initTracer("indexer")
+	tp, err := telemetry.InitTelemetry(context.Background(), "indexer")
 	if err != nil {
 		log.Fatalf("failed to initialize tracer: %v", err)
 	}
@@ -75,10 +54,10 @@ func main() {
 
 	// OpenSearch Client
 	osClient, err := opensearch.NewClient(opensearch.Config{
-		Transport: &http.Transport{
+		Transport: otelhttp.NewTransport(&http.Transport{
 			TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
 			ResponseHeaderTimeout: 30 * time.Second,
-		},
+		}),
 		Addresses: []string{cfg.OpenSearchURL},
 	})
 	if err != nil {

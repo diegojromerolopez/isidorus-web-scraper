@@ -79,9 +79,9 @@ func TestTelemetryClient_BaggageCorrelationID(t *testing.T) {
 
 	client := NewTelemetryClient(tp, "test-service")
 
-	// Create context with correlator_id in baggage
+	// Create context with correlation_id in baggage
 	ctx := context.Background()
-	m, err := baggage.NewMember("correlator_id", "my-unique-correlator-id")
+	m, err := baggage.NewMember("correlation_id", "my-unique-correlation-id")
 	assert.NoError(t, err)
 	b, err := baggage.New(m)
 	assert.NoError(t, err)
@@ -97,12 +97,12 @@ func TestTelemetryClient_BaggageCorrelationID(t *testing.T) {
 
 	var foundCorrelationID bool
 	for _, attr := range capturedSpan.Attributes() {
-		if attr.Key == "correlator_id" {
-			assert.Equal(t, "my-unique-correlator-id", attr.Value.AsString())
+		if attr.Key == "correlation_id" {
+			assert.Equal(t, "my-unique-correlation-id", attr.Value.AsString())
 			foundCorrelationID = true
 		}
 	}
-	assert.True(t, foundCorrelationID, "should have found correlator_id attribute")
+	assert.True(t, foundCorrelationID, "should have found correlation_id attribute")
 }
 
 func TestTelemetryClient_ContextPropagation(t *testing.T) {

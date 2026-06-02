@@ -31,7 +31,9 @@ async def init_db(database_url: str) -> None:
     )
 
 
-async def main(stop_event: asyncio.Event | None = None) -> None:
+async def main(
+    stop_event: asyncio.Event | None = None,
+) -> None:  # pylint: disable=too-many-locals,too-many-branches
     # Configuration
     config = Configuration.from_env()
 
@@ -108,7 +110,14 @@ async def main(stop_event: asyncio.Event | None = None) -> None:
                     body = json.loads(msg["Body"])
                     scraping_id = body.get("scraping_id")
 
-                    trace_context = body.get("_trace_context")
+                    # Extract trace context from SQS MessageAttributes
+                    message_attributes = msg.get("MessageAttributes", {})
+                    trace_context = {
+                        k: v["StringValue"]
+                        for k, v in message_attributes.items()
+                        if "StringValue" in v
+                    }
+
                     extracted_context = (
                         propagate.extract(trace_context) if trace_context else None
                     )

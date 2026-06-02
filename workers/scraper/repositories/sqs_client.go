@@ -7,6 +7,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 )
@@ -25,9 +26,10 @@ func (s *AWSSQSClient) ReceiveMessages(ctx context.Context, queueURL string) (*s
 	defer span.End()
 
 	out, err := s.client.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
-		QueueUrl:            aws.String(queueURL),
-		MaxNumberOfMessages: 1,
-		WaitTimeSeconds:     20,
+		QueueUrl:              aws.String(queueURL),
+		MaxNumberOfMessages:   1,
+		WaitTimeSeconds:       20,
+		MessageAttributeNames: []string{"All"},
 	})
 	if err != nil {
 		span.RecordError(err)
@@ -66,20 +68,22 @@ func (s *AWSSQSClient) SendMessage(ctx context.Context, queueURL string, msg int
 		return fmt.Errorf("failed to marshal message for %s: %w", queueURL, err)
 	}
 
-	// Inject trace context into the JSON payload
-	var payloadMap map[string]interface{}
-	if err := json.Unmarshal(body, &payloadMap); err == nil && payloadMap != nil {
-		traceMap := make(map[string]string)
-		otel.GetTextMapPropagator().Inject(ctx, propagation.MapCarrier(traceMap))
-		payloadMap["_trace_context"] = traceMap
-		if updatedBody, err := json.Marshal(payloadMap); err == nil {
-			body = updatedBody
+	// Inject standard trace context as SQS Message Attributes
+	traceMap := make(map[string]string)
+	otel.GetTextMapPropagator().Inject(ctx, propagation.MapCarrier(traceMap))
+
+	msgAttrs := make(map[string]types.MessageAttributeValue)
+	for k, v := range traceMap {
+		msgAttrs[k] = types.MessageAttributeValue{
+			DataType:    aws.String("String"),
+			StringValue: aws.String(v),
 		}
 	}
 
 	_, err = s.client.SendMessage(ctx, &sqs.SendMessageInput{
-		QueueUrl:    aws.String(queueURL),
-		MessageBody: aws.String(string(body)),
+		QueueUrl:          aws.String(queueURL),
+		MessageBody:       aws.String(string(body)),
+		MessageAttributes: msgAttrs,
 	})
 	if err != nil {
 		span.RecordError(err)

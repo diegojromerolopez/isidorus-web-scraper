@@ -15,12 +15,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	otelgorm "gorm.io/plugin/opentelemetry/tracing"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/sdk/resource"
-	"go.opentelemetry.io/otel/sdk/trace"
 
 	"shared/telemetry"
 	"workers/writer/config"
@@ -35,26 +33,8 @@ type SQSClient interface {
 	DeleteMessage(ctx context.Context, queueURL string, receiptHandle *string) error
 }
 
-func initTracer(serviceName string) (*trace.TracerProvider, error) {
-	res, err := resource.New(context.Background(),
-		resource.WithAttributes(
-			attribute.String("service.name", serviceName),
-		),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	tp := trace.NewTracerProvider(
-		trace.WithSampler(telemetry.GetSamplerFromEnv()),
-		trace.WithResource(res),
-	)
-	otel.SetTracerProvider(tp)
-	return tp, nil
-}
-
 func main() {
-	tp, err := initTracer("writer")
+	tp, err := telemetry.InitTelemetry(context.Background(), "writer")
 	if err != nil {
 		log.Fatalf("failed to initialize tracer: %v", err)
 	}
@@ -76,6 +56,10 @@ func main() {
 	db, err := gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("failed to connect to db: %v", err)
+	}
+
+	if err := db.Use(otelgorm.NewPlugin()); err != nil {
+		log.Fatalf("failed to register GORM OTel plugin: %v", err)
 	}
 
 	// Connect AWS
@@ -142,11 +126,15 @@ func main() {
 			// Process batch of messages
 			for _, msg := range msgOutput.Messages {
 				msgCtx := ctx
-				var traceContextHolder struct {
-					TraceContext map[string]string `json:"_trace_context"`
+				// Extract trace context from SQS MessageAttributes
+				traceContext := make(map[string]string)
+				for k, attr := range msg.MessageAttributes {
+					if attr.StringValue != nil {
+						traceContext[k] = *attr.StringValue
+					}
 				}
-				if err := json.Unmarshal([]byte(*msg.Body), &traceContextHolder); err == nil && traceContextHolder.TraceContext != nil {
-					msgCtx = otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(traceContextHolder.TraceContext))
+				if len(traceContext) > 0 {
+					msgCtx = otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(traceContext))
 				}
 
 				var body domain.WriterMessage

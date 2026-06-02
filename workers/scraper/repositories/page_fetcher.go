@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 type HTTPPageFetcher struct {
@@ -27,7 +29,8 @@ func (pf *HTTPPageFetcher) Fetch(ctx context.Context, url string) (*http.Respons
 	}
 
 	client := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout:   30 * time.Second,
+		Transport: otelhttp.NewTransport(http.DefaultTransport),
 	}
 	resp, err := client.Do(req)
 	if err != nil {

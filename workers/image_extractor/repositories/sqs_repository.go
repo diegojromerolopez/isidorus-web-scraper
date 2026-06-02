@@ -30,9 +30,10 @@ func (r *SQSRepository) ReceiveMessages(ctx context.Context, queueURL string) ([
 	defer span.End()
 
 	output, err := r.client.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
-		QueueUrl:            aws.String(queueURL),
-		MaxNumberOfMessages: 10,
-		WaitTimeSeconds:     20,
+		QueueUrl:              aws.String(queueURL),
+		MaxNumberOfMessages:   10,
+		WaitTimeSeconds:       20,
+		MessageAttributeNames: []string{"All"},
 	})
 	if err != nil {
 		span.RecordError(err)
@@ -56,20 +57,22 @@ func (r *SQSRepository) SendMessage(ctx context.Context, queueURL string, body i
 		return err
 	}
 
-	// Inject trace context into the JSON payload
-	var payloadMap map[string]interface{}
-	if err := json.Unmarshal(jsonBody, &payloadMap); err == nil && payloadMap != nil {
-		traceMap := make(map[string]string)
-		otel.GetTextMapPropagator().Inject(ctx, propagation.MapCarrier(traceMap))
-		payloadMap["_trace_context"] = traceMap
-		if updatedBody, err := json.Marshal(payloadMap); err == nil {
-			jsonBody = updatedBody
+	// Inject standard trace context as SQS Message Attributes
+	traceMap := make(map[string]string)
+	otel.GetTextMapPropagator().Inject(ctx, propagation.MapCarrier(traceMap))
+
+	msgAttrs := make(map[string]types.MessageAttributeValue)
+	for k, v := range traceMap {
+		msgAttrs[k] = types.MessageAttributeValue{
+			DataType:    aws.String("String"),
+			StringValue: aws.String(v),
 		}
 	}
 
 	_, err = r.client.SendMessage(ctx, &sqs.SendMessageInput{
-		QueueUrl:    aws.String(queueURL),
-		MessageBody: aws.String(string(jsonBody)),
+		QueueUrl:          aws.String(queueURL),
+		MessageBody:       aws.String(string(jsonBody)),
+		MessageAttributes: msgAttrs,
 	})
 	if err != nil {
 		span.RecordError(err)
