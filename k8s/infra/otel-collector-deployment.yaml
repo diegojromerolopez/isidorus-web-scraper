@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: isidorus
+  labels:
+    io.kompose.service: otel-collector
+  name: otel-collector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      io.kompose.service: otel-collector
+  template:
+    metadata:
+      labels:
+        io.kompose.service: otel-collector
+    spec:
+      containers:
+        - image: otel/opentelemetry-collector-contrib:0.95.0
+          imagePullPolicy: IfNotPresent
+          name: otel-collector
+          command:
+            - "/otelcol-contrib"
+            - "--config=/etc/otelcol/config.yaml"
+          ports:
+            - containerPort: 4317
+              name: otlp-grpc
+              protocol: TCP
+            - containerPort: 4318
+              name: otlp-http
+              protocol: TCP
+            - containerPort: 13133
+              name: health
+              protocol: TCP
+          volumeMounts:
+            - name: otel-collector-config-vol
+              mountPath: /etc/otelcol/config.yaml
+              subPath: otel-collector-config.yaml
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: otel-collector-config-vol
+          configMap:
+            name: otel-collector-config
+      restartPolicy: Always

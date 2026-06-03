@@ -1,9 +1,12 @@
 import asyncio
 import logging
 
+from shared.clients.otel_client import init_telemetry
 from shared.clients.sqs_client import SQSClient
 from workers.page_summarizer.config import Configuration
 from workers.page_summarizer.services.summarizer_service import SummarizerService
+
+init_telemetry("page-summarizer")
 
 # Logging setup
 logging.basicConfig(level=logging.INFO)
@@ -36,7 +39,29 @@ async def main() -> None:
         try:
             messages = await sqs_client.receive_messages(config.input_queue_url)
             for message in messages:
-                await summarizer_service.process_message(message["Body"])
+                # Extract and activate OpenTelemetry context
+                from opentelemetry import context, propagate
+
+                token = None
+                try:
+                    # Extract trace context from SQS MessageAttributes
+                    message_attributes = message.get("MessageAttributes", {})
+                    trace_context = {
+                        k: v["StringValue"]
+                        for k, v in message_attributes.items()
+                        if "StringValue" in v
+                    }
+                    if trace_context:
+                        extracted_context = propagate.extract(trace_context)
+                        token = context.attach(extracted_context)
+                except Exception:  # pylint: disable=broad-exception-caught
+                    pass
+
+                try:
+                    await summarizer_service.process_message(message["Body"])
+                finally:
+                    if token is not None:
+                        context.detach(token)
 
                 await sqs_client.delete_message(
                     config.input_queue_url, message["ReceiptHandle"]

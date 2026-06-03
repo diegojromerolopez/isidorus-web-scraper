@@ -265,6 +265,8 @@ The system is built with a microservices approach:
 | `REDIS_HOST` | Redis host | `localhost` or `redis` |
 | `IMAGE_BUCKET` | S3 bucket for images | `isidorus-images` |
 | `LLM_PROVIDER` | AI provider for explanations | `mock`, `openai`, `gemini`, etc. |
+| `OTEL_TRACES_SAMPLER` | Trace sampler type (always_on, always_off, traceidratio, etc.) | `traceidratio` |
+| `OTEL_TRACES_SAMPLER_ARG` | Sampler ratio argument (used for traceidratio fraction) | `0.1` |
 | `SCRAPER_REPLICAS` | Number of Scraper instances | `3` |
 | `WRITER_REPLICAS` | Number of Writer instances | `2` |
 | `IMAGE_EXTRACTOR_REPLICAS`| Number of Extractor instances | `3` |
@@ -511,7 +513,6 @@ The project uses several tools to ensure code quality:
 -   **Black**: For deterministic code formatting.
 -   **isort**: For import sorting (compatible with Black).
 -   **Ruff**: For fast linting.
--   **Flake8**: For legacy style checks.
 -   **Mypy**: For strict static type checking.
 -   **Pylint**: For deep code analysis (Rating ≥ 9.5 required).
 
@@ -590,7 +591,7 @@ curl http://localhost:8000/search?t=example -H "X-API-Key: test-api-key-123"
 This project is a functional showcase, but there are several areas planned for "Production-Grade" evolution:
 
 - **📊 Observability**:
-    - Integration with **OpenTelemetry**.
+    - [x] Integration with **OpenTelemetry** (Fully Implemented).
     - **Structured Logging** using `slog` for better observability and correlation.
     - Centralized logging with **Prometheus/Grafana** dashboards for worker health and queue depths.
 - **🛡️ Resilience**:
@@ -607,6 +608,55 @@ This project is a functional showcase, but there are several areas planned for "
 - **⚡ Performance**:
     - Moving more workers to **Go** where sub-millisecond I/O is critical.
     - Vector database integration for semantic search beyond keyword matching.
+
+## 📊 Observability & Distributed Tracing (OpenTelemetry)
+
+Isidorus includes high-fidelity distributed tracing designed around **Domain-Driven Design (DDD)** guidelines. All raw OpenTelemetry library interactions are fully decoupled within concrete infrastructure clients, keeping core business/domain layers completely stable and unpolluted.
+
+### 🌟 Key Tracing Features
+1. **Full Span Coverage**: Every function and method across both Go and Python services, repositories, and clients is wrapped in an active OpenTelemetry span.
+2. **Automatic Parameter Mapping**: Function parameters are dynamically extracted and set as span attributes if they are built-in types (`int`, `float`, `bool`, `string`).
+3. **Sensitive Keyword Redaction**: Any parameter name or string value containing authentication or private information is automatically redacted to prevent secret leakage in trace collectors. Flagged terms include:
+   `secret`, `token`, `key`, `password`, `pass`, `auth`, `credential`, `private`, `cert`, `jwt`, `conn`, `access`, `sign`
+4. **Trace Sampling Control**: Traces can be sampled based on the standard OpenTelemetry configuration variables `OTEL_TRACES_SAMPLER` and `OTEL_TRACES_SAMPLER_ARG`. This allows you to control telemetry volume dynamically (e.g. 10% sampling) under heavy loads.
+5. **Local OTel Collector Pipeline**: Traces are exported over OTLP (gRPC on port `4317` and HTTP on port `4318`) to a local OpenTelemetry Collector service which prints detailed traces to standard console output.
+
+### ⚙️ Trace Sampling Configuration
+To control the volume of telemetry data produced, you can use the standard OpenTelemetry trace sampling variables:
+
+* **`OTEL_TRACES_SAMPLER`**: Configures the trace sampler. Supported samplers are:
+  - `always_on` (Default): All spans are sampled and trace context is propagated.
+  - `always_off`: No spans are sampled.
+  - `traceidratio`: Spans are sampled probabilistically based on the ratio specified in `OTEL_TRACES_SAMPLER_ARG`.
+  - `parentbased_always_on`: Spans are sampled if the parent was sampled, defaulting to on.
+  - `parentbased_always_off`: Spans are sampled if the parent was sampled, defaulting to off.
+  - `parentbased_traceidratio`: Spans are sampled if the parent was sampled, defaulting to a probabilistic ratio.
+
+* **`OTEL_TRACES_SAMPLER_ARG`**: Argument for the configured sampler. Required for `traceidratio` or `parentbased_traceidratio` to specify the sampling fraction (e.g., `0.1` for `10%` sampling, or `0.01` for `1%` sampling).
+
+If these variables are omitted, the system defaults to `always_on` to ensure complete traces during testing.
+
+### 🔍 Viewing Live Spans & Telemetry
+Since the deprecated `logging` exporter has been replaced by the modern `debug` exporter configured with `verbosity: detailed`, you can view live spans, traces, and metrics directly in the OTel Collector logs:
+
+* **For Local Development (Docker Compose):**
+  ```bash
+  docker compose logs -f otel-collector
+  ```
+
+* **For Kubernetes (Kind):**
+  ```bash
+  kubectl logs -f deployment/otel-collector -n isidorus
+  ```
+
+### ⚙️ Infrastructure Integrations
+- **Docker Compose**: The `otel-collector` service is configured in `docker-compose.base.yml`. All services across `docker-compose.yml` and `docker-compose.prod.yml` automatically inherit `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317`.
+- **Kubernetes**: Deployed via custom manifests in `k8s/infra/` (`otel-collector-configmap.yaml`, `otel-collector-deployment.yaml`, `otel-collector-service.yaml`) and registered in the `kustomization.yaml`. FQDN endpoint `http://otel-collector.isidorus.svc.cluster.local:4317` is cleanly injected across all application deployments under `k8s/apps/`.
+
+### 🧪 Unit Testing Span Isolation
+Unit tests in both languages verify trace capture in isolation:
+- **Python**: Tests in `tests/unit/shared/clients/test_otel_client.py` use an `InMemorySpanExporter` and clean up the context after each test via `OtelClient.clear_spans()`.
+- **Go**: Repository and service tests utilize OpenTelemetry's `go.opentelemetry.io/otel/sdk/trace/tracetest` package to verify span properties, resetting the collector between tests via `exporter.Reset()`.
 
 ## License
 

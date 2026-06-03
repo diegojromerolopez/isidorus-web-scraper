@@ -2,6 +2,7 @@ import base64
 import json
 import logging
 
+from shared.clients.otel_client import observe
 from shared.clients.s3_client import S3Client
 from shared.clients.sqs_client import SQSClient
 from workers.image_explainer.services.explainer_factory import ExplainerFactory
@@ -9,6 +10,7 @@ from workers.image_explainer.services.explainer_factory import ExplainerFactory
 logger = logging.getLogger(__name__)
 
 
+@observe
 class ExplainerService:
     # pylint: disable=too-few-public-methods,too-many-arguments
     # pylint: disable=too-many-positional-arguments,too-many-locals

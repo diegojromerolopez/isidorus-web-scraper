@@ -15,20 +15,29 @@ type DynamoDBAPI interface {
 }
 
 type DynamoDBClient struct {
-	client    DynamoDBAPI
-	tableName string
+	client     DynamoDBAPI
+	tableName  string
+	otelClient TelemetryClient
 }
 
-func NewDynamoDBClient(client DynamoDBAPI, tableName string) *DynamoDBClient {
+func NewDynamoDBClient(client DynamoDBAPI, tableName string, otelClient TelemetryClient) *DynamoDBClient {
 	return &DynamoDBClient{
-		client:    client,
-		tableName: tableName,
+		client:     client,
+		tableName:  tableName,
+		otelClient: otelClient,
 	}
 }
 
 func (d *DynamoDBClient) UpdateJobStatus(ctx context.Context, jobID string, status string) error {
+	ctx, span := d.otelClient.StartSpan(ctx, "DynamoDBClient.UpdateJobStatus",
+		WithAttribute("jobID", jobID),
+		WithAttribute("status", status),
+	)
+	defer span.End()
+
 	if d.tableName == "" {
 		log.Printf("Warning: DYNAMODB_TABLE not configured, skipping DynamoDB status update for job %s", jobID)
+		span.SetStatus("ok", "skipped (no table)")
 		return nil
 	}
 
@@ -47,15 +56,27 @@ func (d *DynamoDBClient) UpdateJobStatus(ctx context.Context, jobID string, stat
 	})
 
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus("error", err.Error())
 		return fmt.Errorf("failed to update job status in DynamoDB for job %s: %w", jobID, err)
 	}
 
 	log.Printf("Successfully updated job %s status to %s in DynamoDB (Table: %s)", jobID, status, d.tableName)
+	span.SetStatus("ok", "success")
 	return nil
 }
+
 func (d *DynamoDBClient) UpdateJobStatusFull(ctx context.Context, jobID string, status string, completedAt string) error {
+	ctx, span := d.otelClient.StartSpan(ctx, "DynamoDBClient.UpdateJobStatusFull",
+		WithAttribute("jobID", jobID),
+		WithAttribute("status", status),
+		WithAttribute("completedAt", completedAt),
+	)
+	defer span.End()
+
 	if d.tableName == "" {
 		log.Printf("Warning: DYNAMODB_TABLE not configured, skipping DynamoDB status update for job %s", jobID)
+		span.SetStatus("ok", "skipped (no table)")
 		return nil
 	}
 
@@ -75,15 +96,25 @@ func (d *DynamoDBClient) UpdateJobStatusFull(ctx context.Context, jobID string, 
 	})
 
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus("error", err.Error())
 		return fmt.Errorf("failed to update job status full in DynamoDB for job %s: %w", jobID, err)
 	}
 
 	log.Printf("Successfully updated job %s status to %s and completed_at to %s in DynamoDB (Table: %s)", jobID, status, completedAt, d.tableName)
+	span.SetStatus("ok", "success")
 	return nil
 }
 
 func (d *DynamoDBClient) IncrementLinkCount(ctx context.Context, jobID string, increment int) error {
+	ctx, span := d.otelClient.StartSpan(ctx, "DynamoDBClient.IncrementLinkCount",
+		WithAttribute("jobID", jobID),
+		WithAttribute("increment", increment),
+	)
+	defer span.End()
+
 	if d.tableName == "" {
+		span.SetStatus("ok", "skipped (no table)")
 		return nil
 	}
 
@@ -99,8 +130,11 @@ func (d *DynamoDBClient) IncrementLinkCount(ctx context.Context, jobID string, i
 	})
 
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus("error", err.Error())
 		return fmt.Errorf("failed to increment link count in DynamoDB for job %s: %w", jobID, err)
 	}
 
+	span.SetStatus("ok", "success")
 	return nil
 }

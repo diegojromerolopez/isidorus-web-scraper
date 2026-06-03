@@ -56,6 +56,33 @@ class TestMain(unittest.TestCase):
             "http://example.com", 2, 1
         )
 
+    def test_scrape_generates_correlation_id_in_baggage(self) -> None:
+        from unittest.mock import patch
+
+        self.mock_scraper_service.start_scraping.return_value = 123
+
+        # Patch set_baggage to inspect the correlation ID
+        with patch("opentelemetry.baggage.set_baggage") as mock_set_baggage:
+            # Return a valid context so that context.attach doesn't fail.
+            from opentelemetry.context import Context
+
+            mock_set_baggage.return_value = Context()
+
+            response = self.client.post(
+                "/scrape", json={"url": "http://example.com", "depth": 2}
+            )
+
+            self.assertEqual(response.status_code, 200)
+            mock_set_baggage.assert_called_once()
+            args, _ = mock_set_baggage.call_args
+            self.assertEqual(args[0], "correlation_id")
+            # Verify it's a valid UUID
+            import uuid
+
+            val = args[1]
+            # Should not raise exception
+            uuid.UUID(val)
+
     def test_scrape_error(self) -> None:
         self.mock_scraper_service.start_scraping.side_effect = Exception("SQS Error")
         response = self.client.post(

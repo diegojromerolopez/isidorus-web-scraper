@@ -1,7 +1,9 @@
+import uuid
 from typing import TypedDict
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from opentelemetry import baggage, context
 from pydantic import BaseModel
 from tortoise.contrib.fastapi import register_tortoise  # pylint: disable=import-error
 
@@ -11,14 +13,17 @@ from api.dependencies import (
     get_scraper_service,
     get_search_service,
 )
-from api.models import APIKey
-from api.services.scraper_service import (
+from shared.clients.otel_client import init_telemetry
+
+init_telemetry("api")
+from api.models import APIKey  # noqa: E402
+from api.services.scraper_service import (  # noqa: E402
     FullScrapingRecord,
     NotAuthorizedError,
     ScraperService,
     ScrapingNotFoundError,
 )
-from api.services.search_service import SearchPageResult, SearchService
+from api.services.search_service import SearchPageResult, SearchService  # noqa: E402
 
 app = FastAPI()
 app.add_middleware(
@@ -84,9 +89,15 @@ async def scrape(
     try:
         # Extract user_id from the APIKey dependency
         user_id = _api_key.user_id if _api_key else None
-        scraping_id = await scraper_service.start_scraping(
-            request.url, request.depth, user_id
-        )
+        correlation_id = str(uuid.uuid4())
+        ctx = baggage.set_baggage("correlation_id", correlation_id)
+        token = context.attach(ctx)
+        try:
+            scraping_id = await scraper_service.start_scraping(
+                request.url, request.depth, user_id
+            )
+        finally:
+            context.detach(token)
         return {"scraping_id": scraping_id}
     except HTTPException:
         raise

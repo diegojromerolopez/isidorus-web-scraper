@@ -3,8 +3,10 @@ from typing import Any, cast
 import redis.asyncio as redis  # type: ignore
 
 from api.config import Configuration
+from shared.clients.otel_client import observe
 
 
+@observe
 class RedisClient:
     def __init__(self, host: str, port: int, db: int = 0):
         self.__client = redis.Redis(host=host, port=port, db=db)

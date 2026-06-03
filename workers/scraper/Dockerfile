@@ -1,16 +1,20 @@
 # Build stage
 FROM golang:1.25-alpine AS builder
 
-WORKDIR /app
+WORKDIR /app/workers/scraper
 
-COPY go.mod go.sum ./
+# Copy shared telemetry package
+COPY shared/go/telemetry/ /app/shared/go/telemetry/
+
+# Copy the scraper worker dependencies and source
+COPY workers/scraper/go.mod workers/scraper/go.sum ./
 RUN go mod download
 
-COPY main.go .
-COPY config/ config/
-COPY domain/ domain/
-COPY repositories/ repositories/
-COPY services/ services/
+COPY workers/scraper/main.go .
+COPY workers/scraper/config/ config/
+COPY workers/scraper/domain/ domain/
+COPY workers/scraper/repositories/ repositories/
+COPY workers/scraper/services/ services/
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o main .
 
@@ -19,6 +23,6 @@ FROM alpine:latest
 
 WORKDIR /app
 
-COPY --from=builder /app/main .
+COPY --from=builder /app/workers/scraper/main .
 
 CMD ["./main"]

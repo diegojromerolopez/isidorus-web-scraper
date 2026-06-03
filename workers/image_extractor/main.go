@@ -16,17 +16,34 @@ import (
 	"workers/image_extractor/services"
 
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+
+	"shared/telemetry"
 )
 
 func main() {
 	log.Println("Image Extractor Worker starting (Go)...")
+
+	tp, err := telemetry.InitTelemetry(context.Background(), "image-extractor")
+	if err != nil {
+		log.Fatalf("failed to initialize tracer: %v", err)
+	}
+	defer func() {
+		if err := tp.Shutdown(context.Background()); err != nil {
+			log.Printf("Error shutting down tracer provider: %v", err)
+		}
+	}()
+
 	cfg := config.LoadConfig()
 
 	if cfg.InputQueueURL == "" || cfg.WriterQueueURL == "" {
 		log.Fatal("INPUT_QUEUE_URL and WRITER_QUEUE_URL must be set")
 	}
 
-	// 1. AWS Config
+	// Create TelemetryClient
+	otelClient := repositories.NewTelemetryClient(tp, "image-extractor")
+
 	// 1. AWS Config
 	// Use background context for initial setup
 	setupCtx := context.Background()
@@ -52,9 +69,9 @@ func main() {
 	}
 
 	// 2. Dependency Injection
-	sqsRepo := repositories.NewSQSRepository(sqsAwsCfg)
-	s3Repo := repositories.NewS3Repository(s3AwsCfg)
-	httpRepo := repositories.NewHTTPRepository()
+	sqsRepo := repositories.NewSQSRepository(sqsAwsCfg, otelClient)
+	s3Repo := repositories.NewS3Repository(s3AwsCfg, otelClient)
+	httpRepo := repositories.NewHTTPRepository(otelClient)
 
 	extractorService := services.NewExtractorService(
 		sqsRepo,
@@ -64,6 +81,7 @@ func main() {
 		cfg.ImageExplainerQueueURL,
 		cfg.ImagesBucket,
 		cfg.ImageExplainerEnabled,
+		otelClient,
 	)
 
 	// 3. Main Loop
@@ -98,18 +116,30 @@ func main() {
 		}
 
 		for _, msg := range messages {
+			msgCtx := ctx
+			// Extract trace context from SQS MessageAttributes
+			traceContext := make(map[string]string)
+			for k, attr := range msg.MessageAttributes {
+				if attr.StringValue != nil {
+					traceContext[k] = *attr.StringValue
+				}
+			}
+			if len(traceContext) > 0 {
+				msgCtx = otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(traceContext))
+			}
+
 			var imageMsg domain.ImageMessage
 			if err := json.Unmarshal([]byte(*msg.Body), &imageMsg); err != nil {
 				log.Printf("Error unmarshaling message: %v", err)
 			} else {
 				// Process image
-				if err := extractorService.ProcessMessage(ctx, imageMsg); err != nil {
+				if err := extractorService.ProcessMessage(msgCtx, imageMsg); err != nil {
 					log.Printf("Error processing image %s: %v", imageMsg.URL, err)
 				}
 			}
 
 			// Delete message after processing (or if invalid)
-			if err := sqsRepo.DeleteMessage(ctx, cfg.InputQueueURL, *msg.ReceiptHandle); err != nil {
+			if err := sqsRepo.DeleteMessage(msgCtx, cfg.InputQueueURL, *msg.ReceiptHandle); err != nil {
 				log.Printf("Error deleting message: %v", err)
 			}
 		}

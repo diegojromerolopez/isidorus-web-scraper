@@ -34,7 +34,7 @@ func newMockDB(t *testing.T) (*gorm.DB, sqlmock.Sqlmock) {
 }
 
 func TestNewDBRepository_Default(t *testing.T) {
-	repo := NewDBRepository(nil, 0)
+	repo := NewDBRepository(nil, 0, NewNoopTelemetryClient())
 	assert.Equal(t, 100, repo.batchSize)
 }
 
@@ -95,7 +95,7 @@ func TestDBRepository_InsertPageData(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db, mock := newMockDB(t)
-			repo := NewDBRepository(db, 100)
+			repo := NewDBRepository(db, 100, NewNoopTelemetryClient())
 			tt.mockFunc(mock)
 
 			err := repo.InsertPageData(context.Background(), tt.msg)
@@ -160,7 +160,7 @@ func TestDBRepository_InsertImageExplanation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db, mock := newMockDB(t)
-			repo := NewDBRepository(db, 100)
+			repo := NewDBRepository(db, 100, NewNoopTelemetryClient())
 			tt.mockFunc(mock)
 
 			err := repo.InsertImageExplanation(context.Background(), tt.msg)
@@ -222,7 +222,7 @@ func TestDBRepository_InsertPageSummary(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			db, mock := newMockDB(t)
-			repo := NewDBRepository(db, 100)
+			repo := NewDBRepository(db, 100, NewNoopTelemetryClient())
 			tt.mockFunc(mock)
 
 			err := repo.InsertPageSummary(context.Background(), tt.msg)
@@ -241,7 +241,7 @@ func TestDBRepository_InsertPageSummary(t *testing.T) {
 
 func TestDBRepository_CompleteScraping(t *testing.T) {
 	db, _ := newMockDB(t)
-	repo := NewDBRepository(db, 100)
+	repo := NewDBRepository(db, 100, NewNoopTelemetryClient())
 	err := repo.CompleteScraping(context.Background(), 123)
 	assert.NoError(t, err)
 }

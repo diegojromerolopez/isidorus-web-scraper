@@ -13,6 +13,9 @@ resources:
   - ollama-deployment.yaml
   - ollama-service.yaml
   - ollama-setup-job.yaml
+  - otel-collector-configmap.yaml
+  - otel-collector-deployment.yaml
+  - otel-collector-service.yaml
   - opensearch-service.yaml
   - opensearch-statefulset.yaml
   - postgres-service.yaml

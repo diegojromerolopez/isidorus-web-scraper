@@ -10,6 +10,8 @@ from langchain_huggingface import HuggingFaceEndpoint
 from langchain_ollama import ChatOllama  # type: ignore
 from langchain_openai import ChatOpenAI  # type: ignore
 
+from shared.clients.otel_client import observe
+
 logger = logging.getLogger(__name__)
 
 
@@ -26,6 +28,7 @@ class MockLLM:
         return len(text.split())
 
 
+@observe
 class SummarizerFactory:
     # pylint: disable=too-few-public-methods
     @staticmethod

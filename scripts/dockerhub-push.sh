@@ -63,11 +63,11 @@ for svc in "${SERVICES[@]}"; do
         IMAGE_NAME="${IMAGE_NAME}-${BRANCH}"
     fi
 
-    # Determine build context. Python services need 'shared/' from the root.
-    # Go, Frontend, and Auth services are designed for local context.
+    # Determine build context. Python and Go services need 'shared/' or 'shared/go/' from the root.
+    # Frontend and Auth services are designed for local context.
     CONTEXT="."
     case "$svc" in
-        api|image-explainer-worker|page-summarizer-worker|deletion-worker)
+        api|image-explainer-worker|page-summarizer-worker|deletion-worker|scraper-worker|writer-worker|indexer-worker|image-extractor-worker)
             CONTEXT="."
             ;;
         *)

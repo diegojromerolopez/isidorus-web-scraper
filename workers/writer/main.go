@@ -15,7 +15,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	otelgorm "gorm.io/plugin/opentelemetry/tracing"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+
+	"shared/telemetry"
 	"workers/writer/config"
 	"workers/writer/domain"
 	"workers/writer/repositories"
@@ -29,15 +34,32 @@ type SQSClient interface {
 }
 
 func main() {
+	tp, err := telemetry.InitTelemetry(context.Background(), "writer")
+	if err != nil {
+		log.Fatalf("failed to initialize tracer: %v", err)
+	}
+	defer func() {
+		if err := tp.Shutdown(context.Background()); err != nil {
+			log.Printf("Error shutting down tracer provider: %v", err)
+		}
+	}()
+
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
+	// Create TelemetryClient
+	otelClient := repositories.NewTelemetryClient(tp, "writer")
+
 	// Connect DB using GORM
 	db, err := gorm.Open(postgres.Open(cfg.DatabaseURL), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("failed to connect to db: %v", err)
+	}
+
+	if err := db.Use(otelgorm.NewPlugin()); err != nil {
+		log.Fatalf("failed to register GORM OTel plugin: %v", err)
 	}
 
 	// Connect AWS
@@ -53,19 +75,20 @@ func main() {
 			o.BaseEndpoint = &cfg.SQSEndpointURL
 		}
 	})
-	sqsClient := repositories.NewSQSClient(rawSQSClient)
-	dbRepo := repositories.NewDBRepository(db, cfg.BatchSize)
+	sqsClient := repositories.NewSQSClient(rawSQSClient, otelClient)
+	dbRepo := repositories.NewDBRepository(db, cfg.BatchSize, otelClient)
 
 	rawDynamoClient := dynamodb.NewFromConfig(awsCfg, func(o *dynamodb.Options) {
 		if cfg.DynamoDBEndpointURL != "" {
 			o.BaseEndpoint = &cfg.DynamoDBEndpointURL
 		}
 	})
-	dynamoClient := repositories.NewDynamoDBClient(rawDynamoClient, cfg.DynamoDBTable)
+	dynamoClient := repositories.NewDynamoDBClient(rawDynamoClient, cfg.DynamoDBTable, otelClient)
 
 	writerService := services.NewWriterService(
 		services.WithDBRepository(dbRepo),
 		services.WithJobStatusRepository(dynamoClient),
+		services.WithTelemetryClient(otelClient),
 	)
 
 	log.Println("Writer worker started (DDD Refactor with community standards)")
@@ -102,17 +125,29 @@ func main() {
 
 			// Process batch of messages
 			for _, msg := range msgOutput.Messages {
+				msgCtx := ctx
+				// Extract trace context from SQS MessageAttributes
+				traceContext := make(map[string]string)
+				for k, attr := range msg.MessageAttributes {
+					if attr.StringValue != nil {
+						traceContext[k] = *attr.StringValue
+					}
+				}
+				if len(traceContext) > 0 {
+					msgCtx = otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(traceContext))
+				}
+
 				var body domain.WriterMessage
 				if err := json.Unmarshal([]byte(*msg.Body), &body); err != nil {
 					log.Printf("failed to unmarshal: %v", err)
 					continue
 				}
 
-				if err := writerService.ProcessMessage(ctx, body); err != nil {
+				if err := writerService.ProcessMessage(msgCtx, body); err != nil {
 					log.Printf("Failed to process message: %v", err)
 				} else {
 					// Delete on success
-					if err := sqsClient.DeleteMessage(ctx, cfg.InputQueueURL, msg.ReceiptHandle); err != nil {
+					if err := sqsClient.DeleteMessage(msgCtx, cfg.InputQueueURL, msg.ReceiptHandle); err != nil {
 						log.Printf("failed to delete message: %v", err)
 					}
 				}

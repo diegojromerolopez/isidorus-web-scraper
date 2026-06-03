@@ -1,10 +1,13 @@
 import asyncio
 import logging
 
+from shared.clients.otel_client import init_telemetry
 from shared.clients.s3_client import S3Client
 from shared.clients.sqs_client import SQSClient
 from workers.image_explainer.config import Configuration
 from workers.image_explainer.services.explainer_service import ExplainerService
+
+init_telemetry("image-explainer")
 
 # Logging setup
 logging.basicConfig(level=logging.INFO)
@@ -40,7 +43,29 @@ async def main() -> None:
             # SQSClient.receive_messages is now async
             messages = await sqs_client.receive_messages(config.input_queue_url)
             for message in messages:
-                await service.process_message(message["Body"])
+                # Extract and activate OpenTelemetry context
+                from opentelemetry import context, propagate
+
+                token = None
+                try:
+                    # Extract trace context from SQS MessageAttributes
+                    message_attributes = message.get("MessageAttributes", {})
+                    trace_context = {
+                        k: v["StringValue"]
+                        for k, v in message_attributes.items()
+                        if "StringValue" in v
+                    }
+                    if trace_context:
+                        extracted_context = propagate.extract(trace_context)
+                        token = context.attach(extracted_context)
+                except Exception:  # pylint: disable=broad-exception-caught
+                    pass
+
+                try:
+                    await service.process_message(message["Body"])
+                finally:
+                    if token is not None:
+                        context.detach(token)
 
                 # Delete message is now async
                 await sqs_client.delete_message(

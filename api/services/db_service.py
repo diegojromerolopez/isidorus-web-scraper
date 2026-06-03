@@ -2,8 +2,10 @@ from api.repositories.db_repository import (
     DbRepository,
     ScrapingRecord,
 )
+from shared.clients.otel_client import observe
 
 
+@observe
 class DbService:  # pylint: disable=too-few-public-methods
     def __init__(self, db_repo: DbRepository) -> None:
         self.__db_repo = db_repo

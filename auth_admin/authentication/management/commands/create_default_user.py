@@ -10,7 +10,7 @@ class Command(BaseCommand):
     def handle(self, *args: Any, **options: Any) -> None:
         User = get_user_model()
         if not User.objects.filter(username="scraper").exists():
-            User.objects.create_user("scraper", "scraper@isidorus.com", "scraper")
+            User.objects.create_user("scraper", "scraper@isidorus.com", "scraper")  # type: ignore[attr-defined]
             self.stdout.write(self.style.SUCCESS('Successfully created user "scraper"'))
         else:
             self.stdout.write(self.style.SUCCESS('User "scraper" already exists'))

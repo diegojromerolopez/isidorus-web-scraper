@@ -3,8 +3,10 @@ from typing import Any, cast
 from opensearchpy import AsyncOpenSearch  # pylint: disable=import-error
 
 from api.config import Configuration
+from shared.clients.otel_client import observe
 
 
+@observe
 class SearchRepository:
     def __init__(self, config: Configuration):
         self.__client = AsyncOpenSearch(

@@ -4,13 +4,17 @@ import logging
 import signal
 
 from opensearchpy import AsyncOpenSearch  # pylint: disable=import-error
+from opentelemetry import context, propagate
 from tortoise import Tortoise  # pylint: disable=import-error
 
 from api.clients.dynamodb_client import DynamoDBClient
+from shared.clients.otel_client import init_telemetry
 from shared.clients.s3_client import S3Client
 from shared.clients.sqs_client import SQSClient
 from workers.deletion.config import Configuration
 from workers.deletion.services.deletion_service import DeletionService
+
+init_telemetry("deletion-worker")
 
 # Logging configuration
 logging.basicConfig(
@@ -27,7 +31,9 @@ async def init_db(database_url: str) -> None:
     )
 
 
-async def main(stop_event: asyncio.Event | None = None) -> None:
+async def main(
+    stop_event: asyncio.Event | None = None,
+) -> None:  # pylint: disable=too-many-locals,too-many-branches
     # Configuration
     config = Configuration.from_env()
 
@@ -103,8 +109,29 @@ async def main(stop_event: asyncio.Event | None = None) -> None:
                 try:
                     body = json.loads(msg["Body"])
                     scraping_id = body.get("scraping_id")
-                    if scraping_id:
-                        await deletion_service.cleanup_scraping(scraping_id)
+
+                    # Extract trace context from SQS MessageAttributes
+                    message_attributes = msg.get("MessageAttributes", {})
+                    trace_context = {
+                        k: v["StringValue"]
+                        for k, v in message_attributes.items()
+                        if "StringValue" in v
+                    }
+
+                    extracted_context = (
+                        propagate.extract(trace_context) if trace_context else None
+                    )
+                    token = (
+                        context.attach(extracted_context)
+                        if extracted_context is not None
+                        else None
+                    )
+                    try:
+                        if scraping_id:
+                            await deletion_service.cleanup_scraping(scraping_id)
+                    finally:
+                        if token is not None:
+                            context.detach(token)
 
                     await sqs_client.delete_message(
                         config.input_queue_url, msg["ReceiptHandle"]

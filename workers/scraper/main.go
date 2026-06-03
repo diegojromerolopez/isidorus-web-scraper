@@ -13,6 +13,11 @@ import (
 	config_aws "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/propagation"
+
+	"shared/telemetry"
 	"workers/scraper/config"
 	"workers/scraper/domain"
 	"workers/scraper/repositories"
@@ -20,9 +25,28 @@ import (
 )
 
 func main() {
+	tp, err := telemetry.InitTelemetry(context.Background(), "scraper")
+	if err != nil {
+		log.Fatalf("failed to initialize tracer: %v", err)
+	}
+	defer func() {
+		if err := tp.Shutdown(context.Background()); err != nil {
+			log.Printf("failed to shutdown trace provider: %v", err)
+		}
+	}()
+
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
+	}
+
+	// Initialize metrics
+	meter := telemetry.GetMeter("scraper")
+	jobsProcessed, err := meter.Int64Counter("scraping_jobs_processed_total",
+		metric.WithDescription("Total number of scraping jobs processed by the scraper worker"),
+	)
+	if err != nil {
+		log.Printf("failed to create jobsProcessed metric: %v", err)
 	}
 
 	awsCfg, err := config_aws.LoadDefaultConfig(context.Background(),
@@ -32,19 +56,22 @@ func main() {
 		log.Fatalf("unable to load SDK config, %v", err)
 	}
 
+	otelClient := repositories.NewTelemetryClient(tp, "scraper")
+
 	rawSQSClient := sqs.NewFromConfig(awsCfg, func(o *sqs.Options) {
 		if cfg.SQSEndpointURL != "" {
 			o.BaseEndpoint = &cfg.SQSEndpointURL
 		}
 	})
-	sqsClient := repositories.NewSQSClient(rawSQSClient)
-	pageFetcher := repositories.NewPageFetcher()
-	redisClient := repositories.NewRedisClient(cfg.RedisHost, cfg.RedisPort)
+	sqsClient := repositories.NewSQSClient(rawSQSClient, otelClient)
+	pageFetcher := repositories.NewPageFetcher(otelClient)
+	redisClient := repositories.NewRedisClient(cfg.RedisHost, cfg.RedisPort, otelClient)
 
 	scraperService := services.NewScraperService(
 		services.WithSQSClient(sqsClient),
 		services.WithRedisClient(redisClient),
 		services.WithPageFetcher(pageFetcher),
+		services.WithTelemetryClient(otelClient),
 		services.WithQueues(cfg.InputQueueURL, cfg.WriterQueueURL, cfg.ImageQueueURL, cfg.SummarizerQueueURL, cfg.IndexerQueueURL),
 		services.WithFeatureFlags(cfg.ImageExtractorEnabled, cfg.ImageExplainerEnabled, cfg.PageSummarizerEnabled),
 	)
@@ -85,15 +112,31 @@ func main() {
 
 			// Process Messages
 			for _, msg := range msgOutput.Messages {
+				msgCtx := ctx
+				// Extract trace context from SQS MessageAttributes
+				traceContext := make(map[string]string)
+				for k, attr := range msg.MessageAttributes {
+					if attr.StringValue != nil {
+						traceContext[k] = *attr.StringValue
+					}
+				}
+				if len(traceContext) > 0 {
+					msgCtx = otel.GetTextMapPropagator().Extract(ctx, propagation.MapCarrier(traceContext))
+				}
+
 				var body domain.ScrapeMessage
 				if err := json.Unmarshal([]byte(*msg.Body), &body); err != nil {
 					log.Printf("failed to unmarshal message: %v", err)
 					continue
 				}
 
-				scraperService.ProcessMessage(ctx, body)
+				scraperService.ProcessMessage(msgCtx, body)
 
-				err := sqsClient.DeleteMessage(ctx, cfg.InputQueueURL, msg.ReceiptHandle)
+				if jobsProcessed != nil {
+					jobsProcessed.Add(msgCtx, 1)
+				}
+
+				err := sqsClient.DeleteMessage(msgCtx, cfg.InputQueueURL, msg.ReceiptHandle)
 				if err != nil {
 					log.Printf("failed to delete message, %v", err)
 				}

@@ -4,11 +4,13 @@ from typing import cast
 import aioboto3  # type: ignore
 from botocore.exceptions import ClientError  # type: ignore
 
+from shared.clients.otel_client import observe
 from shared.config import Configuration
 
 logger = logging.getLogger(__name__)
 
 
+@observe
 class S3Client:
     # pylint: disable=too-few-public-methods
     def __init__(

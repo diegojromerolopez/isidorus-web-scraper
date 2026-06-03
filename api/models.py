@@ -13,7 +13,7 @@ class Scraping(models.Model):
 
 class ScrapedPage(models.Model):
     id = fields.IntField(pk=True)
-    scraping = fields.ForeignKeyField(
+    scraping: fields.ForeignKeyRelation = fields.ForeignKeyField(
         "models.Scraping", related_name="pages", source_field="scraping_id"
     )
     url = fields.TextField()
@@ -27,10 +27,10 @@ class ScrapedPage(models.Model):
 
 class PageLink(models.Model):
     id = fields.IntField(pk=True)
-    scraping = fields.ForeignKeyField(
+    scraping: fields.ForeignKeyRelation = fields.ForeignKeyField(
         "models.Scraping", related_name="links", source_field="scraping_id"
     )
-    source_page = fields.ForeignKeyField(
+    source_page: fields.ForeignKeyRelation = fields.ForeignKeyField(
         "models.ScrapedPage", related_name="links", source_field="source_page_id"
     )
     target_url = fields.TextField()
@@ -41,10 +41,10 @@ class PageLink(models.Model):
 
 class PageImage(models.Model):
     id = fields.IntField(pk=True)
-    scraping = fields.ForeignKeyField(
+    scraping: fields.ForeignKeyRelation = fields.ForeignKeyField(
         "models.Scraping", related_name="images", source_field="scraping_id"
     )
-    page = fields.ForeignKeyField(
+    page: fields.ForeignKeyRelation = fields.ForeignKeyField(
         "models.ScrapedPage", related_name="images", source_field="page_id"
     )
     image_url = fields.TextField()

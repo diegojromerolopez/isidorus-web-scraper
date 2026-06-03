@@ -7,46 +7,97 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 type SQSRepository struct {
-	client *sqs.Client
+	client     *sqs.Client
+	otelClient TelemetryClient
 }
 
-func NewSQSRepository(cfg aws.Config) *SQSRepository {
+func NewSQSRepository(cfg aws.Config, otelClient TelemetryClient) *SQSRepository {
 	return &SQSRepository{
-		client: sqs.NewFromConfig(cfg),
+		client:     sqs.NewFromConfig(cfg),
+		otelClient: otelClient,
 	}
 }
 
 func (r *SQSRepository) ReceiveMessages(ctx context.Context, queueURL string) ([]types.Message, error) {
+	ctx, span := r.otelClient.StartSpan(ctx, "SQSRepository.ReceiveMessages",
+		WithAttribute("queueURL", queueURL),
+	)
+	defer span.End()
+
 	output, err := r.client.ReceiveMessage(ctx, &sqs.ReceiveMessageInput{
-		QueueUrl:            aws.String(queueURL),
-		MaxNumberOfMessages: 10,
-		WaitTimeSeconds:     20,
+		QueueUrl:              aws.String(queueURL),
+		MaxNumberOfMessages:   10,
+		WaitTimeSeconds:       20,
+		MessageAttributeNames: []string{"All"},
 	})
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus("error", err.Error())
 		return nil, err
 	}
+	span.SetStatus("ok", "success")
 	return output.Messages, nil
 }
 
 func (r *SQSRepository) SendMessage(ctx context.Context, queueURL string, body interface{}) error {
+	ctx, span := r.otelClient.StartSpan(ctx, "SQSRepository.SendMessage",
+		WithAttribute("queueURL", queueURL),
+	)
+	defer span.End()
+
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus("error", err.Error())
 		return err
 	}
+
+	// Inject standard trace context as SQS Message Attributes
+	traceMap := make(map[string]string)
+	otel.GetTextMapPropagator().Inject(ctx, propagation.MapCarrier(traceMap))
+
+	msgAttrs := make(map[string]types.MessageAttributeValue)
+	for k, v := range traceMap {
+		msgAttrs[k] = types.MessageAttributeValue{
+			DataType:    aws.String("String"),
+			StringValue: aws.String(v),
+		}
+	}
+
 	_, err = r.client.SendMessage(ctx, &sqs.SendMessageInput{
-		QueueUrl:    aws.String(queueURL),
-		MessageBody: aws.String(string(jsonBody)),
+		QueueUrl:          aws.String(queueURL),
+		MessageBody:       aws.String(string(jsonBody)),
+		MessageAttributes: msgAttrs,
 	})
-	return err
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus("error", err.Error())
+		return err
+	}
+	span.SetStatus("ok", "success")
+	return nil
 }
 
 func (r *SQSRepository) DeleteMessage(ctx context.Context, queueURL string, receiptHandle string) error {
+	ctx, span := r.otelClient.StartSpan(ctx, "SQSRepository.DeleteMessage",
+		WithAttribute("queueURL", queueURL),
+	)
+	defer span.End()
+
 	_, err := r.client.DeleteMessage(ctx, &sqs.DeleteMessageInput{
 		QueueUrl:      aws.String(queueURL),
 		ReceiptHandle: aws.String(receiptHandle),
 	})
-	return err
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus("error", err.Error())
+		return err
+	}
+	span.SetStatus("ok", "success")
+	return nil
 }

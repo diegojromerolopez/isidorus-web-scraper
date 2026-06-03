@@ -56,6 +56,12 @@ spec:
               value: http://minio.isidorus.svc.cluster.local:9000
             - name: SQS_ENDPOINT_URL
               value: http://elasticmq.isidorus.svc.cluster.local:9324
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://otel-collector.isidorus.svc.cluster.local:4317
+            - name: OTEL_TRACES_SAMPLER
+              value: parentbased_traceidratio
+            - name: OTEL_TRACES_SAMPLER_ARG
+              value: "0.25"
           image: docker.io/library/deletion-worker:latest
           imagePullPolicy: IfNotPresent
           name: deletion-worker

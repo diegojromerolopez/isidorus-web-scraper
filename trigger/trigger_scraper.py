@@ -97,7 +97,7 @@ def monitor_scraping(scraping_id: int) -> None:
     sys.exit(1)
 
 
-def main():
+def main() -> None:
     wait_for_api()
     # Give a small buffer for Auth Admin to sync keys if this is a fresh start
     time.sleep(5)

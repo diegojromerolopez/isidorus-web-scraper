@@ -15,13 +15,29 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/opensearch-project/opensearch-go/v2"
 
+	"shared/telemetry"
 	indexerConfig "workers/indexer/config"
 	"workers/indexer/repositories"
 	"workers/indexer/services"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 func main() {
+	tp, err := telemetry.InitTelemetry(context.Background(), "indexer")
+	if err != nil {
+		log.Fatalf("failed to initialize tracer: %v", err)
+	}
+	defer func() {
+		if err := tp.Shutdown(context.Background()); err != nil {
+			log.Printf("Error shutting down tracer provider: %v", err)
+		}
+	}()
+
 	cfg := indexerConfig.LoadConfig()
+
+	// Create TelemetryClient
+	otelClient := repositories.NewTelemetryClient(tp, "indexer")
 
 	// AWS/SQS Client
 	awsCfg, err := config.LoadDefaultConfig(context.Background(),
@@ -38,10 +54,10 @@ func main() {
 
 	// OpenSearch Client
 	osClient, err := opensearch.NewClient(opensearch.Config{
-		Transport: &http.Transport{
+		Transport: otelhttp.NewTransport(&http.Transport{
 			TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
 			ResponseHeaderTimeout: 30 * time.Second,
-		},
+		}),
 		Addresses: []string{cfg.OpenSearchURL},
 	})
 	if err != nil {
@@ -49,9 +65,9 @@ func main() {
 	}
 
 	// Setup Repositories and Service
-	sqsRepo := repositories.NewSQSRepository(sqsClient, cfg.InputQueueURL)
-	osRepo := repositories.NewOpenSearchRepository(osClient)
-	indexerService := services.NewIndexerService(sqsRepo, osRepo)
+	sqsRepo := repositories.NewSQSRepository(sqsClient, cfg.InputQueueURL, otelClient)
+	osRepo := repositories.NewOpenSearchRepository(osClient, otelClient)
+	indexerService := services.NewIndexerService(sqsRepo, osRepo, otelClient)
 
 	// Context for graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
